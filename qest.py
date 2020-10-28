@@ -1,7 +1,7 @@
 import numpy as np
 from scipy.interpolate import interp1d
 from pyccl.pyutils import _fftlog_transform
-from lensing_rec_biases_code import spectra
+from . import spectra
 
 class experiment:
     def __init__(self, nlev_t, beam_size, lmax, fname_scalar=None, fname_lensed=None, freq_GHz=150.):

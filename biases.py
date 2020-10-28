@@ -1,6 +1,6 @@
 import numpy as np
 import hmvec as hm
-import tools as tls
+from . import tools as tls
 
 class hm_framework:
     ''' Set the halo model parameters '''
