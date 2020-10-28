@@ -4,7 +4,7 @@ from pyccl.pyutils import _fftlog_transform
 from lensing_rec_biases_code import spectra
 
 class experiment:
-    def __init__(self, nlev_t, beam_size, lmax, fname_scalar=None, fname_lensed=None):
+    def __init__(self, nlev_t, beam_size, lmax, fname_scalar=None, fname_lensed=None, freq_GHz=150.):
         ''' Initialise a cosmology and experimental charactierstics
             - Inputs:
                 * nlev_t = temperature noise level, In uK.arcmin.
@@ -25,6 +25,7 @@ class experiment:
         self.cltt = cl_len.cltt
         self.ls = cl_len.ls
         self.lmax = lmax
+        self.freq_GHz=freq_GHz
 
         bl = spectra.bl(beam_size, lmax) # beam transfer function.
         self.nltt = (np.pi/180./60.*nlev_t)**2 / bl**2
