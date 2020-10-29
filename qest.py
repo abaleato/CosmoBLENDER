@@ -1,6 +1,7 @@
 import numpy as np
 from scipy.interpolate import interp1d
 from pyccl.pyutils import _fftlog_transform
+from scipy.integrate import quad
 from . import spectra
 
 class experiment:
@@ -59,24 +60,6 @@ class experiment:
         al_F_2 = interp1d(self.ls, F_2_of_l, bounds_error=False,  fill_value='extrapolate')
         return al_F_1, al_F_2
 
-    def get_unnorm_TT_qe(self, ell_out, profile_leg1, profile_leg2=None, fftlog_way=True, N_l=4*4096, lmin=0.000135, alpha=-1.35):
-        '''
-        Helper function to get the unnormalised TT QE reconstruction for spherically-symmetric profiles using FFTlog
-        Inputs:
-            * ell_out = 1D numpy array with the multipoles at which the reconstruction is wanted.
-            * (optional) fftlog_way = Bool. Use fftlog if True, Quicklens if False.
-            * (optional) N_l = Integer (preferrably power of 2). Number of logarithmically-spaced samples FFTlog will use.
-            * (optional) lmin = Float. lmin of the reconstruction. Recommend choosing (unphysical) small values (e.g., lmin=1e-4) to avoid ringing.
-            * (optional) alpha = Float. FFTlog bias exponent. alpha=-1.35 seems to work fine for most applications.
-        Returns:
-            * If fftlog_way=True, a 1D array containing the unnormalised reconstruction at the multipoles specified in ell_out
-        '''
-        if fftlog_way:
-            al_F_1, al_F_2 = self.get_filtered_profiles_fftlog(profile_leg1, profile_leg2=None)
-            return self.unnorm_TT_qe_fftlog(al_F_1, al_F_2, N_l, lmin, alpha)(ell_out)
-        else:
-            print('Implement QL way!')
-
     def unnorm_TT_qe_fftlog(self, al_F_1, al_F_2, N_l, lmin, alpha):
         '''
         Compute the unnormalised TT QE reconstruction for spherically symmetric profiles using FFTlog.
@@ -102,3 +85,56 @@ class experiment:
         # Interpolate and correct factors of 2pi from fftlog convetions
         unnormalised_phi = interp1d(ell_out_arr, - (2*np.pi)**3 * fl_total, bounds_error=False, fill_value=0.0)
         return unnormalised_phi
+
+    def get_unnorm_TT_qe(self, ell_out, profile_leg1, profile_leg2=None, fftlog_way=True, N_l=4*4096, lmin=0.000135, alpha=-1.35):
+        '''
+        Helper function to get the unnormalised TT QE reconstruction for spherically-symmetric profiles using FFTlog
+        Inputs:
+            * ell_out = 1D numpy array with the multipoles at which the reconstruction is wanted.
+            * profile_leg1 = 1D numpy array. Projected, spherically-symmetric emission profile. Truncated at lmax.
+            * (optional) profile_leg2 = 1D numpy array. As profile_leg1, but for the other QE leg.
+            * (optional) fftlog_way = Bool. Use fftlog if True, Quicklens if False.
+            * (optional) N_l = Integer (preferrably power of 2). Number of logarithmically-spaced samples FFTlog will use.
+            * (optional) lmin = Float. lmin of the reconstruction. Recommend choosing (unphysical) small values (e.g., lmin=1e-4) to avoid ringing.
+            * (optional) alpha = Float. FFTlog bias exponent. alpha=-1.35 seems to work fine for most applications.
+        Returns:
+            * If fftlog_way=True, a 1D array containing the unnormalised reconstruction at the multipoles specified in ell_out
+        '''
+        if fftlog_way:
+            al_F_1, al_F_2 = self.get_filtered_profiles_fftlog(profile_leg1, profile_leg2=None)
+            return self.unnorm_TT_qe_fftlog(al_F_1, al_F_2, N_l, lmin, alpha)(ell_out)
+        else:
+            print('Implement QL way!')
+
+    def get_brute_force_unnorm_TT_qe(self, ell_out, profile_leg1, profile_leg2=None):
+        '''
+        Slow but sure method to calculate the 1D TT QE reconstruction. Scales as O(N^3), but useful as a cross-check of FFTlog
+        Inputs:
+            * ell_out = 1D numpy array with the multipoles at which the reconstruction is wanted.
+            * profile_leg1 = 1D numpy array. Projected, spherically-symmetric emission profile. Truncated at lmax.
+            * (optional) profile_leg2 = 1D numpy array. As profile_leg1, but for the other QE leg.
+        '''
+        def ell_dependence(L, l, lp):
+            '''L is outter multipole'''
+            if (L+l>=lp) and (L+lp>=l) and (l+lp>=L):
+                #check triangle inequality
+                if (L+l==lp) or (L+lp==l) or (l+lp==L):
+                    # integrand is singular at the triangle equality
+                    print('dealing with integrable singularity by setting to 0')
+                    return 0
+                return 2 * ( (L**2 + lp**2 - l**2) / (2*L*lp) )* ( 1 - ((L**2 + lp**2 - l**2) / (2*L*lp) )**2  )**(-0.5)
+            else:
+                return 0
+
+        def inner_integrand(lp, L, l):
+            return lp * al_F_2(lp) * ell_dependence(L, l, lp)
+
+        def outer_integrand(l, L):
+            return l * al_F_1(l) * quad(inner_integrand, 1, self.lmax, args=(L, l))[0]
+
+        al_F_1, al_F_2 = self.get_filtered_profiles_fftlog(profile_leg1, profile_leg2=None)
+        output_unnormalised_phi = np.zeros(ell_out.shape)
+        for i,L in enumerate(ell_out):
+            output_unnormalised_phi[i] = quad(outer_integrand, 1, self.lmax, args=L)[0]/(2*np.pi)
+
+        return output_unnormalised_phi
