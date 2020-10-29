@@ -108,7 +108,7 @@ class experiment:
 
     def get_brute_force_unnorm_TT_qe(self, ell_out, profile_leg1, profile_leg2=None):
         '''
-        Slow but sure method to calculate the 1D TT QE reconstruction. Scales as O(N^3), but useful as a cross-check of FFTlog
+        Slow but sure method to calculate the 1D TT QE reconstruction. Scales as O(N^3), but useful as a cross-check of get_unnorm_TT_qe(fftlog_way=True)
         Inputs:
             * ell_out = 1D numpy array with the multipoles at which the reconstruction is wanted.
             * profile_leg1 = 1D numpy array. Projected, spherically-symmetric emission profile. Truncated at lmax.
