@@ -31,6 +31,7 @@ class hm_framework:
 
         self.hcos = hm.HaloModel(zs,ks,ms=ms,mass_function=mass_function,params=cosmoParams,mdef=mdef)
         self.hcos.add_battaglia_pres_profile("y",family="pres",xmax=5,nxs=40000)
+        self.hcos.set_cibParams('planck13')
 
         self.ms_rescaled = self.hcos.ms[...]/self.hcos.rho_matter_z(0)
         mMask = np.ones(nMasses)
@@ -46,7 +47,7 @@ class hm_framework:
     def get_tsz_bias(self, exp):
         ''' Calculate the tsz biases given an "experiment" object (defined in qest.py)'''
         hcos = self.hcos
-        # FIXME: Hard-codDe QE normalisation for now
+        # FIXME: Hard-code QE normalisation for now
         norm_from_lenscov = np.load('/Users/antonbaleatolizancos/Projects/lensing_rec_biases/auxiliary_objects/N0_lmax3000_nlevt18_beam1arcmin.npy')
         norm = np.interp(exp.ls, np.arange(3001), norm_from_lenscov)
 
@@ -102,4 +103,81 @@ class hm_framework:
         exp.biases['tsz']['trispec']['2h'] = tls.scale_sz(exp.freq_GHz)**4 * self.T_CMB**4* np.trapz(twoHalo_4pt*hcos.comoving_radial_distance(hcos.zs)**-6*(hcos.h_of_z(hcos.zs)**3),hcos.zs,axis=-1)
         exp.biases['tsz']['prim_bispec']['1h'] = 2*conversion_factor * tls.scale_sz(exp.freq_GHz)**2 * self.T_CMB**2* np.trapz(oneHalo_cross*1./hcos.comoving_radial_distance(hcos.zs)**4*(hcos.h_of_z(hcos.zs)**2),hcos.zs,axis=-1)
         exp.biases['tsz']['prim_bispec']['2h'] = 2*conversion_factor * tls.scale_sz(exp.freq_GHz)**2 * self.T_CMB**2* np.trapz(twoHalo_cross*1./hcos.comoving_radial_distance(hcos.zs)**4*(hcos.h_of_z(hcos.zs)**2),hcos.zs,axis=-1)
+        return
+
+    def get_cib_bias(self, exp):
+        ''' Calculate the CIB biases given an "experiment" object (defined in qest.py)'''
+        autofreq = np.array([[exp.freq_GHz], [exp.freq_GHz]], dtype=np.double)   *1e9    #Ghz
+        hcos = self.hcos
+        # FIXME: Hard-codDe QE normalisation for now
+        norm_from_lenscov = np.load('/Users/antonbaleatolizancos/Projects/lensing_rec_biases/auxiliary_objects/N0_lmax3000_nlevt18_beam1arcmin.npy')
+        norm = np.interp(exp.ls, np.arange(3001), norm_from_lenscov)
+
+        nx = exp.lmax+1
+        # The one and two halo bias terms -- these store the integrand to be integrated over z
+        oneHalo_4pt = np.zeros([nx,self.nZs])+0j
+        twoHalo_4pt = np.zeros([nx,self.nZs])+0j
+        oneHalo_cross = np.zeros([nx,self.nZs])+0j
+        twoHalo_cross = np.zeros([nx,self.nZs])+0j
+
+        for i,z in enumerate(hcos.zs):
+            #Temporary storage
+            integrand_oneHalo_4pt = np.zeros([nx,self.nMasses])+0j
+            integrand_oneHalo_cross = np.zeros([nx,self.nMasses])+0j
+            integrand_twoHalo_2g = np.zeros([nx,self.nMasses])+0j
+            integrand_twoHalo_1g = np.zeros([nx,self.nMasses])+0j
+
+            # M integral.
+            for j,m in enumerate(hcos.ms):
+                if m> self.massCut: continue
+                 #project the galaxy profiles
+                g_central = tls.pkToPell(hcos.comoving_radial_distance(hcos.zs[i]),hcos.ks,hcos._get_fcen(autofreq[0])[i,j]*\
+                             (1-np.exp(-(hcos.ks/hcos.p['kstar_damping']))), ellmax=exp.lmax)
+                g_sat = tls.pkToPell(hcos.comoving_radial_distance(hcos.zs[i]),hcos.ks,hcos._get_fsat(autofreq[0], cibinteg='trap', satmf='Tinker')[i,j] * hcos.uk_profiles['nfw'][i,j]*\
+                             (1-np.exp(-(hcos.ks/hcos.p['kstar_damping']))), ellmax=exp.lmax)
+                g = tls.pkToPell(hcos.comoving_radial_distance(hcos.zs[i]),hcos.ks, hcos.uk_profiles['nfw'][i,j]*\
+                             (1-np.exp(-(hcos.ks/hcos.p['kstar_damping']))), ellmax=exp.lmax)
+
+                unnormalised_phi_central = exp.get_unnorm_TT_qe(np.arange(exp.lmax+1), g_central, np.ones(g_central.shape))# for 1h trisp -- one leg is a central
+                unnormalised_phi_sat = exp.get_unnorm_TT_qe(np.arange(exp.lmax+1), g_sat, g_sat)# for 1h trisp -- all legs are satellites
+                unnormalised_phi_cen_and_sat =  exp.get_unnorm_TT_qe(np.arange(exp.lmax+1), g_central, g_sat)
+
+                #Normalize the reconstruction
+                phi_estimate_cfft_central = unnormalised_phi_central * norm
+                phi_estimate_cfft_central = np.nan_to_num(phi_estimate_cfft_central)
+                phi_estimate_cfft_sat = unnormalised_phi_sat * norm
+                phi_estimate_cfft_sat = np.nan_to_num(phi_estimate_cfft_sat)
+                phi_estimate_cfft_cen_and_sat = unnormalised_phi_cen_and_sat * norm
+                phi_estimate_cfft_cen_and_sat = np.nan_to_num(phi_estimate_cfft_cen_and_sat)
+
+                # Get the kappa map
+                kap = tls.pkToPell(hcos.comoving_radial_distance(hcos.zs[i]),hcos.ks,hcos.uk_profiles['nfw'][i,j]*hcos.lensing_window(hcos.zs[i],1100.), ellmax=exp.lmax)
+                kfft = kap*self.ms_rescaled[j]
+                # Accumulate the integrands
+                integrand_oneHalo_cross[:,j] = (phi_estimate_cfft_sat + 2*phi_estimate_cfft_cen_and_sat)*np.conjugate(kfft)*hcos.nzm[i,j]
+                integrand_oneHalo_4pt[:,j] = (3*phi_estimate_cfft_sat*np.conjugate(phi_estimate_cfft_cen_and_sat) + phi_estimate_cfft_sat*np.conjugate(phi_estimate_cfft_sat)) * hcos.nzm[i,j]
+                # FIXME! The 2h term below only has one factor of u in the coupling involving centrals. should it have two?
+                integrand_twoHalo_2g[:,j] = (2*phi_estimate_cfft_cen_and_sat + phi_estimate_cfft_sat)*hcos.nzm[i,j]*hcos.bh[i,j]
+                integrand_twoHalo_1g[:,j] = np.conjugate(kfft)*hcos.nzm[i,j]*hcos.bh[i,j]
+
+            # Perform the m integrals
+            oneHalo_4pt[:,i]=np.trapz(integrand_oneHalo_4pt,hcos.ms,axis=-1)
+            oneHalo_cross[:,i]=np.trapz(integrand_oneHalo_cross,hcos.ms,axis=-1)
+
+            # This is the two halo term. P_k times the M integrals
+            pk = tls.pkToPell(hcos.comoving_radial_distance(hcos.zs[i]),hcos.ks,hcos.Pzk[i], ellmax=exp.lmax)
+            twoHalo_4pt[:,i]=np.trapz(integrand_twoHalo_2g,hcos.ms,axis=-1)**2 *pk
+
+            tmpCorr =np.trapz(integrand_twoHalo_1g,hcos.ms,axis=-1)
+            twoHalo_cross[:,i]=np.trapz(integrand_twoHalo_2g,hcos.ms,axis=-1)*(tmpCorr + hcos.lensing_window(hcos.zs,1100.)[i] - hcos.lensing_window(hcos.zs[i],1100.)*self.consistency[i])*pk#
+
+
+        # Convert the NFW profile in the cross bias from kappa to phi
+        conversion_factor = np.nan_to_num(1 / (0.5 * exp.ls*(exp.ls+1) ))
+
+        # Integrate over z
+        exp.biases['cib']['trispec']['1h'] =  np.trapz(oneHalo_4pt*(1+hcos.zs)**-4 * hcos.comoving_radial_distance(hcos.zs)**-6*(hcos.h_of_z(hcos.zs)**-1),hcos.zs,axis=-1)
+        exp.biases['cib']['trispec']['2h'] = np.trapz(twoHalo_4pt*(1+hcos.zs)**-4*hcos.comoving_radial_distance(hcos.zs)**-6*(hcos.h_of_z(hcos.zs)**-1),hcos.zs,axis=-1)
+        exp.biases['cib']['prim_bispec']['1h'] = conversion_factor * np.trapz(oneHalo_cross*(1+hcos.zs)**-3*1./hcos.comoving_radial_distance(hcos.zs)**4,hcos.zs,axis=-1)
+        exp.biases['cib']['prim_bispec']['2h'] = conversion_factor * np.trapz(twoHalo_cross*(1+hcos.zs)**-3*1./hcos.comoving_radial_distance(hcos.zs)**4,hcos.zs,axis=-1)
         return
