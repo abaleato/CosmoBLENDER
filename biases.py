@@ -4,9 +4,8 @@ from . import tools as tls
 
 class hm_framework:
     ''' Set the halo model parameters '''
-    def __init__(self, massCut_Mvir = 5e15, m_min=2e13, m_max=5e16, nMasses=30, z_min=0.07, z_max=3, nZs=30, k_min = 1e-4, k_max=10, nks=1001, mass_function='sheth-torman', mdef='vir', cosmoParams=None):
+    def __init__(self, m_min=2e13, m_max=5e16, nMasses=30, z_min=0.07, z_max=3, nZs=30, k_min = 1e-4, k_max=10, nks=1001, mass_function='sheth-torman', mdef='vir', cosmoParams=None):
         ''' Inputs:
-                * massCut_Mvir = Virial masss cut in solar masses.
                 * m_min = Minimum virial mass for the halo model calculation
                 * m_max = Maximum virial mass for the halo model calculation (bot that massCut_Mvir will overide this)
                 * nMasses = Integer. Number of steps in mass for the integrals
@@ -20,8 +19,6 @@ class hm_framework:
                 * mdef = String. Mass definition. Must be defined in hmvec for the chosen mass_function
                 * cosmoParams = Dictionary of cosmological parameters to initialised HaloModel hmvec object
         '''
-        self.massCut = massCut_Mvir #Convert from M_vir (which is what Alex uses) to M_200 (which is what the
-                                    # Tinker mass function in hmvec uses) using the relation from White 01.
         self.nMasses = nMasses
         zs = np.linspace(z_min,z_max,nZs) # redshifts
         ms = np.geomspace(m_min,m_max,nMasses) # masses
@@ -34,8 +31,15 @@ class hm_framework:
         self.hcos.set_cibParams('planck13')
 
         self.ms_rescaled = self.hcos.ms[...]/self.hcos.rho_matter_z(0)
-        mMask = np.ones(nMasses)
-        mMask[self.massCut<self.hcos.ms]=0
+
+    def get_consistency(self, exp):
+        '''
+        Calculate consistency relation for 2-halo term given some mass cut
+        Input:
+            * exp = a qest.experiment object
+        '''
+        mMask = np.ones(self.nMasses)
+        mMask[exp.massCut<self.hcos.ms]=0
 
         # This is an adhoc fix for the large scales. Perhaps not needed here.
         # Essentially the one halo terms are flat on large scales, this means the as k->0 you are dominated by these
@@ -45,8 +49,13 @@ class hm_framework:
         self.consistency =  np.trapz(self.hcos.nzm*self.hcos.bh*self.hcos.ms/self.hcos.rho_matter_z(0)*mMask,self.hcos.ms, axis=-1)
 
     def get_tsz_bias(self, exp):
-        ''' Calculate the tsz biases given an "experiment" object (defined in qest.py)'''
+        '''
+        Calculate the tsz biases given an "experiment" object (defined in qest.py)
+        Input:
+            * exp = a qest.experiment object
+        '''
         hcos = self.hcos
+        self.get_consistency(exp)
         # FIXME: Hard-code QE normalisation for now
         norm_from_lenscov = np.load('/Users/antonbaleatolizancos/Projects/lensing_rec_biases/auxiliary_objects/N0_lmax3000_nlevt18_beam1arcmin.npy')
         norm = np.interp(exp.ls, np.arange(3001), norm_from_lenscov)
@@ -67,7 +76,7 @@ class hm_framework:
 
             # M integral.
             for j,m in enumerate(hcos.ms):
-                if m> self.massCut: continue
+                if m> exp.massCut: continue
                 y = tls.pkToPell(hcos.comoving_radial_distance(hcos.zs[i]),hcos.ks,hcos.pk_profiles['y'][i,j]*(1-np.exp(-(hcos.ks/hcos.p['kstar_damping']))), ellmax=exp.lmax)
                 # Get the kappa map
                 kap = tls.pkToPell(hcos.comoving_radial_distance(hcos.zs[i]),hcos.ks,hcos.uk_profiles['nfw'][i,j]*hcos.lensing_window(hcos.zs[i],1100.), ellmax=exp.lmax)
@@ -109,7 +118,8 @@ class hm_framework:
         ''' Calculate the CIB biases given an "experiment" object (defined in qest.py)'''
         autofreq = np.array([[exp.freq_GHz], [exp.freq_GHz]], dtype=np.double)   *1e9    #Ghz
         hcos = self.hcos
-        # FIXME: Hard-codDe QE normalisation for now
+        self.get_consistency(exp)
+        # FIXME: Hard-code QE normalisation for now
         norm_from_lenscov = np.load('/Users/antonbaleatolizancos/Projects/lensing_rec_biases/auxiliary_objects/N0_lmax3000_nlevt18_beam1arcmin.npy')
         norm = np.interp(exp.ls, np.arange(3001), norm_from_lenscov)
 
@@ -129,7 +139,7 @@ class hm_framework:
 
             # M integral.
             for j,m in enumerate(hcos.ms):
-                if m> self.massCut: continue
+                if m> exp.massCut: continue
                  #project the galaxy profiles
                 g_central = tls.pkToPell(hcos.comoving_radial_distance(hcos.zs[i]),hcos.ks,hcos._get_fcen(autofreq[0])[i,j]*\
                              (1-np.exp(-(hcos.ks/hcos.p['kstar_damping']))), ellmax=exp.lmax)

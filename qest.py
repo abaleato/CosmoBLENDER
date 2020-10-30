@@ -5,12 +5,13 @@ from scipy.integrate import quad
 from . import spectra
 
 class experiment:
-    def __init__(self, nlev_t, beam_size, lmax, fname_scalar=None, fname_lensed=None, freq_GHz=150.):
+    def __init__(self, nlev_t, beam_size, lmax, massCut_Mvir = np.inf, fname_scalar=None, fname_lensed=None, freq_GHz=150.):
         ''' Initialise a cosmology and experimental charactierstics
             - Inputs:
                 * nlev_t = temperature noise level, In uK.arcmin.
                 * beam_size = beam fwhm (symmetric). In arcmin.
                 * lmax = reconstruction lmax.
+                * (optional) massCut_Mvir = Maximum halo virial masss, in solar masses. Default is no cut (infinite)
                 * (optional) fname_scalar = CAMB files for unlensed CMB
                 * (optiomal) fname_lensed = CAMB files for lensed CMB
         '''
@@ -27,6 +28,8 @@ class experiment:
         self.ls = cl_len.ls
         self.lmax = lmax
         self.freq_GHz=freq_GHz
+        self.massCut = massCut_Mvir #Convert from M_vir (which is what Alex uses) to M_200 (which is what the
+                                    # Tinker mass function in hmvec uses) using the relation from White 01.
 
         bl = spectra.bl(beam_size, lmax) # beam transfer function.
         self.nltt = (np.pi/180./60.*nlev_t)**2 / bl**2
@@ -82,11 +85,11 @@ class experiment:
         r_arr_4, f_222 = _fftlog_transform(ell, ell**2 * al_F_2(ell), 2, 2, alpha)
 
         ell_out_arr, fl_total = _fftlog_transform(r_arr_4, f_121 * (-f_010/r_arr_0 + f_111) + 0.5 * f_010*(-f_022 + f_222) , 2, 0, alpha)
-        # Interpolate and correct factors of 2pi from fftlog convetions
+        # Interpolate and correct factors of 2pi from fftlog conventions
         unnormalised_phi = interp1d(ell_out_arr, - (2*np.pi)**3 * fl_total, bounds_error=False, fill_value=0.0)
         return unnormalised_phi
 
-    def get_unnorm_TT_qe(self, ell_out, profile_leg1, profile_leg2=None, fftlog_way=True, N_l=4*4096, lmin=0.000135, alpha=-1.35):
+    def get_unnorm_TT_qe(self, ell_out, profile_leg1, profile_leg2=None, fftlog_way=True, N_l=2*4096, lmin=0.000135, alpha=-1.35):
         '''
         Helper function to get the unnormalised TT QE reconstruction for spherically-symmetric profiles using FFTlog
         Inputs:
