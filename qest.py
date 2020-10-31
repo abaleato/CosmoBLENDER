@@ -34,9 +34,17 @@ class experiment:
         bl = spectra.bl(beam_size, lmax) # beam transfer function.
         self.nltt = (np.pi/180./60.*nlev_t)**2 / bl**2
         
+        # Calculate QE norm
+        self.get_qe_norm(nlev_t, beam_size, lmax)
+
         # Initialise arrays to store the biases
         empty_arr = np.zeros(lmax + 1)
         self.biases = { 'tsz' : {'trispec' : {'1h' : empty_arr, '2h' : empty_arr}, 'prim_bispec' : {'1h' : empty_arr, '2h' : empty_arr}, 'second_bispec' : {'1h' : empty_arr, '2h' : empty_arr}}, 'cib' : {'trispec' : {'1h' : empty_arr, '2h' : empty_arr}, 'prim_bispec' : {'1h' : empty_arr, '2h' : empty_arr}, 'second_bispec' : {'1h' : empty_arr, '2h' : empty_arr}} }
+
+    def get_qe_norm(self, nlev_t, beam_size, lmax):
+        # FIXME: Hard-code QE normalisation for now
+        norm_from_lenscov = np.load('/Users/antonbaleatolizancos/Projects/lensing_rec_biases/auxiliary_objects/N0_lmax3000_nlevt18_beam1arcmin.npy')
+        self.qe_norm = np.interp(self.ls, np.arange(3001), norm_from_lenscov)
 
     def __getattr__(self, spec):
         try:

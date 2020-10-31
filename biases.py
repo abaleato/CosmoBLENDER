@@ -56,9 +56,6 @@ class hm_framework:
         '''
         hcos = self.hcos
         self.get_consistency(exp)
-        # FIXME: Hard-code QE normalisation for now
-        norm_from_lenscov = np.load('/Users/antonbaleatolizancos/Projects/lensing_rec_biases/auxiliary_objects/N0_lmax3000_nlevt18_beam1arcmin.npy')
-        norm = np.interp(exp.ls, np.arange(3001), norm_from_lenscov)
 
         nx = exp.lmax+1
         # The one and two halo bias terms -- these store the integrand to be integrated over z
@@ -85,7 +82,7 @@ class hm_framework:
                 unnormalised_phi = exp.get_unnorm_TT_qe(np.arange(exp.lmax+1), y,y)
 
                 #Normalize the reconstruction
-                phi_estimate_cfft = unnormalised_phi * norm
+                phi_estimate_cfft = unnormalised_phi * exp.qe_norm
                 phi_estimate_cfft = np.nan_to_num(phi_estimate_cfft)
 
                 # Accumulate the integrands
@@ -119,9 +116,6 @@ class hm_framework:
         autofreq = np.array([[exp.freq_GHz], [exp.freq_GHz]], dtype=np.double)   *1e9    #Ghz
         hcos = self.hcos
         self.get_consistency(exp)
-        # FIXME: Hard-code QE normalisation for now
-        norm_from_lenscov = np.load('/Users/antonbaleatolizancos/Projects/lensing_rec_biases/auxiliary_objects/N0_lmax3000_nlevt18_beam1arcmin.npy')
-        norm = np.interp(exp.ls, np.arange(3001), norm_from_lenscov)
 
         nx = exp.lmax+1
         # The one and two halo bias terms -- these store the integrand to be integrated over z
@@ -153,11 +147,11 @@ class hm_framework:
                 unnormalised_phi_cen_and_sat =  exp.get_unnorm_TT_qe(np.arange(exp.lmax+1), g_central, g_sat)
 
                 #Normalize the reconstruction
-                phi_estimate_cfft_central = unnormalised_phi_central * norm
+                phi_estimate_cfft_central = unnormalised_phi_central * exp.qe_norm
                 phi_estimate_cfft_central = np.nan_to_num(phi_estimate_cfft_central)
-                phi_estimate_cfft_sat = unnormalised_phi_sat * norm
+                phi_estimate_cfft_sat = unnormalised_phi_sat * exp.qe_norm
                 phi_estimate_cfft_sat = np.nan_to_num(phi_estimate_cfft_sat)
-                phi_estimate_cfft_cen_and_sat = unnormalised_phi_cen_and_sat * norm
+                phi_estimate_cfft_cen_and_sat = unnormalised_phi_cen_and_sat * exp.qe_norm
                 phi_estimate_cfft_cen_and_sat = np.nan_to_num(phi_estimate_cfft_cen_and_sat)
 
                 # Get the kappa map
