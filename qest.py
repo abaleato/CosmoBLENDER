@@ -31,6 +31,8 @@ class experiment:
         self.massCut = massCut_Mvir #Convert from M_vir (which is what Alex uses) to M_200 (which is what the
                                     # Tinker mass function in hmvec uses) using the relation from White 01.
 
+        self.nlev_t = nlev_t
+        self.beam_size = beam_size
         bl = spectra.bl(beam_size, lmax) # beam transfer function.
         self.nltt = (np.pi/180./60.*nlev_t)**2 / bl**2
         
@@ -51,6 +53,15 @@ class experiment:
             return self.biases[spec]
         except KeyError:
             raise AttributeError(spec)
+
+    def __str__(self):
+        ''' Print out halo model calculator properties '''
+        massCut = '{:.2e}'.format(self.massCut)
+        beam_size = '{:.2f}'.format(self.beam_size)
+        nlev_t = '{:.2f}'.format(self.nlev_t)
+        freq_GHz = '{:.2f}'.format(self.freq_GHz)
+
+        return 'Mass Cut: ' + massCut + '  lmax: ' + str(self.lmax) + '  Beam FWHM: '+ beam_size + ' Noise (uK arcmin): ' + nlev_t + '  Freq (GHz): ' + freq_GHz
 
     def get_filtered_profiles_fftlog(self, profile_leg1, profile_leg2=None):
         '''

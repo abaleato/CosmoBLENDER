@@ -20,6 +20,13 @@ class hm_framework:
                 * cosmoParams = Dictionary of cosmological parameters to initialised HaloModel hmvec object
         '''
         self.nMasses = nMasses
+        self.m_min = m_min
+        self.m_max = m_max
+        self.z_min = z_min
+        self.z_max = z_max
+        self.nZs = nZs
+        self.mass_function = mass_function
+        self.mdef = mdef
         zs = np.linspace(z_min,z_max,nZs) # redshifts
         ms = np.geomspace(m_min,m_max,nMasses) # masses
         ks = np.geomspace(k_min,k_max,nks) # wavenumbers
@@ -31,6 +38,15 @@ class hm_framework:
         self.hcos.set_cibParams('planck13')
 
         self.ms_rescaled = self.hcos.ms[...]/self.hcos.rho_matter_z(0)
+
+    def __str__(self):
+        ''' Print out halo model calculator properties '''
+        m_min = '{:.2e}'.format(self.m_min)
+        m_max = '{:.2e}'.format(self.m_max)
+        z_min = '{:.2f}'.format(self.z_min)
+        z_max = '{:.2f}'.format(self.z_max)
+
+        return 'M_min: ' + m_min + '  M_max: ' + m_max + '  n_Masses: '+ str(self.nMasses) + '\n' + '  z_min: ' + z_min + '  z_max: ' + z_max + '  n_zs: ' + str(self.nZs) +  '\n' +'  Mass function: ' + self.mass_function + '  Mass definition: ' + self.mdef
 
     def get_consistency(self, exp):
         '''
