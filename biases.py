@@ -1,6 +1,7 @@
 import numpy as np
 import hmvec as hm
 from . import tools as tls
+import quicklens as ql
 
 class hm_framework:
     ''' Set the halo model parameters '''
@@ -64,28 +65,36 @@ class hm_framework:
         # I have removed this for now as i think it is likley subdomiant
         self.consistency =  np.trapz(self.hcos.nzm*self.hcos.bh*self.hcos.ms/self.hcos.rho_matter_z(0)*mMask,self.hcos.ms, axis=-1)
 
-    def get_tsz_bias(self, exp):
+    def get_tsz_bias(self, exp, fftlog_way=True, lmax_out=3000):
         '''
         Calculate the tsz biases given an "experiment" object (defined in qest.py)
         Input:
             * exp = a qest.experiment object
+            * (optional) fftlog_way = Boolean. If true, use 1D fftlog reconstructions, otherwise use 2D quicklens
+            * (optional) lmax_out = int. Maximum multipole at which to return the lensing reconstruction
         '''
         hcos = self.hcos
         self.get_consistency(exp)
 
-        nx = exp.lmax+1
-        # The one and two halo bias terms -- these store the integrand to be integrated over z
-        oneHalo_4pt = np.zeros([nx,self.nZs])+0j
-        twoHalo_4pt = np.zeros([nx,self.nZs])+0j
-        oneHalo_cross = np.zeros([nx,self.nZs])+0j
-        twoHalo_cross = np.zeros([nx,self.nZs])+0j
+        # Output ells
+        ells_out = np.arange(lmax_out+1)
+        if not fftlog_way:
+            lbins = np.arange(1,lmax_out+1,30)
+
+        nx = exp.lmax+1 if fftlog_way else exp.pix.nx
+
+        # The one and two halo bias terms -- these store the integrand to be integrated over z. Dimensions depend on method
+        oneHalo_4pt = np.zeros([nx,self.nZs])+0j if fftlog_way else np.zeros([nx,nx,self.nZs])+0j
+        twoHalo_4pt = np.zeros([nx,self.nZs])+0j if fftlog_way else np.zeros([nx,nx,self.nZs])+0j
+        oneHalo_cross = np.zeros([nx,self.nZs])+0j if fftlog_way else np.zeros([nx,nx,self.nZs])+0j
+        twoHalo_cross = np.zeros([nx,self.nZs])+0j if fftlog_way else np.zeros([nx,nx,self.nZs])+0j
 
         for i,z in enumerate(hcos.zs):
             #Temporary storage
-            integrand_oneHalo_4pt = np.zeros([nx,self.nMasses])+0j
-            integrand_oneHalo_cross = np.zeros([nx,self.nMasses])+0j
-            integrand_twoHalo_2g = np.zeros([nx,self.nMasses])+0j
-            integrand_twoHalo_1g = np.zeros([nx,self.nMasses])+0j
+            integrand_oneHalo_4pt = np.zeros([nx,self.nMasses])+0j if fftlog_way else np.zeros([nx,nx,self.nMasses])+0j
+            integrand_oneHalo_cross = np.zeros([nx,self.nMasses])+0j if fftlog_way else np.zeros([nx,nx,self.nMasses])+0j
+            integrand_twoHalo_2g = np.zeros([nx,self.nMasses])+0j if fftlog_way else np.zeros([nx,nx,self.nMasses])+0j
+            integrand_twoHalo_1g = np.zeros([nx,self.nMasses])+0j if fftlog_way else np.zeros([nx,nx,self.nMasses])+0j
 
             # M integral.
             for j,m in enumerate(hcos.ms):
@@ -93,55 +102,77 @@ class hm_framework:
                 y = tls.pkToPell(hcos.comoving_radial_distance(hcos.zs[i]),hcos.ks,hcos.pk_profiles['y'][i,j]*(1-np.exp(-(hcos.ks/hcos.p['kstar_damping']))), ellmax=exp.lmax)
                 # Get the kappa map
                 kap = tls.pkToPell(hcos.comoving_radial_distance(hcos.zs[i]),hcos.ks,hcos.uk_profiles['nfw'][i,j]*hcos.lensing_window(hcos.zs[i],1100.), ellmax=exp.lmax)
-                kfft = kap*self.ms_rescaled[j]
+                kfft = kap*self.ms_rescaled[j] if fftlog_way else ql.spec.cl2cfft(kap,exp.pix).fft*self.ms_rescaled[j]
 
-                phi_estimate_cfft = exp.get_TT_qe(np.arange(exp.lmax+1), y,y)
+                phi_estimate_cfft = exp.get_TT_qe(fftlog_way, ells_out, y,y)
 
                 # Accumulate the integrands
-                integrand_oneHalo_cross[:,j] = phi_estimate_cfft*np.conjugate(kfft)*hcos.nzm[i,j]
-                integrand_oneHalo_4pt[:,j] = phi_estimate_cfft*np.conjugate(phi_estimate_cfft) * hcos.nzm[i,j]
-                integrand_twoHalo_1g[:,j] = np.conjugate(kfft)*hcos.nzm[i,j]*hcos.bh[i,j]
-                integrand_twoHalo_2g[:,j] = phi_estimate_cfft*hcos.nzm[i,j]*hcos.bh[i,j]
+                integrand_oneHalo_cross[...,j] = phi_estimate_cfft*np.conjugate(kfft)*hcos.nzm[i,j]
+                integrand_oneHalo_4pt[...,j] = phi_estimate_cfft*np.conjugate(phi_estimate_cfft) * hcos.nzm[i,j]
+                integrand_twoHalo_1g[...,j] = np.conjugate(kfft)*hcos.nzm[i,j]*hcos.bh[i,j]
+                integrand_twoHalo_2g[...,j] = phi_estimate_cfft*hcos.nzm[i,j]*hcos.bh[i,j]
 
             # Perform the m integrals
-            oneHalo_4pt[:,i]=np.trapz(integrand_oneHalo_4pt,hcos.ms,axis=-1)
-            oneHalo_cross[:,i]=np.trapz(integrand_oneHalo_cross,hcos.ms,axis=-1)
+            oneHalo_4pt[...,i]=np.trapz(integrand_oneHalo_4pt,hcos.ms,axis=-1)
+            oneHalo_cross[...,i]=np.trapz(integrand_oneHalo_cross,hcos.ms,axis=-1)
 
             # This is the two halo term. P_k times the M integrals
             pk = tls.pkToPell(hcos.comoving_radial_distance(hcos.zs[i]),hcos.ks,hcos.Pzk[i], ellmax=exp.lmax)
-            twoHalo_4pt[:,i]=np.trapz(integrand_twoHalo_2g,hcos.ms,axis=-1)**2 *pk
+            if not fftlog_way:
+                pk = ql.spec.cl2cfft(pk, exp.pix).fft
+
+            twoHalo_4pt[...,i]=np.trapz(integrand_twoHalo_2g,hcos.ms,axis=-1)**2 *pk
             tmpCorr =np.trapz(integrand_twoHalo_1g,hcos.ms,axis=-1)
-            twoHalo_cross[:,i]=np.trapz(integrand_twoHalo_2g,hcos.ms,axis=-1)*(tmpCorr + hcos.lensing_window(hcos.zs,1100.)[i] - hcos.lensing_window(hcos.zs[i],1100.)*self.consistency[i])*pk#
+            twoHalo_cross[...,i]=np.trapz(integrand_twoHalo_2g,hcos.ms,axis=-1)*(tmpCorr + hcos.lensing_window(hcos.zs,1100.)[i] - hcos.lensing_window(hcos.zs[i],1100.)*self.consistency[i])*pk#
 
         # Convert the NFW profile in the cross bias from kappa to phi
-        conversion_factor = np.nan_to_num(1 / (0.5 * exp.ls*(exp.ls+1) ))
+        conversion_factor = np.nan_to_num(1 / (0.5 * ells_out*(ells_out+1) )) if fftlog_way else ql.spec.cl2cfft(np.nan_to_num(1 / (0.5 * np.arange(lmax_out+1)*(np.arange(lmax_out+1)+1) )),exp.pix).fft
 
         # Integrate over z
         exp.biases['tsz']['trispec']['1h'] = tls.scale_sz(exp.freq_GHz)**4 * self.T_CMB**4* np.trapz(oneHalo_4pt*hcos.comoving_radial_distance(hcos.zs)**-6*(hcos.h_of_z(hcos.zs)**3),hcos.zs,axis=-1)
         exp.biases['tsz']['trispec']['2h'] = tls.scale_sz(exp.freq_GHz)**4 * self.T_CMB**4* np.trapz(twoHalo_4pt*hcos.comoving_radial_distance(hcos.zs)**-6*(hcos.h_of_z(hcos.zs)**3),hcos.zs,axis=-1)
         exp.biases['tsz']['prim_bispec']['1h'] = 2*conversion_factor * tls.scale_sz(exp.freq_GHz)**2 * self.T_CMB**2* np.trapz(oneHalo_cross*1./hcos.comoving_radial_distance(hcos.zs)**4*(hcos.h_of_z(hcos.zs)**2),hcos.zs,axis=-1)
         exp.biases['tsz']['prim_bispec']['2h'] = 2*conversion_factor * tls.scale_sz(exp.freq_GHz)**2 * self.T_CMB**2* np.trapz(twoHalo_cross*1./hcos.comoving_radial_distance(hcos.zs)**4*(hcos.h_of_z(hcos.zs)**2),hcos.zs,axis=-1)
-        return
+        
+        if fftlog_way:
+            exp.biases['ells'] = np.arange(exp.lmax+1)
+            return
+        else:
+            exp.biases['ells'] = ql.maps.cfft(exp.nx,exp.dx,fft=exp.biases['tsz']['trispec']['1h']).get_ml(lbins).ls
+            exp.biases['tsz']['trispec']['1h'] = ql.maps.cfft(exp.nx,exp.dx,fft=exp.biases['tsz']['trispec']['1h']).get_ml(lbins).specs['cl']
+            exp.biases['tsz']['trispec']['2h'] = ql.maps.cfft(exp.nx,exp.dx,fft=exp.biases['tsz']['trispec']['2h']).get_ml(lbins).specs['cl']
+            exp.biases['tsz']['prim_bispec']['1h'] = ql.maps.cfft(exp.nx,exp.dx,fft=exp.biases['tsz']['prim_bispec']['1h']).get_ml(lbins).specs['cl']
+            exp.biases['tsz']['prim_bispec']['2h'] = ql.maps.cfft(exp.nx,exp.dx,fft=exp.biases['tsz']['prim_bispec']['2h']).get_ml(lbins).specs['cl']
+            return
 
-    def get_cib_bias(self, exp):
-        ''' Calculate the CIB biases given an "experiment" object (defined in qest.py)'''
+    def get_cib_bias(self, exp, fftlog_way=True, lmax_out=3000):
+        '''
+        Calculate the CIB biases given an "experiment" object (defined in qest.py)
+        Input:
+            * exp = a qest.experiment object
+            * (optional) fftlog_way = Boolean. If true, use 1D fftlog reconstructions, otherwise use 2D qiucklens
+        '''
         autofreq = np.array([[exp.freq_GHz], [exp.freq_GHz]], dtype=np.double)   *1e9    #Ghz
         hcos = self.hcos
         self.get_consistency(exp)
 
-        nx = exp.lmax+1
+        # Output ells
+        ells_out = np.arange(lmax_out+1)
+
+        nx = exp.lmax+1 if fftlog_way else exp.nx
+
         # The one and two halo bias terms -- these store the integrand to be integrated over z
-        oneHalo_4pt = np.zeros([nx,self.nZs])+0j
-        twoHalo_4pt = np.zeros([nx,self.nZs])+0j
-        oneHalo_cross = np.zeros([nx,self.nZs])+0j
-        twoHalo_cross = np.zeros([nx,self.nZs])+0j
+        oneHalo_4pt = np.zeros([nx,self.nZs])+0j if fftlog_way else np.zeros([nx,nx,self.nZs])+0j
+        twoHalo_4pt = np.zeros([nx,self.nZs])+0j if fftlog_way else np.zeros([nx,nx,self.nZs])+0j
+        oneHalo_cross = np.zeros([nx,self.nZs])+0j if fftlog_way else np.zeros([nx,nx,self.nZs])+0j
+        twoHalo_cross = np.zeros([nx,self.nZs])+0j if fftlog_way else np.zeros([nx,nx,self.nZs])+0j
 
         for i,z in enumerate(hcos.zs):
             #Temporary storage
-            integrand_oneHalo_4pt = np.zeros([nx,self.nMasses])+0j
-            integrand_oneHalo_cross = np.zeros([nx,self.nMasses])+0j
-            integrand_twoHalo_2g = np.zeros([nx,self.nMasses])+0j
-            integrand_twoHalo_1g = np.zeros([nx,self.nMasses])+0j
+            integrand_oneHalo_4pt = np.zeros([nx,self.nMasses])+0j if fftlog_way else np.zeros([nx,nx,self.nMasses])+0j
+            integrand_oneHalo_cross = np.zeros([nx,self.nMasses])+0j if fftlog_way else np.zeros([nx,nx,self.nMasses])+0j
+            integrand_twoHalo_2g = np.zeros([nx,self.nMasses])+0j if fftlog_way else np.zeros([nx,nx,self.nMasses])+0j
+            integrand_twoHalo_1g = np.zeros([nx,self.nMasses])+0j if fftlog_way else np.zeros([nx,nx,self.nMasses])+0j
 
             # M integral.
             for j,m in enumerate(hcos.ms):
@@ -154,38 +185,51 @@ class hm_framework:
                 g = tls.pkToPell(hcos.comoving_radial_distance(hcos.zs[i]),hcos.ks, hcos.uk_profiles['nfw'][i,j]*\
                              (1-np.exp(-(hcos.ks/hcos.p['kstar_damping']))), ellmax=exp.lmax)
 
-                phi_estimate_cfft_central = exp.get_TT_qe(np.arange(exp.lmax+1), g_central, np.ones(g_central.shape))# for 1h trisp -- one leg is a central
-                phi_estimate_cfft_sat = exp.get_TT_qe(np.arange(exp.lmax+1), g_sat, g_sat)# for 1h trisp -- all legs are satellites
-                phi_estimate_cfft_cen_and_sat =  exp.get_TT_qe(np.arange(exp.lmax+1), g_central, g_sat)
+                phi_estimate_cfft_central = exp.get_TT_qe(fftlog_way, np.arange(exp.lmax+1), g_central, np.ones(g_central.shape))# for 1h trisp -- one leg is a central
+                phi_estimate_cfft_sat = exp.get_TT_qe(fftlog_way, np.arange(exp.lmax+1), g_sat, g_sat)# for 1h trisp -- all legs are satellites
+                phi_estimate_cfft_cen_and_sat =  exp.get_TT_qe(fftlog_way, np.arange(exp.lmax+1), g_central, g_sat)
 
                 # Get the kappa map
                 kap = tls.pkToPell(hcos.comoving_radial_distance(hcos.zs[i]),hcos.ks,hcos.uk_profiles['nfw'][i,j]*hcos.lensing_window(hcos.zs[i],1100.), ellmax=exp.lmax)
-                kfft = kap*self.ms_rescaled[j]
+                kfft = kap*self.ms_rescaled[j] if fftlog_way else ql.spec.cl2cfft(kap,exp.pix).fft*self.ms_rescaled[j]
                 # Accumulate the integrands
-                integrand_oneHalo_cross[:,j] = (phi_estimate_cfft_sat + 2*phi_estimate_cfft_cen_and_sat)*np.conjugate(kfft)*hcos.nzm[i,j]
-                integrand_oneHalo_4pt[:,j] = (3*phi_estimate_cfft_sat*np.conjugate(phi_estimate_cfft_cen_and_sat) + phi_estimate_cfft_sat*np.conjugate(phi_estimate_cfft_sat)) * hcos.nzm[i,j]
+                integrand_oneHalo_cross[...,j] = (phi_estimate_cfft_sat + 2*phi_estimate_cfft_cen_and_sat)*np.conjugate(kfft)*hcos.nzm[i,j]
+                integrand_oneHalo_4pt[...,j] = (3*phi_estimate_cfft_sat*np.conjugate(phi_estimate_cfft_cen_and_sat) + phi_estimate_cfft_sat*np.conjugate(phi_estimate_cfft_sat)) * hcos.nzm[i,j]
                 # FIXME! The 2h term below only has one factor of u in the coupling involving centrals. should it have two?
-                integrand_twoHalo_2g[:,j] = (2*phi_estimate_cfft_cen_and_sat + phi_estimate_cfft_sat)*hcos.nzm[i,j]*hcos.bh[i,j]
-                integrand_twoHalo_1g[:,j] = np.conjugate(kfft)*hcos.nzm[i,j]*hcos.bh[i,j]
+                integrand_twoHalo_2g[...,j] = (2*phi_estimate_cfft_cen_and_sat + phi_estimate_cfft_sat)*hcos.nzm[i,j]*hcos.bh[i,j]
+                integrand_twoHalo_1g[...,j] = np.conjugate(kfft)*hcos.nzm[i,j]*hcos.bh[i,j]
 
             # Perform the m integrals
-            oneHalo_4pt[:,i]=np.trapz(integrand_oneHalo_4pt,hcos.ms,axis=-1)
-            oneHalo_cross[:,i]=np.trapz(integrand_oneHalo_cross,hcos.ms,axis=-1)
+            oneHalo_4pt[...,i]=np.trapz(integrand_oneHalo_4pt,hcos.ms,axis=-1)
+            oneHalo_cross[...,i]=np.trapz(integrand_oneHalo_cross,hcos.ms,axis=-1)
 
             # This is the two halo term. P_k times the M integrals
             pk = tls.pkToPell(hcos.comoving_radial_distance(hcos.zs[i]),hcos.ks,hcos.Pzk[i], ellmax=exp.lmax)
-            twoHalo_4pt[:,i]=np.trapz(integrand_twoHalo_2g,hcos.ms,axis=-1)**2 *pk
+            if not fftlog_way:
+                pk = ql.spec.cl2cfft(pk, exp.pix).fft
+
+            twoHalo_4pt[...,i]=np.trapz(integrand_twoHalo_2g,hcos.ms,axis=-1)**2 *pk
 
             tmpCorr =np.trapz(integrand_twoHalo_1g,hcos.ms,axis=-1)
-            twoHalo_cross[:,i]=np.trapz(integrand_twoHalo_2g,hcos.ms,axis=-1)*(tmpCorr + hcos.lensing_window(hcos.zs,1100.)[i] - hcos.lensing_window(hcos.zs[i],1100.)*self.consistency[i])*pk#
+            twoHalo_cross[...,i]=np.trapz(integrand_twoHalo_2g,hcos.ms,axis=-1)*(tmpCorr + hcos.lensing_window(hcos.zs,1100.)[i] - hcos.lensing_window(hcos.zs[i],1100.)*self.consistency[i])*pk#
 
 
         # Convert the NFW profile in the cross bias from kappa to phi
-        conversion_factor = np.nan_to_num(1 / (0.5 * exp.ls*(exp.ls+1) ))
+        conversion_factor = np.nan_to_num(1 / (0.5 * ells_out*(ells_out+1) )) if fftlog_way else ql.spec.cl2cfft(np.nan_to_num(1 / (0.5 * np.arange(lmax_out+1)*(np.arange(lmax_out+1)+1) )),exp.pix).fft
 
         # Integrate over z
         exp.biases['cib']['trispec']['1h'] =  np.trapz(oneHalo_4pt*(1+hcos.zs)**-4 * hcos.comoving_radial_distance(hcos.zs)**-6*(hcos.h_of_z(hcos.zs)**-1),hcos.zs,axis=-1)
         exp.biases['cib']['trispec']['2h'] = np.trapz(twoHalo_4pt*(1+hcos.zs)**-4*hcos.comoving_radial_distance(hcos.zs)**-6*(hcos.h_of_z(hcos.zs)**-1),hcos.zs,axis=-1)
         exp.biases['cib']['prim_bispec']['1h'] = conversion_factor * np.trapz(oneHalo_cross*(1+hcos.zs)**-3*1./hcos.comoving_radial_distance(hcos.zs)**4,hcos.zs,axis=-1)
         exp.biases['cib']['prim_bispec']['2h'] = conversion_factor * np.trapz(twoHalo_cross*(1+hcos.zs)**-3*1./hcos.comoving_radial_distance(hcos.zs)**4,hcos.zs,axis=-1)
-        return
+
+        if fftlog_way:
+            exp.biases['ells'] = np.arange(exp.lmax+1)
+            return
+        else:
+            exp.biases['cib']['trispec']['1h'] = ql.maps.cfft(exp.nx,exp.dx,fft=exp.biases['cib']['trispec']['1h']).get_ml(lbins).specs['cl']
+            exp.biases['cib']['trispec']['2h'] = ql.maps.cfft(exp.nx,exp.dx,fft=exp.biases['cib']['trispec']['2h']).get_ml(lbins).specs['cl']
+            exp.biases['cib']['prim_bispec']['1h'] = ql.maps.cfft(exp.nx,exp.dx,fft=exp.biases['cib']['prim_bispec']['1h']).get_ml(lbins).specs['cl']
+            exp.biases['cib']['prim_bispec']['2h'] = ql.maps.cfft(exp.nx,exp.dx,fft=exp.biases['cib']['prim_bispec']['2h']).get_ml(lbins).specs['cl']
+            exp.biases['ells'] = ql.maps.cfft(exp.nx,exp.dx,fft=exp.biases['cib']['trispec']['1h']).get_ml(lbins).ls
+            return

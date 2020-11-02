@@ -6,7 +6,7 @@ from . import spectra
 import quicklens as ql
 
 class experiment:
-    def __init__(self, nlev_t, beam_size, lmax, massCut_Mvir = np.inf, fname_scalar=None, fname_lensed=None, freq_GHz=150.):
+    def __init__(self, nlev_t, beam_size, lmax, massCut_Mvir = np.inf, fname_scalar=None, fname_lensed=None, freq_GHz=150., nx=512, dx_arcmin=1.0):
         ''' Initialise a cosmology and experimental charactierstics
             - Inputs:
                 * nlev_t = temperature noise level, In uK.arcmin.
@@ -14,7 +14,9 @@ class experiment:
                 * lmax = reconstruction lmax.
                 * (optional) massCut_Mvir = Maximum halo virial masss, in solar masses. Default is no cut (infinite)
                 * (optional) fname_scalar = CAMB files for unlensed CMB
-                * (optiomal) fname_lensed = CAMB files for lensed CMB
+                * (optional) fname_lensed = CAMB files for lensed CMB
+                * (otional) nx = int. Width in number of pixels of grid used in quicklens computations
+                * (optional) dx = float. Pixel width in arcmin for quicklens computations
         '''
         if fname_scalar is None:
             fname_scalar = '/Users/antonbaleatolizancos/Software/Quicklens-with-fixes/quicklens/data/cl/planck_wp_highL/planck_lensing_wp_highL_bestFit_20130627_scalCls.dat'
@@ -35,31 +37,31 @@ class experiment:
         self.bl = spectra.bl(beam_size, lmax) # beam transfer function.
         self.nltt = (np.pi/180./60.*nlev_t)**2 / self.bl**2
 
+        # Set up grid for Quicklens calculations
+        self.nx = nx
+        self.dx = dx_arcmin/60./180.*np.pi # pixel width in radians.
+        self.pix = ql.maps.cfft(self.nx, self.dx)
+
         # Calculate inverse-variance filters
         self.inverse_variance_filters()
         # Calculate QE norm
         self.get_qe_norm()
 
-        # Initialise arrays to store the biases
-        empty_arr = np.zeros(lmax + 1)
-        self.biases = { 'tsz' : {'trispec' : {'1h' : empty_arr, '2h' : empty_arr}, 'prim_bispec' : {'1h' : empty_arr, '2h' : empty_arr}, 'second_bispec' : {'1h' : empty_arr, '2h' : empty_arr}}, 'cib' : {'trispec' : {'1h' : empty_arr, '2h' : empty_arr}, 'prim_bispec' : {'1h' : empty_arr, '2h' : empty_arr}, 'second_bispec' : {'1h' : empty_arr, '2h' : empty_arr}} }
+        # Initialise an empty dictionary to store the biases
+        empty_arr = {}
+        self.biases = { 'ells': empty_arr, 'tsz' : {'trispec' : {'1h' : empty_arr, '2h' : empty_arr}, 'prim_bispec' : {'1h' : empty_arr, '2h' : empty_arr}, 'second_bispec' : {'1h' : empty_arr, '2h' : empty_arr}}, 'cib' : {'trispec' : {'1h' : empty_arr, '2h' : empty_arr}, 'prim_bispec' : {'1h' : empty_arr, '2h' : empty_arr}, 'second_bispec' : {'1h' : empty_arr, '2h' : empty_arr}} }
 
     def inverse_variance_filters(self):
         '''
         Calculate the inverse-variance filters to be applied to the fields prior to lensing reconstruction
         '''
         lmin = 2
-        # Set up grid for semi-analytic calculation -- FIXME: these grid params could perhaps be optimised
-        nx = 512 # number of pixels.
-        dx = (1.0/60./180.*np.pi) # pixel width in radians.
-        pix = ql.maps.pix(nx, dx)
-
         # Initialise a dummy set of maps for the computation
-        tmap = qmap = umap = np.random.randn(nx,nx)
-        tqumap = ql.maps.tqumap(nx, dx, maps=[tmap,qmap,umap])
+        tmap = qmap = umap = np.random.randn(self.nx,self.nx)
+        tqumap = ql.maps.tqumap(self.nx, self.dx, maps=[tmap,qmap,umap])
         #Define the beam transfer function and pixelisation window function.
         #This will be used for beam deconvolution and inverse-variance filtering
-        transf = ql.spec.cl2tebfft(ql.util.dictobj( {'lmax' : self.lmax, 'cltt' : self.bl, 'clee' : self.bl, 'clbb' : self.bl} ), pix)
+        transf = ql.spec.cl2tebfft(ql.util.dictobj( {'lmax' : self.lmax, 'cltt' : self.bl, 'clee' : self.bl, 'clbb' : self.bl} ), self.pix)
         cl_theory  = ql.spec.clmat_teb( ql.util.dictobj( {'lmax' : self.lmax, 'cltt' : self.cl_len.cltt, 'clee' : self.cl_len.clee, 'clbb' : self.cl_len.clbb} ) )
         self.ivf_lib = ql.sims.ivf.library_l_mask( ql.sims.ivf.library_diag_emp(tqumap, cl_theory, transf=transf, nlev_t=self.nlev_t), lmin=lmin, lmax=self.lmax)
 
@@ -132,20 +134,22 @@ class experiment:
         unnormalised_phi = interp1d(ell_out_arr, - (2*np.pi)**3 * fl_total, bounds_error=False, fill_value=0.0)
         return unnormalised_phi
 
-    def get_TT_qe(self, ell_out, profile_leg1, profile_leg2=None, fftlog_way=True, N_l=2*4096, lmin=0.000135, alpha=-1.35, norm_bin_width=40):
+    def get_TT_qe(self, fftlog_way, ell_out, profile_leg1, profile_leg2=None, N_l=2*4096, lmin=0.000135, alpha=-1.35, norm_bin_width=40, key='ptt'):
         '''
         Helper function to get the TT QE reconstruction for spherically-symmetric profiles using FFTlog
         Inputs:
+            * fftlog_way = Bool. If true, use fftlog reconstruction. Otherwise use quicklens.
             * ell_out = 1D numpy array with the multipoles at which the reconstruction is wanted.
             * profile_leg1 = 1D numpy array. Projected, spherically-symmetric emission profile. Truncated at lmax.
             * (optional) profile_leg2 = 1D numpy array. As profile_leg1, but for the other QE leg.
-            * (optional) fftlog_way = Bool. Use fftlog if True, Quicklens if False.
             * (optional) N_l = Integer (preferrably power of 2). Number of logarithmically-spaced samples FFTlog will use.
             * (optional) lmin = Float. lmin of the reconstruction. Recommend choosing (unphysical) small values (e.g., lmin=1e-4) to avoid ringing.
             * (optional) alpha = Float. FFTlog bias exponent. alpha=-1.35 seems to work fine for most applications.
             * (optional) norm_bin_width = int. Bin width to use when taking spectra of the semi-analytic QE normalisation (for fftlog only)
         Returns:
             * If fftlog_way=True, a 1D array containing the unnormalised reconstruction at the multipoles specified in ell_out
+            * (optional) key = String. The quadratic estimator key for quicklens. Default is 'ptt' for TT
+
         '''
         if fftlog_way:
             al_F_1, al_F_2 = self.get_filtered_profiles_fftlog(profile_leg1, profile_leg2=None)
@@ -156,7 +160,19 @@ class experiment:
             qe_norm_1D = self.qe_norm.get_ml(lbins)
             return np.nan_to_num( unnorm_TT_qe / np.interp(ell_out, qe_norm_1D.ls, qe_norm_1D.specs['cl']) )
         else:
-            print('Implement QL way!')
+            tft1 = ql.spec.cl2cfft(profile_leg1, self.pix)
+
+            # Apply filters and do lensing reconstruction
+            t_filter = self.ivf_lib.get_fl().get_cffts()[0]
+            tft1.fft *=t_filter.fft
+            if profile_leg2 is None:
+                tft2 = tft1.copy()
+            else:
+                tft2 = ql.spec.cl2cfft(profile_leg2, self.pix)
+                tft2.fft *= t_filter.fft
+            unnormalized_phi = self.qest_lib.get_qft(key, tft1, 0*tft1.copy(), 0*tft1.copy(), tft2, 0*tft1.copy(), 0*tft1.copy())
+            #Normalize the reconstruction
+            return np.nan_to_num(unnormalized_phi.fft[:,:] / self.qe_norm.fft[:,:])
 
     def get_brute_force_unnorm_TT_qe(self, ell_out, profile_leg1, profile_leg2=None):
         '''
