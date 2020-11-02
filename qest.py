@@ -3,6 +3,7 @@ from scipy.interpolate import interp1d
 from pyccl.pyutils import _fftlog_transform
 from scipy.integrate import quad
 from . import spectra
+import quicklens as ql
 
 class experiment:
     def __init__(self, nlev_t, beam_size, lmax, massCut_Mvir = np.inf, fname_scalar=None, fname_lensed=None, freq_GHz=150.):
@@ -21,11 +22,9 @@ class experiment:
             fname_lensed = '/Users/antonbaleatolizancos/Software/Quicklens-with-fixes/quicklens/data/cl/planck_wp_highL/planck_lensing_wp_highL_bestFit_20130627_lensedCls.dat'
 
         #Initialise CAMB spectra for filtering
-        cl_unl = spectra.get_camb_scalcl(fname_scalar, lmax=lmax)
-        cl_len = spectra.get_camb_lensedcl(fname_lensed, lmax=lmax)
-        self.clpp = cl_unl.clpp
-        self.cltt = cl_len.cltt
-        self.ls = cl_len.ls
+        self.cl_unl = ql.spec.get_camb_scalcl(fname_scalar, lmax=lmax)
+        self.cl_len = ql.spec.get_camb_lensedcl(fname_lensed, lmax=lmax)
+        self.ls = self.cl_len.ls
         self.lmax = lmax
         self.freq_GHz=freq_GHz
         self.massCut = massCut_Mvir #Convert from M_vir (which is what Alex uses) to M_200 (which is what the
@@ -33,20 +32,45 @@ class experiment:
 
         self.nlev_t = nlev_t
         self.beam_size = beam_size
-        bl = spectra.bl(beam_size, lmax) # beam transfer function.
-        self.nltt = (np.pi/180./60.*nlev_t)**2 / bl**2
-        
+        self.bl = spectra.bl(beam_size, lmax) # beam transfer function.
+        self.nltt = (np.pi/180./60.*nlev_t)**2 / self.bl**2
+
+        # Calculate inverse-variance filters
+        self.inverse_variance_filters()
         # Calculate QE norm
-        self.get_qe_norm(nlev_t, beam_size, lmax)
+        self.get_qe_norm()
 
         # Initialise arrays to store the biases
         empty_arr = np.zeros(lmax + 1)
         self.biases = { 'tsz' : {'trispec' : {'1h' : empty_arr, '2h' : empty_arr}, 'prim_bispec' : {'1h' : empty_arr, '2h' : empty_arr}, 'second_bispec' : {'1h' : empty_arr, '2h' : empty_arr}}, 'cib' : {'trispec' : {'1h' : empty_arr, '2h' : empty_arr}, 'prim_bispec' : {'1h' : empty_arr, '2h' : empty_arr}, 'second_bispec' : {'1h' : empty_arr, '2h' : empty_arr}} }
 
-    def get_qe_norm(self, nlev_t, beam_size, lmax):
-        # FIXME: Hard-code QE normalisation for now
-        norm_from_lenscov = np.load('/Users/antonbaleatolizancos/Projects/lensing_rec_biases/auxiliary_objects/N0_lmax3000_nlevt18_beam1arcmin.npy')
-        self.qe_norm = np.interp(self.ls, np.arange(3001), norm_from_lenscov)
+    def inverse_variance_filters(self):
+        '''
+        Calculate the inverse-variance filters to be applied to the fields prior to lensing reconstruction
+        '''
+        lmin = 2
+        # Set up grid for semi-analytic calculation -- FIXME: these grid params could perhaps be optimised
+        nx = 512 # number of pixels.
+        dx = (1.0/60./180.*np.pi) # pixel width in radians.
+        pix = ql.maps.pix(nx, dx)
+
+        # Initialise a dummy set of maps for the computation
+        tmap = qmap = umap = np.random.randn(nx,nx)
+        tqumap = ql.maps.tqumap(nx, dx, maps=[tmap,qmap,umap])
+        #Define the beam transfer function and pixelisation window function.
+        #This will be used for beam deconvolution and inverse-variance filtering
+        transf = ql.spec.cl2tebfft(ql.util.dictobj( {'lmax' : self.lmax, 'cltt' : self.bl, 'clee' : self.bl, 'clbb' : self.bl} ), pix)
+        cl_theory  = ql.spec.clmat_teb( ql.util.dictobj( {'lmax' : self.lmax, 'cltt' : self.cl_len.cltt, 'clee' : self.cl_len.clee, 'clbb' : self.cl_len.clbb} ) )
+        self.ivf_lib = ql.sims.ivf.library_l_mask( ql.sims.ivf.library_diag_emp(tqumap, cl_theory, transf=transf, nlev_t=self.nlev_t), lmin=lmin, lmax=self.lmax)
+
+    def get_qe_norm(self, key='ptt'):
+        '''
+        Calculate the QE normalisation as the reciprocal of the N^{(0)} bias
+        Inputs:
+            * (optional) key = String. The quadratic estimator key. Default is 'ptt' for TT
+        '''
+        self.qest_lib = ql.sims.qest.library(self.cl_unl, self.cl_len, self.ivf_lib)
+        self.qe_norm = self.qest_lib.get_qr(key)
 
     def __getattr__(self, spec):
         try:
@@ -75,8 +99,8 @@ class experiment:
         if profile_leg2 is None:
             profile_leg2 = profile_leg1
 
-        F_1_of_l = profile_leg1 / (self.cltt + self.nltt)
-        F_2_of_l = self.cltt * profile_leg2/(self.cltt + self.nltt)
+        F_1_of_l = profile_leg1 / (self.cl_len.cltt + self.nltt)
+        F_2_of_l = self.cl_len.cltt * profile_leg2/(self.cl_len.cltt + self.nltt)
             
         al_F_1 = interp1d(self.ls, F_1_of_l, bounds_error=False,  fill_value='extrapolate')
         al_F_2 = interp1d(self.ls, F_2_of_l, bounds_error=False,  fill_value='extrapolate')
@@ -108,9 +132,9 @@ class experiment:
         unnormalised_phi = interp1d(ell_out_arr, - (2*np.pi)**3 * fl_total, bounds_error=False, fill_value=0.0)
         return unnormalised_phi
 
-    def get_unnorm_TT_qe(self, ell_out, profile_leg1, profile_leg2=None, fftlog_way=True, N_l=2*4096, lmin=0.000135, alpha=-1.35):
+    def get_TT_qe(self, ell_out, profile_leg1, profile_leg2=None, fftlog_way=True, N_l=2*4096, lmin=0.000135, alpha=-1.35, norm_bin_width=40):
         '''
-        Helper function to get the unnormalised TT QE reconstruction for spherically-symmetric profiles using FFTlog
+        Helper function to get the TT QE reconstruction for spherically-symmetric profiles using FFTlog
         Inputs:
             * ell_out = 1D numpy array with the multipoles at which the reconstruction is wanted.
             * profile_leg1 = 1D numpy array. Projected, spherically-symmetric emission profile. Truncated at lmax.
@@ -119,12 +143,18 @@ class experiment:
             * (optional) N_l = Integer (preferrably power of 2). Number of logarithmically-spaced samples FFTlog will use.
             * (optional) lmin = Float. lmin of the reconstruction. Recommend choosing (unphysical) small values (e.g., lmin=1e-4) to avoid ringing.
             * (optional) alpha = Float. FFTlog bias exponent. alpha=-1.35 seems to work fine for most applications.
+            * (optional) norm_bin_width = int. Bin width to use when taking spectra of the semi-analytic QE normalisation (for fftlog only)
         Returns:
             * If fftlog_way=True, a 1D array containing the unnormalised reconstruction at the multipoles specified in ell_out
         '''
         if fftlog_way:
             al_F_1, al_F_2 = self.get_filtered_profiles_fftlog(profile_leg1, profile_leg2=None)
-            return self.unnorm_TT_qe_fftlog(al_F_1, al_F_2, N_l, lmin, alpha)(ell_out)
+            # Calculate unnormalised QE
+            unnorm_TT_qe = self.unnorm_TT_qe_fftlog(al_F_1, al_F_2, N_l, lmin, alpha)(ell_out)
+            # Project the QE normalisation to 1D
+            lbins = np.arange(lmin, self.lmax, norm_bin_width)
+            qe_norm_1D = self.qe_norm.get_ml(lbins)
+            return np.nan_to_num( unnorm_TT_qe / np.interp(ell_out, qe_norm_1D.ls, qe_norm_1D.specs['cl']) )
         else:
             print('Implement QL way!')
 

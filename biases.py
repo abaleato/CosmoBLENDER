@@ -95,11 +95,7 @@ class hm_framework:
                 kap = tls.pkToPell(hcos.comoving_radial_distance(hcos.zs[i]),hcos.ks,hcos.uk_profiles['nfw'][i,j]*hcos.lensing_window(hcos.zs[i],1100.), ellmax=exp.lmax)
                 kfft = kap*self.ms_rescaled[j]
 
-                unnormalised_phi = exp.get_unnorm_TT_qe(np.arange(exp.lmax+1), y,y)
-
-                #Normalize the reconstruction
-                phi_estimate_cfft = unnormalised_phi * exp.qe_norm
-                phi_estimate_cfft = np.nan_to_num(phi_estimate_cfft)
+                phi_estimate_cfft = exp.get_TT_qe(np.arange(exp.lmax+1), y,y)
 
                 # Accumulate the integrands
                 integrand_oneHalo_cross[:,j] = phi_estimate_cfft*np.conjugate(kfft)*hcos.nzm[i,j]
@@ -158,17 +154,9 @@ class hm_framework:
                 g = tls.pkToPell(hcos.comoving_radial_distance(hcos.zs[i]),hcos.ks, hcos.uk_profiles['nfw'][i,j]*\
                              (1-np.exp(-(hcos.ks/hcos.p['kstar_damping']))), ellmax=exp.lmax)
 
-                unnormalised_phi_central = exp.get_unnorm_TT_qe(np.arange(exp.lmax+1), g_central, np.ones(g_central.shape))# for 1h trisp -- one leg is a central
-                unnormalised_phi_sat = exp.get_unnorm_TT_qe(np.arange(exp.lmax+1), g_sat, g_sat)# for 1h trisp -- all legs are satellites
-                unnormalised_phi_cen_and_sat =  exp.get_unnorm_TT_qe(np.arange(exp.lmax+1), g_central, g_sat)
-
-                #Normalize the reconstruction
-                phi_estimate_cfft_central = unnormalised_phi_central * exp.qe_norm
-                phi_estimate_cfft_central = np.nan_to_num(phi_estimate_cfft_central)
-                phi_estimate_cfft_sat = unnormalised_phi_sat * exp.qe_norm
-                phi_estimate_cfft_sat = np.nan_to_num(phi_estimate_cfft_sat)
-                phi_estimate_cfft_cen_and_sat = unnormalised_phi_cen_and_sat * exp.qe_norm
-                phi_estimate_cfft_cen_and_sat = np.nan_to_num(phi_estimate_cfft_cen_and_sat)
+                phi_estimate_cfft_central = exp.get_TT_qe(np.arange(exp.lmax+1), g_central, np.ones(g_central.shape))# for 1h trisp -- one leg is a central
+                phi_estimate_cfft_sat = exp.get_TT_qe(np.arange(exp.lmax+1), g_sat, g_sat)# for 1h trisp -- all legs are satellites
+                phi_estimate_cfft_cen_and_sat =  exp.get_TT_qe(np.arange(exp.lmax+1), g_central, g_sat)
 
                 # Get the kappa map
                 kap = tls.pkToPell(hcos.comoving_radial_distance(hcos.zs[i]),hcos.ks,hcos.uk_profiles['nfw'][i,j]*hcos.lensing_window(hcos.zs[i],1100.), ellmax=exp.lmax)
