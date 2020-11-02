@@ -65,13 +65,14 @@ class hm_framework:
         # I have removed this for now as i think it is likley subdomiant
         self.consistency =  np.trapz(self.hcos.nzm*self.hcos.bh*self.hcos.ms/self.hcos.rho_matter_z(0)*mMask,self.hcos.ms, axis=-1)
 
-    def get_tsz_bias(self, exp, fftlog_way=True, lmax_out=3000):
+    def get_tsz_bias(self, exp, fftlog_way=True, lmax_out=3000, bin_width_out=30):
         '''
         Calculate the tsz biases given an "experiment" object (defined in qest.py)
         Input:
             * exp = a qest.experiment object
             * (optional) fftlog_way = Boolean. If true, use 1D fftlog reconstructions, otherwise use 2D quicklens
             * (optional) lmax_out = int. Maximum multipole at which to return the lensing reconstruction
+            * (optional) bin_width_out = int. Bin width of the output lensing reconstruction
         '''
         hcos = self.hcos
         self.get_consistency(exp)
@@ -79,7 +80,7 @@ class hm_framework:
         # Output ells
         ells_out = np.arange(lmax_out+1)
         if not fftlog_way:
-            lbins = np.arange(1,lmax_out+1,30)
+            lbins = np.arange(1,lmax_out+1,bin_width_out)
 
         nx = exp.lmax+1 if fftlog_way else exp.pix.nx
 
@@ -145,12 +146,13 @@ class hm_framework:
             exp.biases['tsz']['prim_bispec']['2h'] = ql.maps.cfft(exp.nx,exp.dx,fft=exp.biases['tsz']['prim_bispec']['2h']).get_ml(lbins).specs['cl']
             return
 
-    def get_cib_bias(self, exp, fftlog_way=True, lmax_out=3000):
+    def get_cib_bias(self, exp, fftlog_way=True, lmax_out=3000, bin_width_out=30):
         '''
         Calculate the CIB biases given an "experiment" object (defined in qest.py)
         Input:
             * exp = a qest.experiment object
             * (optional) fftlog_way = Boolean. If true, use 1D fftlog reconstructions, otherwise use 2D qiucklens
+            * (optional) bin_width_out = int. Bin width of the output lensing reconstruction
         '''
         autofreq = np.array([[exp.freq_GHz], [exp.freq_GHz]], dtype=np.double)   *1e9    #Ghz
         hcos = self.hcos
@@ -158,6 +160,8 @@ class hm_framework:
 
         # Output ells
         ells_out = np.arange(lmax_out+1)
+        if not fftlog_way:
+            lbins = np.arange(1,lmax_out+1,bin_width_out)
 
         nx = exp.lmax+1 if fftlog_way else exp.nx
 
@@ -227,9 +231,9 @@ class hm_framework:
             exp.biases['ells'] = np.arange(exp.lmax+1)
             return
         else:
+            exp.biases['ells'] = ql.maps.cfft(exp.nx,exp.dx,fft=exp.biases['cib']['trispec']['1h']).get_ml(lbins).ls
             exp.biases['cib']['trispec']['1h'] = ql.maps.cfft(exp.nx,exp.dx,fft=exp.biases['cib']['trispec']['1h']).get_ml(lbins).specs['cl']
             exp.biases['cib']['trispec']['2h'] = ql.maps.cfft(exp.nx,exp.dx,fft=exp.biases['cib']['trispec']['2h']).get_ml(lbins).specs['cl']
             exp.biases['cib']['prim_bispec']['1h'] = ql.maps.cfft(exp.nx,exp.dx,fft=exp.biases['cib']['prim_bispec']['1h']).get_ml(lbins).specs['cl']
             exp.biases['cib']['prim_bispec']['2h'] = ql.maps.cfft(exp.nx,exp.dx,fft=exp.biases['cib']['prim_bispec']['2h']).get_ml(lbins).specs['cl']
-            exp.biases['ells'] = ql.maps.cfft(exp.nx,exp.dx,fft=exp.biases['cib']['trispec']['1h']).get_ml(lbins).ls
             return

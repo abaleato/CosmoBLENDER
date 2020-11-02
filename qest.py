@@ -2,7 +2,6 @@ import numpy as np
 from scipy.interpolate import interp1d
 from pyccl.pyutils import _fftlog_transform
 from scipy.integrate import quad
-from . import spectra
 import quicklens as ql
 
 class experiment:

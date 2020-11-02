@@ -3,5 +3,4 @@
 
 from . import tools
 from . import qest
-from . import spectra
 from . import biases
