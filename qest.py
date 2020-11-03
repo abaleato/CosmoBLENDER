@@ -170,8 +170,10 @@ class experiment:
                 tft2 = ql.spec.cl2cfft(profile_leg2, self.pix)
                 tft2.fft *= t_filter.fft
             unnormalized_phi = self.qest_lib.get_qft(key, tft1, 0*tft1.copy(), 0*tft1.copy(), tft2, 0*tft1.copy(), 0*tft1.copy())
+            # In QL, the unnormalised reconstruction (obtained via eval_flatsky()) comes with a factor of sqrt(skyarea)
+            A_sky = (self.dx*self.nx)**2
             #Normalize the reconstruction
-            return np.nan_to_num(unnormalized_phi.fft[:,:] / self.qe_norm.fft[:,:])
+            return np.nan_to_num(unnormalized_phi.fft[:,:] / self.qe_norm.fft[:,:]) /np.sqrt(A_sky)
 
     def get_brute_force_unnorm_TT_qe(self, ell_out, profile_leg1, profile_leg2=None):
         '''
