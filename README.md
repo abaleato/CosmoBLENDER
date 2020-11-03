@@ -1,4 +1,4 @@
-# CosmoBLENDER: Cosmological Biases to LENsing Due to Extragalactic Radiation
+## CosmoBLENDER: Cosmological Biases to LENsing Due to Extragalactic Radiation
 Code for calculating biases to CMB lensing auto- and cross- correlations due to extragalactic foregrounds
 
 ### Requirements:
