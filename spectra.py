@@ -23,7 +23,6 @@ def nl(noise_uK_arcmin, fwhm_arcmin, lmax):
 
 def get_camb_scalcl(fname=None, prefix=None, lmax=None):
     """ loads and returns a "scalar Cls" file produced by CAMB (camb.info).
-
          * (optional) fname  = file name to load.
          * (optional) prefix = directory in quicklens/data/cl directory to pull the *_scalCls.dat from. defaults to 'planck_wp_highL' (only used if fname==None).
          * (optional) lmax   = maximum multipole to load (all multipoles in file will be loaded by default).
@@ -44,7 +43,6 @@ def get_camb_scalcl(fname=None, prefix=None, lmax=None):
     
 def get_camb_lensedcl(fname=None, prefix=None, lmax=None):
     """ loads and returns a "lensed Cls" file produced by CAMB (camb.info).
-
          * (optional) fname  = file name to load.
          * (optional) prefix = directory in quicklens/data/cl directory to pull the *_lensedCls.dat from. defaults to 'planck_wp_highL' (only used if fname==None).
          * (optional) lmax   = maximum multipole to load (all multipoles in file will be loaded by default).

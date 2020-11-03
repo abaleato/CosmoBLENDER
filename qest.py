@@ -33,7 +33,7 @@ class experiment:
 
         self.nlev_t = nlev_t
         self.beam_size = beam_size
-        self.bl = spectra.bl(beam_size, lmax) # beam transfer function.
+        self.bl = ql.spec.bl(beam_size, lmax) # beam transfer function.
         self.nltt = (np.pi/180./60.*nlev_t)**2 / self.bl**2
 
         # Set up grid for Quicklens calculations
