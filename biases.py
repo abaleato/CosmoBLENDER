@@ -4,9 +4,9 @@ from . import tools as tls
 import quicklens as ql
 
 class hm_framework:
-    ''' Set the halo model parameters '''
+    """ Set the halo model parameters """
     def __init__(self, lmax_out=3000, m_min=2e13, m_max=5e16, nMasses=30, z_min=0.07, z_max=3, nZs=30, k_min = 1e-4, k_max=10, nks=1001, mass_function='sheth-torman', mdef='vir', cosmoParams=None):
-        ''' Inputs:
+        """ Inputs:
                 * lmax_out = int. Maximum multipole at which to return the lensing reconstruction
                 * m_min = Minimum virial mass for the halo model calculation
                 * m_max = Maximum virial mass for the halo model calculation (bot that massCut_Mvir will overide this)
@@ -20,7 +20,7 @@ class hm_framework:
                 * mass_function = String. Halo mass function to use. Must be coded into hmvec
                 * mdef = String. Mass definition. Must be defined in hmvec for the chosen mass_function
                 * cosmoParams = Dictionary of cosmological parameters to initialised HaloModel hmvec object
-        '''
+        """
         self.lmax_out = lmax_out
         self.nMasses = nMasses
         self.m_min = m_min
@@ -43,7 +43,7 @@ class hm_framework:
         self.ms_rescaled = self.hcos.ms[...]/self.hcos.rho_matter_z(0)
 
     def __str__(self):
-        ''' Print out halo model calculator properties '''
+        """ Print out halo model calculator properties """
         m_min = '{:.2e}'.format(self.m_min)
         m_max = '{:.2e}'.format(self.m_max)
         z_min = '{:.2f}'.format(self.z_min)
@@ -52,11 +52,11 @@ class hm_framework:
         return 'M_min: ' + m_min + '  M_max: ' + m_max + '  n_Masses: '+ str(self.nMasses) + '\n' + '  z_min: ' + z_min + '  z_max: ' + z_max + '  n_zs: ' + str(self.nZs) +  '\n' +'  Mass function: ' + self.mass_function + '  Mass definition: ' + self.mdef
 
     def get_consistency(self, exp):
-        '''
+        """
         Calculate consistency relation for 2-halo term given some mass cut
         Input:
             * exp = a qest.experiment object
-        '''
+        """
         mMask = np.ones(self.nMasses)
         mMask[exp.massCut<self.hcos.ms]=0
 
@@ -68,13 +68,13 @@ class hm_framework:
         self.consistency =  np.trapz(self.hcos.nzm*self.hcos.bh*self.hcos.ms/self.hcos.rho_matter_z(0)*mMask,self.hcos.ms, axis=-1)
 
     def get_tsz_bias(self, exp, fftlog_way=True, bin_width_out=30):
-        '''
+        """
         Calculate the tsz biases given an "experiment" object (defined in qest.py)
         Input:
             * exp = a qest.experiment object
             * (optional) fftlog_way = Boolean. If true, use 1D fftlog reconstructions, otherwise use 2D quicklens
             * (optional) bin_width_out = int. Bin width of the output lensing reconstruction
-        '''
+        """
         hcos = self.hcos
         self.get_consistency(exp)
 
@@ -148,13 +148,13 @@ class hm_framework:
             return
 
     def get_cib_bias(self, exp, fftlog_way=True, bin_width_out=30):
-        '''
+        """
         Calculate the CIB biases given an "experiment" object (defined in qest.py)
         Input:
             * exp = a qest.experiment object
             * (optional) fftlog_way = Boolean. If true, use 1D fftlog reconstructions, otherwise use 2D qiucklens
             * (optional) bin_width_out = int. Bin width of the output lensing reconstruction
-        '''
+        """
         autofreq = np.array([[exp.freq_GHz], [exp.freq_GHz]], dtype=np.double)   *1e9    #Ghz
         hcos = self.hcos
         self.get_consistency(exp)

@@ -6,7 +6,7 @@ import quicklens as ql
 
 class experiment:
     def __init__(self, nlev_t, beam_size, lmax, massCut_Mvir = np.inf, fname_scalar=None, fname_lensed=None, freq_GHz=150., nx=512, dx_arcmin=1.0):
-        ''' Initialise a cosmology and experimental charactierstics
+        """ Initialise a cosmology and experimental charactierstics
             - Inputs:
                 * nlev_t = temperature noise level, In uK.arcmin.
                 * beam_size = beam fwhm (symmetric). In arcmin.
@@ -16,7 +16,7 @@ class experiment:
                 * (optional) fname_lensed = CAMB files for lensed CMB
                 * (otional) nx = int. Width in number of pixels of grid used in quicklens computations
                 * (optional) dx = float. Pixel width in arcmin for quicklens computations
-        '''
+        """
         if fname_scalar is None:
             fname_scalar = '/Users/antonbaleatolizancos/Software/Quicklens-with-fixes/quicklens/data/cl/planck_wp_highL/planck_lensing_wp_highL_bestFit_20130627_scalCls.dat'
         if fname_lensed is None:
@@ -51,9 +51,9 @@ class experiment:
         self.biases = { 'ells': empty_arr, 'tsz' : {'trispec' : {'1h' : empty_arr, '2h' : empty_arr}, 'prim_bispec' : {'1h' : empty_arr, '2h' : empty_arr}, 'second_bispec' : {'1h' : empty_arr, '2h' : empty_arr}}, 'cib' : {'trispec' : {'1h' : empty_arr, '2h' : empty_arr}, 'prim_bispec' : {'1h' : empty_arr, '2h' : empty_arr}, 'second_bispec' : {'1h' : empty_arr, '2h' : empty_arr}} }
 
     def inverse_variance_filters(self):
-        '''
+        """
         Calculate the inverse-variance filters to be applied to the fields prior to lensing reconstruction
-        '''
+        """
         lmin = 2
         # Initialise a dummy set of maps for the computation
         tmap = qmap = umap = np.random.randn(self.nx,self.nx)
@@ -65,11 +65,11 @@ class experiment:
         self.ivf_lib = ql.sims.ivf.library_l_mask( ql.sims.ivf.library_diag_emp(tqumap, cl_theory, transf=transf, nlev_t=self.nlev_t), lmin=lmin, lmax=self.lmax)
 
     def get_qe_norm(self, key='ptt'):
-        '''
+        """
         Calculate the QE normalisation as the reciprocal of the N^{(0)} bias
         Inputs:
             * (optional) key = String. The quadratic estimator key. Default is 'ptt' for TT
-        '''
+        """
         self.qest_lib = ql.sims.qest.library(self.cl_unl, self.cl_len, self.ivf_lib)
         self.qe_norm = self.qest_lib.get_qr(key)
 
@@ -80,7 +80,7 @@ class experiment:
             raise AttributeError(spec)
 
     def __str__(self):
-        ''' Print out halo model calculator properties '''
+        """ Print out halo model calculator properties """
         massCut = '{:.2e}'.format(self.massCut)
         beam_size = '{:.2f}'.format(self.beam_size)
         nlev_t = '{:.2f}'.format(self.nlev_t)
@@ -89,14 +89,14 @@ class experiment:
         return 'Mass Cut: ' + massCut + '  lmax: ' + str(self.lmax) + '  Beam FWHM: '+ beam_size + ' Noise (uK arcmin): ' + nlev_t + '  Freq (GHz): ' + freq_GHz
 
     def get_filtered_profiles_fftlog(self, profile_leg1, profile_leg2=None):
-        '''
+        """
         Filter the profiles in the way of, e.g., eq. (7.9) of Lewis & Challinor 06.
         Inputs:
             * profile_leg1 = 1D numpy array. Projected, spherically-symmetric emission profile. Truncated at lmax.
             * (optional) profile_leg2 = 1D numpy array. As profile_leg1, but for the other QE leg.
         Returns:
             * Interpolatable objects from which to get F_1 and F_2 at every multipole.
-        '''
+        """
         if profile_leg2 is None:
             profile_leg2 = profile_leg1
 
@@ -108,7 +108,7 @@ class experiment:
         return al_F_1, al_F_2
 
     def unnorm_TT_qe_fftlog(self, al_F_1, al_F_2, N_l, lmin, alpha):
-        '''
+        """
         Compute the unnormalised TT QE reconstruction for spherically symmetric profiles using FFTlog.
         Inputs:
             * al_F_1 = Interpolatable object from which to get F_1 (e.g., in eq. (7.9) of Lewis & Challinor 06) at every multipole.
@@ -118,7 +118,7 @@ class experiment:
             * (optional) alpha = Float. FFTlog bias exponent. alpha=-1.35 seems to work fine for most applications.
         Returns:
             * An interp1d object into which you can plug in an array of ells to get the QE at those ells.
-        '''
+        """
         ell = np.logspace(np.log10(lmin), np.log10(self.lmax), N_l)
 
         # The underscore notation _xyz refers to x=hankel order, y=F_y, z=powers of ell
@@ -134,7 +134,7 @@ class experiment:
         return unnormalised_phi
 
     def get_TT_qe(self, fftlog_way, ell_out, profile_leg1, profile_leg2=None, N_l=2*4096, lmin=0.000135, alpha=-1.35, norm_bin_width=40, key='ptt'):
-        '''
+        """
         Helper function to get the TT QE reconstruction for spherically-symmetric profiles using FFTlog
         Inputs:
             * fftlog_way = Bool. If true, use fftlog reconstruction. Otherwise use quicklens.
@@ -149,7 +149,7 @@ class experiment:
             * If fftlog_way=True, a 1D array containing the unnormalised reconstruction at the multipoles specified in ell_out
             * (optional) key = String. The quadratic estimator key for quicklens. Default is 'ptt' for TT
 
-        '''
+        """
         if fftlog_way:
             al_F_1, al_F_2 = self.get_filtered_profiles_fftlog(profile_leg1, profile_leg2=None)
             # Calculate unnormalised QE
@@ -176,13 +176,13 @@ class experiment:
             return np.nan_to_num(unnormalized_phi.fft[:,:] / self.qe_norm.fft[:,:]) /np.sqrt(A_sky)
 
     def get_brute_force_unnorm_TT_qe(self, ell_out, profile_leg1, profile_leg2=None):
-        '''
+        """
         Slow but sure method to calculate the 1D TT QE reconstruction. Scales as O(N^3), but useful as a cross-check of get_unnorm_TT_qe(fftlog_way=True)
         Inputs:
             * ell_out = 1D numpy array with the multipoles at which the reconstruction is wanted.
             * profile_leg1 = 1D numpy array. Projected, spherically-symmetric emission profile. Truncated at lmax.
             * (optional) profile_leg2 = 1D numpy array. As profile_leg1, but for the other QE leg.
-        '''
+        """
         def ell_dependence(L, l, lp):
             '''L is outter multipole'''
             if (L+l>=lp) and (L+lp>=l) and (l+lp>=L):

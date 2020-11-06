@@ -3,7 +3,7 @@ from scipy.interpolate import interp1d
 import functools
 
 def scale_sz(freq=150.):
-    ''' f_nu in the literature. this is only the non-relativistic formula. note that the formula in alexs paper is wrong. get it from sehgal et al.'''
+    """ f_nu in the literature. this is only the non-relativistic formula. note that the formula in alexs paper is wrong. get it from sehgal et al."""
     #freq must be in GHz
     freq_hz = freq*1e9
     T_CMB = 2.7255e6
