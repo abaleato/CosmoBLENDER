@@ -18,9 +18,9 @@ class experiment:
                 * (optional) dx = float. Pixel width in arcmin for quicklens computations
         """
         if fname_scalar is None:
-            fname_scalar = '/Users/antonbaleatolizancos/Software/Quicklens-with-fixes/quicklens/data/cl/planck_wp_highL/planck_lensing_wp_highL_bestFit_20130627_scalCls.dat'
+            fname_scalar = '~/Software/Quicklens-with-fixes/quicklens/data/cl/planck_wp_highL/planck_lensing_wp_highL_bestFit_20130627_scalCls.dat'
         if fname_lensed is None:
-            fname_lensed = '/Users/antonbaleatolizancos/Software/Quicklens-with-fixes/quicklens/data/cl/planck_wp_highL/planck_lensing_wp_highL_bestFit_20130627_lensedCls.dat'
+            fname_lensed = '~/Software/Quicklens-with-fixes/quicklens/data/cl/planck_wp_highL/planck_lensing_wp_highL_bestFit_20130627_lensedCls.dat'
 
         #Initialise CAMB spectra for filtering
         self.cl_unl = ql.spec.get_camb_scalcl(fname_scalar, lmax=lmax)
