@@ -6,30 +6,9 @@ import tools as tls
 import biases
 
 
-def test_cib_ps():
+def test_cib_ps(hm_object, exp_object):
     """ Check the CIB power spectrum"""
-    # Initialise experiment object
-    nlev_t = 18.  # uK arcmin
-    beam_size = 1.  # arcmin
-    lmax = 3000  # Maximum ell for the reconstruction
-
-    # Initialise experiments with various different mass cuts
-    SPT_nocut = qest.experiment(nlev_t, beam_size, lmax, massCut_Mvir=5e17, freq_GHz=545.)
-
-    # Initialise halo model calculator
-    # This should roughly match the cosmology in Nick's tSZ papers
-    # Note that for now there is still cosmology dependence in the cls defined within the experiment class
-    cosmoParams = {'As': 2.4667392631170437e-09, 'ns': .96, 'omch2': (0.25 - .043) * .7 ** 2, 'ombh2': 0.044 * .7 ** 2,
-                   'H0': 70.}
-
-    nZs = 60  # 30
-    nMasses = 100  # 30
-    z_max = 7
-
-    # Initialise a halo model object for the CIB PS calculation, using mostly default parameters
-    hm_calc = biases.hm_framework(cosmoParams=cosmoParams, nZs=nZs, nMasses=nMasses, z_max=z_max)
-
-    clCIBCIB_oneHalo_ps, clCIBCIB_twoHalo_ps = hm_calc.get_cib_ps(SPT_nocut)
+    clCIBCIB_oneHalo_ps, clCIBCIB_twoHalo_ps = hm_object.get_cib_ps(exp_object)
     plt.loglog(clCIBCIB_oneHalo_ps + clCIBCIB_twoHalo_ps, label='total')
     plt.loglog(clCIBCIB_oneHalo_ps, label='1 halo term')
     plt.loglog(clCIBCIB_twoHalo_ps, label='2 halo term')
@@ -90,30 +69,46 @@ def test_tsz_ps(hm_object):
     plt.grid(which='both')
 
 if __name__ == '__main__':
-    # Initialise the experiment and halo model object for which to run the tests
+    which_test = 'test_CIB' # 'test_CIB' or 'test_tSZ'
 
+    # Initialise the experiment and halo model object for which to run the tests
     # This should roughly match the cosmology in Nick's tSZ papers
     cosmoParams = {'As': 2.4667392631170437e-09, 'ns': .96, 'omch2': (0.25 - .043) * .7 ** 2, 'ombh2': 0.044 * .7 ** 2,
                    'H0': 70.}
-    # These give good results for the tSZ
-    nMasses = 30
-    nZs = 50
-    z_min = 0.14  # 0.07
-    z_max = 5
-    m_min = 4.2e13  # 2e10
-    m_max = 1e17
-    k_min = 1e-3
-    k_max = 10
-    nks = 1001
-    nxs = 30000
-    hm_calc = biases.hm_framework(cosmoParams=cosmoParams, nZs=nZs, nMasses=nMasses, z_min=z_min, z_max=z_max,
-                                  m_max=m_max, m_min=m_min, nxs=nxs, k_min=k_min, k_max=k_max, nks=nks)
 
-    # Check the tSZ power spectrum
-    test_tsz_ps(hm_calc)
+    if which_test == 'test_tSZ':
+        # These give good results for the tSZ
+        nMasses = 30
+        nZs = 50
+        z_min = 0.14  # 0.07
+        z_max = 5
+        m_min = 4.2e13  # 2e10
+        m_max = 1e17
+        k_min = 1e-3
+        k_max = 10
+        nks = 1001
+        nxs = 30000
+        hm_calc = biases.hm_framework(cosmoParams=cosmoParams, nZs=nZs, nMasses=nMasses, z_min=z_min, z_max=z_max,
+                                      m_max=m_max, m_min=m_min, nxs=nxs, k_min=k_min, k_max=k_max, nks=nks)
+        # Check the tSZ power spectrum
+        test_tsz_ps(hm_calc)
 
-    # Check CIB power spectrum
-    #test_cib_ps()
+    elif which_test == 'test_CIB':
+        # Initialise experiment object
+        nlev_t = 18.  # uK arcmin
+        beam_size = 1.  # arcmin
+        lmax = 3000  # Maximum ell for the reconstruction
+        freq_GHz = 545.
+        massCut_Mvir = 5e17
+        # Initialise experiments with various different mass cuts
+        SPT_nocut = qest.experiment(nlev_t, beam_size, lmax, massCut_Mvir=massCut_Mvir, freq_GHz=freq_GHz)
+        # Initialise a halo model object for the CIB PS calculation, using mostly default parameters
+        nZs = 60  # 30
+        nMasses = 100  # 30
+        z_max = 7
+        hm_calc = biases.hm_framework(cosmoParams=cosmoParams, nZs=nZs, nMasses=nMasses, z_max=z_max)
+        # Check CIB power spectrum
+        test_cib_ps(hm_calc, SPT_nocut)
 
     plt.show()
 
