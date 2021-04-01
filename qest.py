@@ -3,6 +3,8 @@ from scipy.interpolate import interp1d
 from pyccl.pyutils import _fftlog_transform
 from scipy.integrate import quad
 import quicklens as ql
+import pickle
+import sys
 
 class experiment:
     def __init__(self, nlev_t, beam_size, lmax, massCut_Mvir = np.inf, fname_scalar=None, fname_lensed=None, freq_GHz=150., nx=512, dx_arcmin=1.0):
@@ -87,6 +89,15 @@ class experiment:
         freq_GHz = '{:.2f}'.format(self.freq_GHz)
 
         return 'Mass Cut: ' + massCut + '  lmax: ' + str(self.lmax) + '  Beam FWHM: '+ beam_size + ' Noise (uK arcmin): ' + nlev_t + '  Freq (GHz): ' + freq_GHz
+
+    def save_biases(self, output_filename='./dict_with_biases'):
+        """
+        Save the dictionary of biases to file
+        Inputs:
+            * output_filename = str. Output filename
+        """
+        with open(output_filename+'.pkl', 'wb') as output:
+            pickle.dump(self.biases, output, pickle.HIGHEST_PROTOCOL)
 
     def get_filtered_profiles_fftlog(self, profile_leg1, profile_leg2=None):
         """
@@ -207,3 +218,17 @@ class experiment:
             output_unnormalised_phi[i] = quad(outer_integrand, 1, self.lmax, args=L)[0]/(2*np.pi)
 
         return output_unnormalised_phi
+
+def load_dict_of_biases(filename='./dict_with_biases.pkl'):
+    """
+    Load a dictionary of biases that was previously saved using experiment.save_biases()
+    Inputs:
+        * filename = str. Filename for the pickle object to be loaded
+    Returns:
+        * Dict of biases with indexing as in experiment.biases
+    """
+    with open(filename, 'rb') as input:
+        experiment_object = pickle.load(input)
+    print('Successfully loaded experiment object with properties:\n')
+    print(experiment_object)
+    return experiment_object

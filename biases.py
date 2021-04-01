@@ -104,7 +104,8 @@ class hm_framework:
         twoHalo_4pt = np.zeros([nx,self.nZs])+0j if fftlog_way else np.zeros([nx,nx,self.nZs])+0j
         oneHalo_cross = np.zeros([nx,self.nZs])+0j if fftlog_way else np.zeros([nx,nx,self.nZs])+0j
         twoHalo_cross = np.zeros([nx,self.nZs])+0j if fftlog_way else np.zeros([nx,nx,self.nZs])+0j
-        oneHalo_second_bispec = np.zeros([len(lbins_second_bispec_bias),self.nZs])+0j
+        if get_secondary_bispec_bias:
+            oneHalo_second_bispec = np.zeros([len(lbins_second_bispec_bias),self.nZs])+0j
 
         for i,z in enumerate(hcos.zs):
             #Temporary storage
@@ -112,7 +113,8 @@ class hm_framework:
             integrand_oneHalo_cross =np.zeros([nx,self.nMasses])+0j if fftlog_way else np.zeros([nx,nx,self.nMasses])+0j
             integrand_twoHalo_2g = np.zeros([nx,self.nMasses])+0j if fftlog_way else np.zeros([nx,nx,self.nMasses])+0j
             integrand_twoHalo_1g = np.zeros([nx,self.nMasses])+0j if fftlog_way else np.zeros([nx,nx,self.nMasses])+0j
-            integrand_oneHalo_second_bispec = np.zeros([len(lbins_second_bispec_bias),self.nMasses])+0j
+            if get_secondary_bispec_bias:
+                integrand_oneHalo_second_bispec = np.zeros([len(lbins_second_bispec_bias),self.nMasses])+0j
 
             # M integral.
             for j,m in enumerate(hcos.ms):
@@ -143,7 +145,8 @@ class hm_framework:
             # Perform the m integrals
             oneHalo_4pt[...,i]=np.trapz(integrand_oneHalo_4pt,hcos.ms,axis=-1)
             oneHalo_cross[...,i]=np.trapz(integrand_oneHalo_cross,hcos.ms,axis=-1)
-            oneHalo_second_bispec[...,i]=np.trapz(integrand_oneHalo_second_bispec,hcos.ms,axis=-1)
+            if get_secondary_bispec_bias:
+                oneHalo_second_bispec[...,i]=np.trapz(integrand_oneHalo_second_bispec,hcos.ms,axis=-1)
 
             # This is the two halo term. P_k times the M integrals
             pk = tls.pkToPell(hcos.comoving_radial_distance(hcos.zs[i]),hcos.ks,hcos.Pzk[i], ellmax=self.lmax_out)
@@ -172,12 +175,13 @@ class hm_framework:
         exp.biases['tsz']['prim_bispec']['2h'] = 2*conversion_factor * tls.scale_sz(exp.freq_GHz)**2 * self.T_CMB**2 \
                                                  * np.trapz(twoHalo_cross*1./hcos.comoving_radial_distance(hcos.zs)**4\
                                                             *(hcos.h_of_z(hcos.zs)**2),hcos.zs,axis=-1)
+        if get_secondary_bispec_bias:
         # FIXME: check the prefactors here
-        exp.biases['tsz']['second_bispec']['1h'] = conversion_factor_second_bispec_bias * tls.scale_sz(
-            exp.freq_GHz) ** 2 * self.T_CMB ** 2 * np.trapz( oneHalo_second_bispec * 1.\
-                                                             / hcos.comoving_radial_distance(hcos.zs) ** 4\
-                                                             * (hcos.h_of_z(hcos.zs) ** 2), hcos.zs, axis=-1)
-        exp.biases['second_bispec_bias_ells'] = lbins_second_bispec_bias
+            exp.biases['tsz']['second_bispec']['1h'] = conversion_factor_second_bispec_bias * tls.scale_sz(
+                exp.freq_GHz) ** 2 * self.T_CMB ** 2 * np.trapz( oneHalo_second_bispec * 1.\
+                                                                 / hcos.comoving_radial_distance(hcos.zs) ** 4\
+                                                                 * (hcos.h_of_z(hcos.zs) ** 2), hcos.zs, axis=-1)
+            exp.biases['second_bispec_bias_ells'] = lbins_second_bispec_bias
 
         if fftlog_way:
             exp.biases['ells'] = np.arange(self.lmax_out+1)
