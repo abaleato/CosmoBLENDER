@@ -50,7 +50,14 @@ class experiment:
 
         # Initialise an empty dictionary to store the biases
         empty_arr = {}
-        self.biases = { 'ells': empty_arr, 'second_bispec_bias_ells': empty_arr, 'tsz' : {'trispec' : {'1h' : empty_arr, '2h' : empty_arr}, 'prim_bispec' : {'1h' : empty_arr, '2h' : empty_arr}, 'second_bispec' : {'1h' : empty_arr, '2h' : empty_arr}}, 'cib' : {'trispec' : {'1h' : empty_arr, '2h' : empty_arr}, 'prim_bispec' : {'1h' : empty_arr, '2h' : empty_arr}, 'second_bispec' : {'1h' : empty_arr, '2h' : empty_arr}} }
+        self.biases = { 'ells': empty_arr,
+                        'second_bispec_bias_ells': empty_arr,
+                        'tsz' : {'trispec' : {'1h' : empty_arr, '2h' : empty_arr},
+                                 'prim_bispec' : {'1h' : empty_arr, '2h' : empty_arr},
+                                 'second_bispec' : {'1h' : empty_arr, '2h' : empty_arr}},
+                        'cib' : {'trispec' : {'1h' : empty_arr, '2h' : empty_arr},
+                                 'prim_bispec' : {'1h' : empty_arr, '2h' : empty_arr},
+                                 'second_bispec' : {'1h' : empty_arr, '2h' : empty_arr}} }
 
     def inverse_variance_filters(self):
         """
