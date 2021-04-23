@@ -285,7 +285,7 @@ class hm_framework:
                 # Get the kappa map
                 kap = tls.pkToPell(hcos.comoving_radial_distance(hcos.zs[i]),hcos.ks,hcos.uk_profiles['nfw'][i,j]\
                                    *hcos.lensing_window(hcos.zs[i],1100.), ellmax=self.lmax_out)
-                kfft = kap*self.ms_rescaled[j] if fftlog_way else ql.spec.cl2cfft(kap,exp.pix).fft*self.ms_rescaled[j]
+                kfft = kap if fftlog_way else ql.spec.cl2cfft(kap,exp.pix).fft # FIXME: ive deleted ms_rescaled. Is that right?
                 # Accumulate the integrands
                 integrand_oneHalo_cross[...,j] = (phi_estimate_cfft_sat + 2*phi_estimate_cfft_cen_and_sat)\
                                                  *np.conjugate(kfft)*hcos.nzm[i,j]
