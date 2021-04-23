@@ -22,7 +22,7 @@ class hm_framework:
                 * mass_function = String. Halo mass function to use. Must be coded into hmvec
                 * mdef = String. Mass definition. Must be defined in hmvec for the chosen mass_function
                 * cosmoParams = Dictionary of cosmological parameters to initialised HaloModel hmvec object
-                * xmax = Float. Electron pressure profile integral xmax
+                * xmax = Float. Electron pressure profile integral xmax (see further docs at hmvec.add_nfw_profile() )
                 * nxs = Integer. Electron pressure profile integral number of x's
         """
         self.lmax_out = lmax_out
