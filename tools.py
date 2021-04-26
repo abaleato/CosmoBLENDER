@@ -27,6 +27,17 @@ def from_Jypersr_to_uK(freq_GHz):
     equiv = u.thermodynamic_temperature(freq, Planck15.Tcmb0)
     return (1. * u.Jy / u.sr).to(u.uK, equivalencies=equiv)
 
+
+def split_positive_negative(spectrum):
+    """ Separately return the positive and negative parts of an input np.array named spectrum.
+    """
+    spectrum_pos = spectrum.copy()
+    spectrum_neg = spectrum.copy()
+
+    spectrum_pos[spectrum < 0] = np.nan
+    spectrum_neg[spectrum > 0] = np.nan
+    return spectrum_pos, - spectrum_neg
+
 def pkToPell(chi,ks,pk,ellmax=9001):
     # State that the argument in P(k) is P(k*chi), and then set l=k*chi so that P(l/chi)
     interp = interp1d(ks*chi,pk,kind='cubic',bounds_error=False,fill_value=0)

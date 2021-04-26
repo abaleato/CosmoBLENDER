@@ -156,9 +156,10 @@ class hm_framework:
 
             twoHalo_4pt[...,i]=np.trapz(integrand_twoHalo_2g,hcos.ms,axis=-1)**2 *pk
             tmpCorr =np.trapz(integrand_twoHalo_1g,hcos.ms,axis=-1)
+            #FIXME: do we need to apply consistency condition to integral over fg profiles too? So far only kappa part
             twoHalo_cross[...,i]=np.trapz(integrand_twoHalo_2g,hcos.ms,axis=-1)\
                                  *(tmpCorr + hcos.lensing_window(hcos.zs,1100.)[i]\
-                                   - hcos.lensing_window(hcos.zs[i],1100.)*self.consistency[i])*pk#
+                                   - hcos.lensing_window(hcos.zs[i],1100.)*self.consistency[i])*pk
 
         # Convert the NFW profile in the cross bias from kappa to phi
         conversion_factor = np.nan_to_num(1 / (0.5 * ells_out*(ells_out+1) )) if fftlog_way else ql.spec.cl2cfft(np.nan_to_num(1 / (0.5 * np.arange(self.lmax_out+1)*(np.arange(self.lmax_out+1)+1) )),exp.pix).fft
@@ -289,7 +290,7 @@ class hm_framework:
                 # Get the kappa map
                 kap = tls.pkToPell(hcos.comoving_radial_distance(hcos.zs[i]),hcos.ks,hcos.uk_profiles['nfw'][i,j]\
                                    *hcos.lensing_window(hcos.zs[i],1100.), ellmax=self.lmax_out)
-                kfft = kap if fftlog_way else ql.spec.cl2cfft(kap,exp.pix).fft # FIXME: ive deleted ms_rescaled. Is that right?
+                kfft = kap*self.ms_rescaled[j] if fftlog_way else ql.spec.cl2cfft(kap,exp.pix).fft*self.ms_rescaled[j]
                 # Accumulate the integrands
                 integrand_oneHalo_cross[...,j] = (phi_estimate_cfft_sat + 2*phi_estimate_cfft_cen_and_sat)\
                                                  *np.conjugate(kfft)*hcos.nzm[i,j]
