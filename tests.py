@@ -10,13 +10,12 @@ import biases
 def test_cib_ps(hm_object, exp_object):
     """ Check the CIB power spectrum"""
     clCIBCIB_oneHalo_ps, clCIBCIB_twoHalo_ps = hm_object.get_cib_ps(exp_object)
-    plt.loglog(clCIBCIB_oneHalo_ps + clCIBCIB_twoHalo_ps, label='total')
-    plt.loglog(clCIBCIB_oneHalo_ps, label='1 halo term')
-    plt.loglog(clCIBCIB_twoHalo_ps, label='2 halo term')
-    plt.loglog(clCIBCIB_oneHalo_ps + clCIBCIB_twoHalo_ps, label='total')
+    plt.loglog(clCIBCIB_oneHalo_ps + clCIBCIB_twoHalo_ps, label='total', 'r')
+    plt.loglog(clCIBCIB_oneHalo_ps, label='1 halo term', 'g')
+    plt.loglog(clCIBCIB_twoHalo_ps, label='2 halo term', 'b')
     plt.xlabel(r'l')
     plt.legend()
-    plt.ylabel(r'$C_l$')
+    plt.ylabel(r'$C_l\,[\mathrm{Jy}^2\,\mathrm{sr}^{-1}]$')
     plt.xlim([10, 1e4])
     plt.title('CIB power spectrum')
     return
