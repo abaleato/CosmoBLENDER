@@ -1,6 +1,8 @@
 import numpy as np
 from scipy.interpolate import interp1d
 import functools
+from astropy import units as u
+from astropy.cosmology import Planck15
 
 def scale_sz(freq=150.):
     """ f_nu in the literature. this is only the non-relativistic formula. note that the formula in alexs paper is wrong. get it from sehgal et al."""
@@ -12,6 +14,18 @@ def scale_sz(freq=150.):
     T_CMB_K = T_CMB/1e6
     x_nu = h*freq_hz/(K_b * T_CMB_K)
     return x_nu * np.cosh(x_nu/2.)/np.sinh(x_nu/2.) - 4
+
+def from_Jypersr_to_uK(freq_GHz):
+    """ Convert from specific intensity (in Jy sr^-1) to CMB thermodynamic temperature units (in microKelvin),
+        assuming infinitely narrow bands.
+    - Inputs:
+        * freq_GHz = Frequency at which the measurement is made. In units of GHz
+    - Returns:
+        Multiplicative conversion factor in units of microKelvin/(Jy sr^-1)
+    """
+    freq = freq_GHz * u.GHz
+    equiv = u.thermodynamic_temperature(freq, Planck15.Tcmb0)
+    return (1. * u.Jy / u.sr).to(u.uK, equivalencies=equiv)
 
 def pkToPell(chi,ks,pk,ellmax=9001):
     # State that the argument in P(k) is P(k*chi), and then set l=k*chi so that P(l/chi)

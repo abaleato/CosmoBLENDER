@@ -7,7 +7,7 @@ import quicklens as ql
 class hm_framework:
     """ Set the halo model parameters """
     def __init__(self, lmax_out=3000, m_min=2e13, m_max=5e16, nMasses=30, z_min=0.07, z_max=3, nZs=30, k_min = 1e-4,\
-                 k_max=10, nks=1001, mass_function='sheth-torman', mdef='vir', cosmoParams=None, xmax=5, nxs=40000):
+                 k_max=10, nks=1001, mass_function='sheth-torman', mdef='vir', cib_model='planck13', cosmoParams=None, xmax=5, nxs=40000):
         """ Inputs:
                 * lmax_out = int. Maximum multipole at which to return the lensing reconstruction
                 * m_min = Minimum virial mass for the halo model calculation
@@ -21,6 +21,7 @@ class hm_framework:
                 * nks = Integer. Number of steps in k for the integrals
                 * mass_function = String. Halo mass function to use. Must be coded into hmvec
                 * mdef = String. Mass definition. Must be defined in hmvec for the chosen mass_function
+                * cib_model = CIB halo model and fit params. Either 'planck13' or 'vierro' (the latter after Viero et al 13.)
                 * cosmoParams = Dictionary of cosmological parameters to initialised HaloModel hmvec object
                 * xmax = Float. Electron pressure profile integral xmax (see further docs at hmvec.add_nfw_profile() )
                 * nxs = Integer. Electron pressure profile integral number of x's
@@ -45,7 +46,7 @@ class hm_framework:
 
         self.hcos = hm.HaloModel(zs,ks,ms=ms,mass_function=mass_function,params=cosmoParams,mdef=mdef)
         self.hcos.add_battaglia_pres_profile("y",family="pres",xmax=xmax,nxs=nxs)
-        self.hcos.set_cibParams('planck13')
+        self.hcos.set_cibParams(cib_model)
 
         self.ms_rescaled = self.hcos.ms[...]/self.hcos.rho_matter_z(0)
 
@@ -269,9 +270,12 @@ class hm_framework:
             for j,m in enumerate(hcos.ms):
                 if m> exp.massCut: continue
                  #project the galaxy profiles
-                g_central = tls.pkToPell(hcos.comoving_radial_distance(hcos.zs[i]),hcos.ks,hcos._get_fcen(autofreq[0])[i,j]*\
-                             (1-np.exp(-(hcos.ks/hcos.p['kstar_damping']))), ellmax=exp.lmax)
-                g_sat = tls.pkToPell(hcos.comoving_radial_distance(hcos.zs[i]),hcos.ks,\
+                g_central = tls.from_Jypersr_to_uK(exp.freq_GHz) * \
+                            tls.pkToPell(hcos.comoving_radial_distance(hcos.zs[i]), hcos.ks,
+                                         hcos._get_fcen(autofreq[0])[i,j] * hcos.uk_profiles['nfw'][i, j] * \
+                                         (1-np.exp(-(hcos.ks/hcos.p['kstar_damping']))), ellmax=exp.lmax)
+                g_sat = tls.from_Jypersr_to_uK(exp.freq_GHz) * \
+                        tls.pkToPell(hcos.comoving_radial_distance(hcos.zs[i]), hcos.ks,
                                      hcos._get_fsat(autofreq[0], cibinteg='trap', satmf='Tinker')[i,j] \
                                      * hcos.uk_profiles['nfw'][i,j]*\
                              (1-np.exp(-(hcos.ks/hcos.p['kstar_damping']))), ellmax=exp.lmax)
@@ -289,9 +293,8 @@ class hm_framework:
                 # Accumulate the integrands
                 integrand_oneHalo_cross[...,j] = (phi_estimate_cfft_sat + 2*phi_estimate_cfft_cen_and_sat)\
                                                  *np.conjugate(kfft)*hcos.nzm[i,j]
-                integrand_oneHalo_4pt[...,j] = (3*phi_estimate_cfft_sat*np.conjugate(phi_estimate_cfft_cen_and_sat) \
+                integrand_oneHalo_4pt[...,j] = (4*phi_estimate_cfft_sat*np.conjugate(phi_estimate_cfft_cen_and_sat) \
                                                 + phi_estimate_cfft_sat*np.conjugate(phi_estimate_cfft_sat)) * hcos.nzm[i,j]
-                # FIXME! The 2h term below only has one factor of u in the coupling involving centrals. should it have two?
                 integrand_twoHalo_2g[...,j] = (2*phi_estimate_cfft_cen_and_sat + phi_estimate_cfft_sat)*hcos.nzm[i,j]*hcos.bh[i,j]
                 integrand_twoHalo_1g[...,j] = np.conjugate(kfft)*hcos.nzm[i,j]*hcos.bh[i,j]
 
