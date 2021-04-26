@@ -7,3 +7,6 @@ Code for calculating biases to CMB lensing auto- and cross- correlations due to 
 * Quicklens ([Python 3 version](https://github.com/abaleato/Quicklens-with-fixes/tree/Python3) )
 * [pyccl](https://github.com/LSSTDESC/CCL)
 * astropy
+
+### Usage:
+See example_pipeline.ipynb
