@@ -322,8 +322,8 @@ class hm_framework:
         # Integrate over z
         exp.biases['cib']['trispec']['1h'] =  np.trapz(oneHalo_4pt*(1+hcos.zs)**-4 * hcos.comoving_radial_distance(hcos.zs)**-6*(hcos.h_of_z(hcos.zs)**-1),hcos.zs,axis=-1)
         exp.biases['cib']['trispec']['2h'] = np.trapz(twoHalo_4pt*(1+hcos.zs)**-4*hcos.comoving_radial_distance(hcos.zs)**-6*(hcos.h_of_z(hcos.zs)**-1),hcos.zs,axis=-1)
-        exp.biases['cib']['prim_bispec']['1h'] = conversion_factor * np.trapz(oneHalo_cross*(1+hcos.zs)**-3*1./hcos.comoving_radial_distance(hcos.zs)**4,hcos.zs,axis=-1)
-        exp.biases['cib']['prim_bispec']['2h'] = conversion_factor * np.trapz(twoHalo_cross*(1+hcos.zs)**-3*1./hcos.comoving_radial_distance(hcos.zs)**4,hcos.zs,axis=-1)
+        exp.biases['cib']['prim_bispec']['1h'] = conversion_factor * np.trapz(oneHalo_cross*(1+hcos.zs)**-2*1./hcos.comoving_radial_distance(hcos.zs)**4,hcos.zs,axis=-1)
+        exp.biases['cib']['prim_bispec']['2h'] = conversion_factor * np.trapz(twoHalo_cross*(1+hcos.zs)**-2*1./hcos.comoving_radial_distance(hcos.zs)**4,hcos.zs,axis=-1)
 
         if fftlog_way:
             exp.biases['ells'] = np.arange(self.lmax_out+1)
