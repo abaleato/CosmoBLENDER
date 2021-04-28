@@ -75,6 +75,21 @@ class hm_framework:
         # I have removed this for now as i think it is likley subdomiant
         self.consistency =  np.trapz(self.hcos.nzm*self.hcos.bh*self.hcos.ms/self.hcos.rho_matter_z(0)*mMask,self.hcos.ms, axis=-1)
 
+    def get_hod_factorial(self, n, exp):
+        """
+        Calculate the function of f_cen and f_sat coming from <N_gal(N_gal-1)...(N_gal-j)>, where j=n-1
+        - Input:
+            * n = int. Number of different galaxies in the halo.
+            * exp = a qest.experiment object
+        - Return:
+            * a 2D array with size (num of zs, num of ms)
+        """
+        j = n-1
+        autofreq = np.array([[exp.freq_GHz], [exp.freq_GHz]], dtype=np.double)   *1e9    #Ghz
+        f_cen = tls.from_Jypersr_to_uK(exp.freq_GHz) * self.hcos._get_fcen(autofreq[0])[:,:,0]
+        f_sat = tls.from_Jypersr_to_uK(exp.freq_GHz) * self.hcos._get_fsat(autofreq[0], cibinteg='trap', satmf='Tinker')[:,:,0]
+        return (f_sat / f_cen)**j * ( (1 + j) * f_cen +  f_sat )
+
     def get_tsz_bias(self, exp, fftlog_way=True, get_secondary_bispec_bias=False, bin_width_out=30, bin_width_out_second_bispec_bias=1000):
         """
         Calculate the tsz biases given an "experiment" object (defined in qest.py)
@@ -243,9 +258,12 @@ class hm_framework:
             * (optional) fftlog_way = Boolean. If true, use 1D fftlog reconstructions, otherwise use 2D qiucklens
             * (optional) bin_width_out = int. Bin width of the output lensing reconstruction
         """
-        autofreq = np.array([[exp.freq_GHz], [exp.freq_GHz]], dtype=np.double)   *1e9    #Ghz
         hcos = self.hcos
         self.get_consistency(exp)
+
+        # Get the HOD factorial we will be needing #FIXME: there are much better ways of doing this
+        hod_fact_2gal = self.get_hod_factorial(2, exp)
+        hod_fact_4gal = self.get_hod_factorial(4, exp)
 
         # Output ells
         ells_out = np.arange(self.lmax_out+1)
@@ -267,8 +285,6 @@ class hm_framework:
             # M integral.
             for j,m in enumerate(hcos.ms):
                 if m> exp.massCut: continue
-                f_cen = tls.from_Jypersr_to_uK(exp.freq_GHz) * hcos._get_fcen(autofreq[0])[i,j][0]
-                f_sat = tls.from_Jypersr_to_uK(exp.freq_GHz) * hcos._get_fsat(autofreq[0], cibinteg='trap', satmf='Tinker')[i,j][0]
                 #project the galaxy profiles
                 u = tls.pkToPell(hcos.comoving_radial_distance(hcos.zs[i]), hcos.ks, hcos.uk_profiles['nfw'][i, j] * \
                                          (1-np.exp(-(hcos.ks/hcos.p['kstar_damping']))), ellmax=exp.lmax)
@@ -280,11 +296,11 @@ class hm_framework:
                                    *hcos.lensing_window(hcos.zs[i],1100.), ellmax=self.lmax_out)
                 kfft = kap*self.ms_rescaled[j] if fftlog_way else ql.spec.cl2cfft(kap,exp.pix).fft*self.ms_rescaled[j]
                 # Accumulate the integrands
-                integrand_oneHalo_cross[...,j] = f_cen*(2*f_sat + f_sat**2) * phi_estimate_cfft_uu * np.conjugate(kfft) * hcos.nzm[i,j]
-                integrand_oneHalo_IIII[...,j] = f_cen*(4*f_sat**3 + f_sat**4) * phi_estimate_cfft_uu * np.conjugate(phi_estimate_cfft_uu) * hcos.nzm[i,j]
+                integrand_oneHalo_cross[...,j] = hod_fact_2gal[i, j] * phi_estimate_cfft_uu * np.conjugate(kfft) * hcos.nzm[i,j]
+                integrand_oneHalo_IIII[...,j] = hod_fact_4gal[i, j] * phi_estimate_cfft_uu * np.conjugate(phi_estimate_cfft_uu) * hcos.nzm[i,j]
 
                 integrand_twoHalo_k[...,j] = np.conjugate(kfft) * hcos.nzm[i,j] * hcos.bh[i,j]
-                integrand_twoHalo_II[...,j] = f_cen*(2*f_sat + f_sat**2) * phi_estimate_cfft_uu * hcos.nzm[i,j] * hcos.bh[i,j]
+                integrand_twoHalo_II[...,j] = hod_fact_2gal[i, j] * phi_estimate_cfft_uu * hcos.nzm[i,j] * hcos.bh[i,j]
 
             # Perform the m integrals
             IIII_1h[...,i]=np.trapz(integrand_oneHalo_IIII,hcos.ms,axis=-1)
@@ -390,9 +406,14 @@ class hm_framework:
             * (optional) fftlog_way = Boolean. If true, use 1D fftlog reconstructions, otherwise use 2D qiucklens
             * (optional) bin_width_out = int. Bin width of the output lensing reconstruction
         """
-        autofreq = np.array([[exp.freq_GHz], [exp.freq_GHz]], dtype=np.double)   *1e9    #Ghz
         hcos = self.hcos
         self.get_consistency(exp)
+
+        # Get the HOD factorial we will be needing #FIXME: there are much better ways of doing this
+        hod_fact_1gal = self.get_hod_factorial(2, exp)
+        hod_fact_2gal = self.get_hod_factorial(2, exp)
+        hod_fact_3gal = self.get_hod_factorial(2, exp)
+        hod_fact_4gal = self.get_hod_factorial(4, exp)
 
         # Output ells
         ells_out = np.arange(self.lmax_out+1)
@@ -417,8 +438,6 @@ class hm_framework:
             # M integral.
             for j,m in enumerate(hcos.ms):
                 if m> exp.massCut: continue
-                f_cen = tls.from_Jypersr_to_uK(exp.freq_GHz) * hcos._get_fcen(autofreq[0])[i,j][0]
-                f_sat = tls.from_Jypersr_to_uK(exp.freq_GHz) * hcos._get_fsat(autofreq[0], cibinteg='trap', satmf='Tinker')[i,j][0]
                 #project the galaxy profiles
                 y = tls.pkToPell(hcos.comoving_radial_distance(hcos.zs[i]), hcos.ks, hcos.pk_profiles['y'][i, j] \
                                  * (1 - np.exp(-(hcos.ks / hcos.p['kstar_damping']))), ellmax=exp.lmax)
@@ -434,15 +453,15 @@ class hm_framework:
                                    *hcos.lensing_window(hcos.zs[i],1100.), ellmax=self.lmax_out)
                 kfft = kap*self.ms_rescaled[j] if fftlog_way else ql.spec.cl2cfft(kap,exp.pix).fft*self.ms_rescaled[j]
                 # Accumulate the integrands
-                integrand_oneHalo_cross[...,j] = (f_cen + f_sat) * phi_estimate_cfft_uy * np.conjugate(kfft) * hcos.nzm[i,j]
-                integrand_oneHalo_Iyyy[...,j] = (f_cen + f_sat) * phi_estimate_cfft_uy * phi_estimate_cfft_yy * hcos.nzm[i,j]
-                integrand_oneHalo_IIyy[...,j] = f_cen*(2*f_sat + f_sat**2) * phi_estimate_cfft_uu * phi_estimate_cfft_yy * hcos.nzm[i,j]
-                integrand_oneHalo_yIII[...,j] = f_cen*(3*f_sat**2 + f_sat**3) * phi_estimate_cfft_uu * phi_estimate_cfft_uy * hcos.nzm[i,j]
+                integrand_oneHalo_cross[...,j] = hod_fact_1gal[i,j] * phi_estimate_cfft_uy * np.conjugate(kfft) * hcos.nzm[i,j]
+                integrand_oneHalo_Iyyy[...,j] = hod_fact_1gal[i,j] * phi_estimate_cfft_uy * phi_estimate_cfft_yy * hcos.nzm[i,j]
+                integrand_oneHalo_IIyy[...,j] = hod_fact_2gal[i,j] * phi_estimate_cfft_uu * phi_estimate_cfft_yy * hcos.nzm[i,j]
+                integrand_oneHalo_yIII[...,j] = hod_fact_3gal[i,j] * phi_estimate_cfft_uu * phi_estimate_cfft_uy * hcos.nzm[i,j]
 
                 integrand_twoHalo_k[...,j] = np.conjugate(kfft) * hcos.nzm[i,j] * hcos.bh[i,j]
                 integrand_twoHalo_yy[...,j] = phi_estimate_cfft_yy * hcos.nzm[i,j] * hcos.bh[i,j]
-                integrand_twoHalo_Iy[...,j] = (f_cen + f_sat) * phi_estimate_cfft_uy * hcos.nzm[i,j] * hcos.bh[i,j]
-                integrand_twoHalo_II[...,j] = f_cen*(2*f_sat + f_sat**2) * phi_estimate_cfft_uu * hcos.nzm[i,j] * hcos.bh[i,j]
+                integrand_twoHalo_Iy[...,j] = hod_fact_1gal[i,j] * phi_estimate_cfft_uy * hcos.nzm[i,j] * hcos.bh[i,j]
+                integrand_twoHalo_II[...,j] = hod_fact_2gal[i,j] * phi_estimate_cfft_uu * hcos.nzm[i,j] * hcos.bh[i,j]
 
             # Perform the m integrals
             Iyyy_1h[...,i]=np.trapz(integrand_oneHalo_Iyyy,hcos.ms,axis=-1)
