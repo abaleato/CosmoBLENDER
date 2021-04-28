@@ -494,14 +494,15 @@ class hm_framework:
         # Integrand factors from Limber projection (adapted to hmvec conventions)
         Iyyy_integrand = 4 * (1+hcos.zs)**-1 * hcos.comoving_radial_distance(hcos.zs)**-6 * hcos.h_of_z(hcos.zs)**2
         IIyy_integrand = 2 * (1+hcos.zs)**-2 * hcos.comoving_radial_distance(hcos.zs)**-6 * hcos.h_of_z(hcos.zs)
+        IyIy_integrand = 2 * IIyy_integrand
         yIII_integrand = 4 * (1+hcos.zs)**-3 * hcos.comoving_radial_distance(hcos.zs)**-6
         kIy_integrand  = 2 * (1+hcos.zs)**-1 * hcos.comoving_radial_distance(hcos.zs)**-4 * hcos.h_of_z(hcos.zs)
 
         # Integrate over z
-        exp.biases['mixed']['trispec']['1h'] = np.trapz( Iyyy_integrand*Iyyy_1h + IIyy_integrand*(IIyy_1h+IyIy_1h)
-                                                       + yIII_integrand*yIII_1h, hcos.zs, axis=-1)
-        exp.biases['mixed']['trispec']['2h'] = np.trapz( Iyyy_integrand*Iyyy_2h + IIyy_integrand*(IIyy_2h+IyIy_2h)
-                                                       + yIII_integrand*yIII_2h, hcos.zs, axis=-1)
+        exp.biases['mixed']['trispec']['1h'] = np.trapz( Iyyy_integrand*Iyyy_1h + IIyy_integrand*IIyy_1h
+                                                         + IyIy_integrand*IyIy_1h + yIII_integrand*yIII_1h, hcos.zs, axis=-1)
+        exp.biases['mixed']['trispec']['2h'] = np.trapz( Iyyy_integrand*Iyyy_2h + IIyy_integrand*IIyy_2h
+                                                         + IyIy_integrand*IyIy_2h + yIII_integrand*yIII_2h, hcos.zs, axis=-1)
         exp.biases['mixed']['prim_bispec']['1h'] = conversion_factor * np.trapz( oneHalo_cross*kIy_integrand,
                                                                                hcos.zs, axis=-1)
         exp.biases['mixed']['prim_bispec']['2h'] = conversion_factor * np.trapz( twoHalo_cross*kIy_integrand,
