@@ -425,7 +425,8 @@ class hm_framework:
         # The one and two halo bias terms -- these store the integrand to be integrated over z
         Iyyy_1h = np.zeros([nx,self.nZs])+0j if fftlog_way else np.zeros([nx,nx,self.nZs])+0j
         IIyy_1h = Iyyy_1h.copy(); yIII_1h = Iyyy_1h.copy(); Iyyy_2h = Iyyy_1h.copy(); IIyy_2h = Iyyy_1h.copy()
-        yIII_2h = Iyyy_1h.copy(); oneHalo_cross = Iyyy_1h.copy(); twoHalo_cross = Iyyy_1h.copy()
+        yIII_2h = Iyyy_1h.copy(); oneHalo_cross = Iyyy_1h.copy(); twoHalo_cross = Iyyy_1h.copy();
+        IyIy_2h = Iyyy_1h.copy(); IyIy_1h = Iyyy_1h.copy()
 
         for i,z in enumerate(hcos.zs):
             #Temporary storage
@@ -433,7 +434,7 @@ class hm_framework:
             integrand_oneHalo_Iyyy=integrand_oneHalo_cross.copy(); integrand_oneHalo_IIyy=integrand_oneHalo_cross.copy()
             integrand_oneHalo_yIII=integrand_oneHalo_cross.copy(); integrand_twoHalo_k=integrand_oneHalo_cross.copy()
             integrand_twoHalo_yy=integrand_oneHalo_cross.copy(); integrand_twoHalo_Iy=integrand_oneHalo_cross.copy()
-            integrand_twoHalo_II=integrand_oneHalo_cross.copy()
+            integrand_twoHalo_II=integrand_oneHalo_cross.copy(); integrand_oneHalo_IyIy=integrand_oneHalo_cross.copy()
 
             # M integral.
             for j,m in enumerate(hcos.ms):
@@ -454,9 +455,10 @@ class hm_framework:
                 kfft = kap*self.ms_rescaled[j] if fftlog_way else ql.spec.cl2cfft(kap,exp.pix).fft*self.ms_rescaled[j]
                 # Accumulate the integrands
                 integrand_oneHalo_cross[...,j] = hod_fact_1gal[i,j] * phi_estimate_cfft_uy * np.conjugate(kfft) * hcos.nzm[i,j]
-                integrand_oneHalo_Iyyy[...,j] = hod_fact_1gal[i,j] * phi_estimate_cfft_uy * phi_estimate_cfft_yy * hcos.nzm[i,j]
-                integrand_oneHalo_IIyy[...,j] = hod_fact_2gal[i,j] * phi_estimate_cfft_uu * phi_estimate_cfft_yy * hcos.nzm[i,j]
-                integrand_oneHalo_yIII[...,j] = hod_fact_3gal[i,j] * phi_estimate_cfft_uu * phi_estimate_cfft_uy * hcos.nzm[i,j]
+                integrand_oneHalo_Iyyy[...,j] = hod_fact_1gal[i,j] * phi_estimate_cfft_uy * np.conjugate(phi_estimate_cfft_yy) * hcos.nzm[i,j]
+                integrand_oneHalo_IIyy[...,j] = hod_fact_2gal[i,j] * phi_estimate_cfft_uu * np.conjugate(phi_estimate_cfft_yy) * hcos.nzm[i,j]
+                integrand_oneHalo_IyIy[...,j] = hod_fact_2gal[i,j] * phi_estimate_cfft_uy * np.conjugate(phi_estimate_cfft_uy) * hcos.nzm[i,j]
+                integrand_oneHalo_yIII[...,j] = hod_fact_3gal[i,j] * phi_estimate_cfft_uu * np.conjugate(phi_estimate_cfft_uy) * hcos.nzm[i,j]
 
                 integrand_twoHalo_k[...,j] = np.conjugate(kfft) * hcos.nzm[i,j] * hcos.bh[i,j]
                 integrand_twoHalo_yy[...,j] = phi_estimate_cfft_yy * hcos.nzm[i,j] * hcos.bh[i,j]
@@ -466,6 +468,7 @@ class hm_framework:
             # Perform the m integrals
             Iyyy_1h[...,i]=np.trapz(integrand_oneHalo_Iyyy,hcos.ms,axis=-1)
             IIyy_1h[...,i]=np.trapz(integrand_oneHalo_IIyy,hcos.ms,axis=-1)
+            IyIy_1h[...,i]=np.trapz(integrand_oneHalo_IyIy,hcos.ms,axis=-1)
             yIII_1h[...,i]=np.trapz(integrand_oneHalo_yIII,hcos.ms,axis=-1)
 
             oneHalo_cross[...,i]=np.trapz(integrand_oneHalo_cross,hcos.ms,axis=-1)
@@ -477,6 +480,7 @@ class hm_framework:
 
             Iyyy_2h[...,i] = np.trapz(integrand_twoHalo_Iy,hcos.ms,axis=-1) * np.trapz(integrand_twoHalo_yy,hcos.ms,axis=-1) * pk
             IIyy_2h[...,i] = np.trapz(integrand_twoHalo_II,hcos.ms,axis=-1) * np.trapz(integrand_twoHalo_yy,hcos.ms,axis=-1) * pk
+            IyIy_2h[...,i] = np.trapz(integrand_twoHalo_Iy,hcos.ms,axis=-1)**2 * pk
             yIII_2h[...,i] = np.trapz(integrand_twoHalo_Iy,hcos.ms,axis=-1) * np.trapz(integrand_twoHalo_II,hcos.ms,axis=-1) * pk
 
             tmpCorr =np.trapz(integrand_twoHalo_k,hcos.ms,axis=-1)
@@ -494,9 +498,9 @@ class hm_framework:
         kIy_integrand  = 2 * (1+hcos.zs)**-1 * hcos.comoving_radial_distance(hcos.zs)**-4 * hcos.h_of_z(hcos.zs)
 
         # Integrate over z
-        exp.biases['mixed']['trispec']['1h'] = np.trapz( Iyyy_integrand*Iyyy_1h + IIyy_integrand*IIyy_1h
+        exp.biases['mixed']['trispec']['1h'] = np.trapz( Iyyy_integrand*Iyyy_1h + IIyy_integrand*(IIyy_1h+IyIy_1h)
                                                        + yIII_integrand*yIII_1h, hcos.zs, axis=-1)
-        exp.biases['mixed']['trispec']['2h'] = np.trapz( Iyyy_integrand*Iyyy_2h + IIyy_integrand*IIyy_2h
+        exp.biases['mixed']['trispec']['2h'] = np.trapz( Iyyy_integrand*Iyyy_2h + IIyy_integrand*(IIyy_2h+IyIy_2h)
                                                        + yIII_integrand*yIII_2h, hcos.zs, axis=-1)
         exp.biases['mixed']['prim_bispec']['1h'] = conversion_factor * np.trapz( oneHalo_cross*kIy_integrand,
                                                                                hcos.zs, axis=-1)
