@@ -140,7 +140,7 @@ class hm_framework:
                 # Get the kappa map
                 kap = tls.pkToPell(hcos.comoving_radial_distance(hcos.zs[i]),hcos.ks,hcos.uk_profiles['nfw'][i,j]\
                                    *hcos.lensing_window(hcos.zs[i],1100.), ellmax=self.lmax_out)
-                kfft = kap*self.ms_rescaled[j] if fftlog_way else ql.spec.cl2cfft(kap,exp.pix).fft*self.ms_rescaled[j]
+                kfft = kap*self.ms_rescaled[j]/(1+hcos.zs[i])**3 if fftlog_way else ql.spec.cl2cfft(kap,exp.pix).fft*self.ms_rescaled[j]/(1+hcos.zs[i])**3
 
                 phi_estimate_cfft = exp.get_TT_qe(fftlog_way, ells_out, y,y)
 
@@ -294,7 +294,7 @@ class hm_framework:
                 # Get the kappa map
                 kap = tls.pkToPell(hcos.comoving_radial_distance(hcos.zs[i]),hcos.ks,hcos.uk_profiles['nfw'][i,j]\
                                    *hcos.lensing_window(hcos.zs[i],1100.), ellmax=self.lmax_out)
-                kfft = kap*self.ms_rescaled[j] if fftlog_way else ql.spec.cl2cfft(kap,exp.pix).fft*self.ms_rescaled[j]
+                kfft = kap*self.ms_rescaled[j]/(1+hcos.zs[i])**3 if fftlog_way else ql.spec.cl2cfft(kap,exp.pix).fft*self.ms_rescaled[j]/(1+hcos.zs[i])**3
                 # Accumulate the integrands
                 integrand_oneHalo_cross[...,j] = hod_fact_2gal[i, j] * phi_estimate_cfft_uu * np.conjugate(kfft) * hcos.nzm[i,j]
                 integrand_oneHalo_IIII[...,j] = hod_fact_4gal[i, j] * phi_estimate_cfft_uu * np.conjugate(phi_estimate_cfft_uu) * hcos.nzm[i,j]
@@ -452,7 +452,7 @@ class hm_framework:
                 # Get the kappa map
                 kap = tls.pkToPell(hcos.comoving_radial_distance(hcos.zs[i]),hcos.ks,hcos.uk_profiles['nfw'][i,j]\
                                    *hcos.lensing_window(hcos.zs[i],1100.), ellmax=self.lmax_out)
-                kfft = kap*self.ms_rescaled[j] if fftlog_way else ql.spec.cl2cfft(kap,exp.pix).fft*self.ms_rescaled[j]
+                kfft = kap*self.ms_rescaled[j]/(1+hcos.zs[i])**3 if fftlog_way else ql.spec.cl2cfft(kap,exp.pix).fft*self.ms_rescaled[j]/(1+hcos.zs[i])**3
                 # Accumulate the integrands
                 integrand_oneHalo_cross[...,j] = hod_fact_1gal[i,j] * phi_estimate_cfft_uy * np.conjugate(kfft) * hcos.nzm[i,j]
                 integrand_oneHalo_Iyyy[...,j] = hod_fact_1gal[i,j] * phi_estimate_cfft_uy * np.conjugate(phi_estimate_cfft_yy) * hcos.nzm[i,j]
