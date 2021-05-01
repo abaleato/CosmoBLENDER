@@ -178,7 +178,10 @@ class experiment:
             # Project the QE normalisation to 1D
             lbins = np.arange(lmin, self.lmax, norm_bin_width)
             qe_norm_1D = self.qe_norm.get_ml(lbins)
-            return np.nan_to_num( unnorm_TT_qe / np.interp(ell_out, qe_norm_1D.ls, qe_norm_1D.specs['cl']) )
+
+            # Apply a convention correction to match Quicklens
+            conv_corr = 1/(2*np.pi)
+            return conv_corr * np.nan_to_num( unnorm_TT_qe / np.interp(ell_out, qe_norm_1D.ls, qe_norm_1D.specs['cl']) )
         else:
             tft1 = ql.spec.cl2cfft(profile_leg1, self.pix)
 
