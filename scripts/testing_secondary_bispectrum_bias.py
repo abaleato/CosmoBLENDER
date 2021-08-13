@@ -25,9 +25,9 @@ if __name__ == '__main__':
     cosmoParams = {'As': 2.4667392631170437e-09, 'ns': .96, 'omch2': (0.25 - .043) * .7 ** 2, 'ombh2': 0.044 * .7 ** 2,
                    'H0': 70.}  # Note that for now there is still cosmology dpendence in the cls defined within the experiment class
 
-    nZs = 3 #30
-    nMasses = 3 #30
-    bin_width_out_second_bispec_bias = 1000 #30
+    nZs = 30
+    nMasses = 30
+    bin_width_out_second_bispec_bias = 60
 
     # Initialise a halo model object for the calculation, using mostly default parameters
     hm_calc = biases.hm_framework(cosmoParams=cosmoParams, nZs=nZs, nMasses=nMasses)
@@ -38,7 +38,7 @@ if __name__ == '__main__':
                          bin_width_out_second_bispec_bias=bin_width_out_second_bispec_bias, exp_param_list=exp_param_list)
 
     # Save a dictionary with the bias we calculated to file
-    #experiment.save() # FIXME: Why is this not working?
+    experiment.save_biases()
 
     # Plot the bias
     plt.figure(figsize=(5, 5))

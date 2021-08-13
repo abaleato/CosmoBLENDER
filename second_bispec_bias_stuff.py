@@ -23,7 +23,6 @@ def get_secondary_bispec_bias_at_L(projected_y_profile, projected_kappa_profile,
     - Returns:
         * A Float. The value of the secondary bispectrum bias at L.
     """
-    print(multiprocessing.current_process())
     # Initialise experiment object. (We do this bc instances cannot be passed via the multiprocessing pipe)
     experiment = qest.experiment(*exp_param_list)
 
