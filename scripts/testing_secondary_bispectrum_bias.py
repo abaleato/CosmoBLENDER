@@ -7,34 +7,38 @@ import numpy as np
 import matplotlib.pyplot as plt
 from lensing_rec_biases_code import qest
 from lensing_rec_biases_code import biases
-
+import time
 # Press the green button in the gutter to run the script.
 if __name__ == '__main__':
+    t0 = time.time() # Time the run
     which_bias = 'tsz' #'tsz' or 'cib'
     nlev_t = 18.  # uK arcmin
     beam_size = 1.  # arcmin
     lmax = 3000  # Maximum ell for the reconstruction
 
-    # Initialise experiments with various different mass cuts
-    SPT_5e15 = qest.experiment(nlev_t, beam_size, lmax, massCut_Mvir=5e15)
+    # Initialise an experiment object. Store the list of params so we can later initialise it again within multiple processes
+    massCut_Mvir=5e15
+    exp_param_list = [nlev_t, beam_size, lmax, massCut_Mvir]
+    SPT_5e15 = qest.experiment(*exp_param_list)
 
     # This should roughly match the cosmology in Nick's tSZ papers
     cosmoParams = {'As': 2.4667392631170437e-09, 'ns': .96, 'omch2': (0.25 - .043) * .7 ** 2, 'ombh2': 0.044 * .7 ** 2,
                    'H0': 70.}  # Note that for now there is still cosmology dpendence in the cls defined within the experiment class
 
-    nZs = 30
-    nMasses = 30
-    bin_width_out_second_bispec_bias = 30
+    nZs = 3 #30
+    nMasses = 3 #30
+    bin_width_out_second_bispec_bias = 1000 #30
 
     # Initialise a halo model object for the calculation, using mostly default parameters
     hm_calc = biases.hm_framework(cosmoParams=cosmoParams, nZs=nZs, nMasses=nMasses)
 
     experiment = SPT_5e15
 
-    hm_calc.get_tsz_bias(SPT_5e15, get_secondary_bispec_bias=True, bin_width_out_second_bispec_bias=bin_width_out_second_bispec_bias)
+    hm_calc.get_tsz_bias(SPT_5e15, get_secondary_bispec_bias=True, \
+                         bin_width_out_second_bispec_bias=bin_width_out_second_bispec_bias, exp_param_list=exp_param_list)
 
     # Save a dictionary with the bias we calculated to file
-    experiment.save()
+    #experiment.save() # FIXME: Why is this not working?
 
     # Plot the bias
     plt.figure(figsize=(5, 5))
@@ -57,5 +61,7 @@ if __name__ == '__main__':
     ax.tick_params(axis='both', which='minor', labelsize=8)
     plt.savefig('testing_second_bispec_bias_nZs{}_nMasses{}_bin_width_out_second_bispec_bias{}.png'.format(nZs, nMasses, bin_width_out_second_bispec_bias))
     plt.close()
+    t1 = time.time()
+    print('time taken:', t1-t0)
 
 

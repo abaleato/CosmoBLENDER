@@ -90,7 +90,8 @@ class hm_framework:
         f_sat = tls.from_Jypersr_to_uK(exp.freq_GHz) * self.hcos._get_fsat(autofreq[0], cibinteg='trap', satmf='Tinker')[:,:,0]
         return (f_sat / f_cen)**j * ( (1 + j) * f_cen +  f_sat )
 
-    def get_tsz_bias(self, exp, fftlog_way=True, get_secondary_bispec_bias=False, bin_width_out=30, bin_width_out_second_bispec_bias=1000):
+    def get_tsz_bias(self, exp, fftlog_way=True, get_secondary_bispec_bias=False, bin_width_out=30, \
+                     bin_width_out_second_bispec_bias=1000, exp_param_list=None):
         """
         Calculate the tsz biases given an "experiment" object (defined in qest.py)
         Input:
@@ -99,6 +100,7 @@ class hm_framework:
             * (optional) get_secondary_bispec_bias = False. Compute and return the secondary bispectrum bias (slow)
             * (optional) bin_width_out = int. Bin width of the output lensing reconstruction
             * (optional) bin_width_out_second_bispec_bias = int. Bin width of the output secondary bispectrum bias
+            * (optional) exp_param_list = list of inputs to initialise the 'exp' experiment object
         """
         hcos = self.hcos
         self.get_consistency(exp)
@@ -154,7 +156,7 @@ class hm_framework:
                     # Temporary secondary bispectrum bias stuff
                     # The part with the nested lensing reconstructions
                     # FIXME: currently the following is incompatible with fftlog_way=False (bc of kfft, conversion_factor, etc)
-                    secondary_bispec_bias_reconstructions = sbbs.get_secondary_bispec_bias(lbins_second_bispec_bias, exp, y, kfft)
+                    secondary_bispec_bias_reconstructions = sbbs.get_secondary_bispec_bias(lbins_second_bispec_bias, exp_param_list, y, kfft) # FIXME: change input to exp_param_list in CIB as well
                     integrand_oneHalo_second_bispec[..., j] = secondary_bispec_bias_reconstructions
                     # FIXME:add the 2-halo term. Should be easy.
 
