@@ -44,7 +44,7 @@ if __name__ == '__main__':
     plt.figure(figsize=(5, 5))
     scaling = experiment.biases['second_bispec_bias_ells'] ** 4 / (2 * np.pi)
 
-    convention_correction = 1 / (2 * np.pi)  # match FT convetion in QL
+    convention_correction = 1 # 1 when using QL #1 / (2 * np.pi)  # match FT convetion in QL
 
     plt.plot(experiment.biases['second_bispec_bias_ells'][experiment.biases[which_bias]['second_bispec']['1h'] > 0],
              (scaling * convention_correction * experiment.biases[which_bias]['second_bispec']['1h'])[

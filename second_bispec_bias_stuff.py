@@ -42,10 +42,16 @@ def get_secondary_bispec_bias_at_L(projected_y_profile, projected_kappa_profile,
     # Carry out the 2D integral over x and y
     # We include a factor of the Wiener filters and the Cls coming coming the lensing weights
     # Note that the \vec{L} \cdot \vec{l} simplifies because we assume that L is aligned with x-axis
-    integral_over_x = np.trapz(
+    # FIXME: only implementing one of two terms in g(l,L); is this OK?
+    integral_over_x_w_l = np.trapz(
         lx * ql.spec.cl2cfft(experiment.cl_unl.cltt / (experiment.cl_len.cltt + experiment.nltt), experiment.pix).fft \
         * inner_rec * shifted_y_array.fft.real, lx[0, :], axis=-1)
-    integral_over_y = L * np.trapz(integral_over_x, ly[:, 0], axis=-1)
+    integral_over_x = np.trapz(
+        ql.spec.cl2cfft(experiment.cl_unl.cltt / (experiment.cl_len.cltt + experiment.nltt), experiment.pix).fft \
+        * inner_rec * shifted_y_array.fft.real, lx[0, :], axis=-1)
+
+    integral_over_y = L**2 * np.trapz(integral_over_x, ly[:, 0], axis=-1) \
+                      - L * np.trapz(integral_over_x_w_l, ly[:, 0], axis=-1)
 
     # Normalise the two QEs involved here
     lbins = np.arange(0, experiment.lmax, 40)
