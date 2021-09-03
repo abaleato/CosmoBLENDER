@@ -4,3 +4,7 @@ __init__.pyc
 __pycache__/
 *.pkl
 *.png
+*.pdf
+*.pyc
+*.tar
+*.log
