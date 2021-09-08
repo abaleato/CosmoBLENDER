@@ -36,7 +36,7 @@ def get_secondary_bispec_bias_at_L(projected_y_profile, projected_kappa_profile,
                                   , experiment, L).fft.real
 
     # Calculate the inner reconstruction
-    inner_rec = get_inner_reconstruction(experiment, T_fg_filtered_shifted, projected_kappa_profile)
+    inner_rec = get_inner_reconstruction(experiment, T_fg_filtered_shifted, projected_kappa_profile).fft
 
     # Carry out the 2D integral over x and y
     # Note that the \vec{L} \cdot \vec{l} simplifies because we assume that L is aligned with x-axis
@@ -52,8 +52,8 @@ def shift_array(array_to_paste, exp, lx_shift, ly_shift=0):
     - Inputs:
         * array_to_paste = 1D numpy array. The 1D y/density profile that we want to paste in 2D and shift.
         * exp = qest.exp object. The experiment from which to get nx, dx, etc.
-        * lx_shift = Float or int. Multipole by which to shift the centre fo the array in the x direction.
-        * ly_shift = Float or int. Multipole by which to shift the centre fo the array in the y direction.
+        * lx_shift = Float or int. Multipole by which to shift the centre of the array in the x direction.
+        * ly_shift = Float or int. Multipole by which to shift the centre of the array in the y direction.
     - Returns:
         * A ql.maps.cfft object containing the 2D, shifted array_to_paste.
     """
@@ -98,7 +98,6 @@ def get_inner_reconstruction(experiment, T_fg_filtered_shifted, projected_kappa_
     # TODO: Document better
     # TODO: check prefactors of 2pi
     # TODO: write some tests
-    # TODO: if this works, remove the other functions above
 
     ret = ql.maps.cfft(nx=experiment.pix.nx, dx=experiment.pix.dx, ny=experiment.pix.ny, dy=experiment.pix.dy)
 
@@ -117,6 +116,9 @@ def get_inner_reconstruction(experiment, T_fg_filtered_shifted, projected_kappa_
     ret.fft = np.fft.fft2(np.fft.ifft2(cltt_filters * T_fg_filtered_shifted * lx**2 ) * np.fft.ifft2(lx * phi)) \
               +  np.fft.fft2(np.fft.ifft2(cltt_filters * T_fg_filtered_shifted * lx * ly) * np.fft.ifft2(lx * phi))
 
-    ret *= 1 / (ret.dx * ret.dy)
+    # Correct for numpy DFT normalisation correction and go from discrete to continuous
+    # FIXME: make sure these factors are correct
+    A_sky = ret.nx * ret.dx * ret.ny * ret.dy
+    ret *= np.sqrt( ret.nx * ret.ny / (ret.dx * ret.dy)) / np.sqrt(A_sky)
 
     return ret
