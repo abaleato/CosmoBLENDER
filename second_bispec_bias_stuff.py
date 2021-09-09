@@ -45,7 +45,12 @@ def get_secondary_bispec_bias_at_L(projected_y_profile, projected_kappa_profile,
 
     integral_over_y = np.trapz(integral_over_x, ly[:, 0], axis=-1)
 
-    return (-2) / np.pi * L**2 * integral_over_y
+    # Normalise the two QEs involved here
+    lbins = np.arange(0, experiment.lmax, 40)
+    qe_norm_1D = experiment.qe_norm.get_ml(lbins)
+    qe_norm_at_L = np.interp(L, qe_norm_1D.ls, qe_norm_1D.specs['cl'])
+
+    return (-2) / np.pi * L**2 * integral_over_y / qe_norm_at_L ** 2
 
 def shift_array(array_to_paste, exp, lx_shift, ly_shift=0):
     """
@@ -91,9 +96,8 @@ def get_secondary_bispec_bias(lbins, exp_param_list, projected_y_profile, projec
 
 
 def get_inner_reconstruction(experiment, T_fg_filtered_shifted, projected_kappa_profile):
-    """ Evaluate the inner QE reconstructions in the calculation of the secondary bispectrum bias. We assume a fixed L
-        so that we can use the convolution theorem.
-
+    """ Evaluate the (unnormalised) inner QE reconstructions in the calculation of the secondary bispectrum bias.
+        We assume a fixed L so that we can use the convolution theorem.
     """
     # TODO: Document better
     # TODO: check prefactors of 2pi
