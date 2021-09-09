@@ -112,6 +112,7 @@ class hm_framework:
 
         if get_secondary_bispec_bias:
             lbins_second_bispec_bias = np.arange(1,self.lmax_out+1,bin_width_out_second_bispec_bias)
+            # FIXME: IMPORTANT: shouldn't this be INSIDE the integrals involving phi?
             conversion_factor_second_bispec_bias = np.nan_to_num(1 / (0.5 * lbins_second_bispec_bias * (lbins_second_bispec_bias + 1)))
 
         nx = self.lmax_out+1 if fftlog_way else exp.pix.nx
