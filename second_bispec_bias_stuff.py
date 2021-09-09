@@ -91,8 +91,7 @@ def shift_array(array_to_paste, exp, lx_shift, ly_shift=0):
     """
     lx, ly = ql.maps.cfft(exp.nx, exp.dx).get_lxly()
     shifted_ells = np.sqrt((lx_shift + lx) ** 2 + (ly_shift + ly) ** 2).flatten()
-    return ql.maps.cfft(exp.nx, exp.dx, fft=np.interp(shifted_ells, exp.ls,
-                                                      array_to_paste).reshape(exp.nx, exp.nx))
+    return ql.maps.cfft(exp.nx, exp.dx, fft=np.interp(shifted_ells, exp.ls, array_to_paste).reshape(exp.nx, exp.nx) )
 
 def get_inner_reconstruction(experiment, T_fg_filtered_shifted, projected_kappa_profile):
     """ Evaluate the (unnormalised) inner QE reconstructions in the calculation of the secondary bispectrum bias.
