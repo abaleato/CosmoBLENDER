@@ -7,6 +7,33 @@ from lensing_rec_biases_code import qest
 import multiprocessing
 from functools import partial
 
+def get_secondary_bispec_bias(lbins, exp_param_list, projected_y_profile, projected_kappa_profile, parallelise=False):
+    """
+    Calculate contributions to secondary bispectrum bias from given profiles, either serially or via multiple processes
+    Input:
+        * lbins = np array. bins centres at which to evaluate the secondary bispec bias
+        * exp_param_list = list of inputs to initialise the 'exp' experiment object
+        * projected_y_profile = 1D numpy array. Project y/density profile.
+        * projected_kappa_profile = 1D numpy array. The 1D projected kappa that we will paste to 2D.
+        parallelise = Boolean. If True, use multiple processes. Alternatively, proceed serially.
+    - Returns:
+        * A np array with the size of lbins containing contributions to the secondary bispectrum bias
+    """
+
+    if parallelise:
+        # Use multiprocessing to speed up calculation
+        pool = multiprocessing.Pool(multiprocessing.cpu_count() - 1) # Start as many processes as machine can handle
+        # Helper function (pool.map can only take one, iterable input)
+        func = partial(get_secondary_bispec_bias_at_L, projected_y_profile, projected_kappa_profile, exp_param_list)
+        second_bispec_bias = np.array(pool.map(func, lbins))
+        pool.close()
+
+    else:
+        second_bispec_bias = np.zeros(lbins.shape)
+        for i, L in enumerate(lbins):
+            second_bispec_bias[i] = get_secondary_bispec_bias_at_L(projected_y_profile, projected_kappa_profile, exp_param_list, L)
+    return second_bispec_bias
+
 def get_secondary_bispec_bias_at_L(projected_y_profile, projected_kappa_profile, exp_param_list, L):
     # FIXME: careful with the 'real' assertions here
     # FIXME: Dont you need some factors to go from discrete to cts?
@@ -67,34 +94,6 @@ def shift_array(array_to_paste, exp, lx_shift, ly_shift=0):
     return ql.maps.cfft(exp.nx, exp.dx, fft=np.interp(shifted_ells, exp.ls, \
                                                       array_to_paste).reshape(exp.nx, exp.nx))
 
-def get_secondary_bispec_bias(lbins, exp_param_list, projected_y_profile, projected_kappa_profile, parallelise=False):
-    """
-    Calculate contributions to secondary bispectrum bias from given profiles, either serially or via multiple processes
-    Input:
-        * lbins = np array. bins centres at which to evaluate the secondary bispec bias
-        * exp_param_list = list of inputs to initialise the 'exp' experiment object
-        * projected_y_profile = 1D numpy array. Project y/density profile.
-        * projected_kappa_profile = 1D numpy array. The 1D projected kappa that we will paste to 2D.
-        parallelise = Boolean. If True, use multiple processes. Alternatively, proceed serially.
-    - Returns:
-        * A np array with the size of lbins containing contributions to the secondary bispectrum bias
-    """
-
-    if parallelise:
-        # Use multiprocessing to speed up calculation
-        pool = multiprocessing.Pool(multiprocessing.cpu_count() - 1) # Start as many processes as machine can handle
-        # Helper function (pool.map can only take one, iterable input)
-        func = partial(get_secondary_bispec_bias_at_L, projected_y_profile, projected_kappa_profile, exp_param_list)
-        second_bispec_bias = np.array(pool.map(func, lbins))
-        pool.close()
-
-    else:
-        second_bispec_bias = np.zeros(lbins.shape)
-        for i, L in enumerate(lbins):
-            second_bispec_bias[i] = get_secondary_bispec_bias_at_L(projected_y_profile, projected_kappa_profile, exp_param_list, L)
-    return second_bispec_bias
-
-
 def get_inner_reconstruction(experiment, T_fg_filtered_shifted, projected_kappa_profile):
     """ Evaluate the (unnormalised) inner QE reconstructions in the calculation of the secondary bispectrum bias.
         We assume a fixed L so that we can use the convolution theorem.
@@ -112,13 +111,12 @@ def get_inner_reconstruction(experiment, T_fg_filtered_shifted, projected_kappa_
                                    (experiment.cl_len.cltt + experiment.nltt), experiment.pix).fft
 
     # Convert kappa to phi and paste onto grid
-    # FIXME: there might be an issue with dividing by zero here
     phi = ql.spec.cl2cfft(np.nan_to_num(projected_kappa_profile / (0.5 * experiment.cl_unl.ls *
                                         (experiment.cl_unl.ls + 1))), experiment.pix).fft
 
     # Carry out integral using convolution theorem
     ret.fft = np.fft.fft2(np.fft.ifft2(cltt_filters * T_fg_filtered_shifted * lx**2 ) * np.fft.ifft2(lx * phi)) \
-              +  np.fft.fft2(np.fft.ifft2(cltt_filters * T_fg_filtered_shifted * lx * ly) * np.fft.ifft2(lx * phi))
+              +  np.fft.fft2(np.fft.ifft2(cltt_filters * T_fg_filtered_shifted * lx * ly) * np.fft.ifft2(ly * phi))
 
     # Correct for numpy DFT normalisation correction and go from discrete to continuous
     # FIXME: make sure these factors are correct
