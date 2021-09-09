@@ -197,7 +197,8 @@ class hm_framework:
                                                             *(hcos.h_of_z(hcos.zs)**2),hcos.zs,axis=-1)
         if get_secondary_bispec_bias:
         # FIXME: check the prefactors here
-            exp.biases['tsz']['second_bispec']['1h'] = conversion_factor_second_bispec_bias * tls.scale_sz(
+            # Note the factor of 4 coming from the different permutations
+            exp.biases['tsz']['second_bispec']['1h'] = 4 * conversion_factor_second_bispec_bias * tls.scale_sz(
                 exp.freq_GHz) ** 2 * self.T_CMB ** 2 * np.trapz( oneHalo_second_bispec * 1.\
                                                                  / hcos.comoving_radial_distance(hcos.zs) ** 4\
                                                                  * (hcos.h_of_z(hcos.zs) ** 2), hcos.zs, axis=-1)
