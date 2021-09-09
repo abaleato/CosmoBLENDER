@@ -122,7 +122,6 @@ def get_inner_reconstruction(experiment, T_fg_filtered_shifted, projected_kappa_
 
     # Correct for numpy DFT normalisation correction and go from discrete to continuous
     # FIXME: make sure these factors are correct
-    A_sky = ret.nx * ret.dx * ret.ny * ret.dy
-    ret *= np.sqrt( ret.nx * ret.ny / (ret.dx * ret.dy)) / np.sqrt(A_sky)
+    ret *= 1 / (ret.dx * ret.dy)
 
     return ret
