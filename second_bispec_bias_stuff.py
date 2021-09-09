@@ -77,7 +77,7 @@ def get_secondary_bispec_bias_at_L(projected_y_profile, projected_kappa_profile,
     qe_norm_1D = experiment.qe_norm.get_ml(lbins)
     qe_norm_at_L = np.interp(L, qe_norm_1D.ls, qe_norm_1D.specs['cl'])
 
-    return (-2) / np.pi * L**2 * integral_over_y / qe_norm_at_L ** 2
+    return (-2) / np.pi / (2*np.pi)**2 * L**2 * integral_over_y / (qe_norm_at_L ** 2)
 
 def shift_array(array_to_paste, exp, lx_shift, ly_shift=0):
     """
