@@ -59,7 +59,7 @@ def get_secondary_bispec_bias_at_L(projected_y_profile, projected_kappa_profile,
     # Wiener filters in T. Depends on |\vec{l}''|. Note the use of lensed cltt to optimise lensing reconstruction
     W_T = ql.spec.cl2cfft(experiment.cl_len.cltt / (experiment.cl_len.cltt + experiment.nltt), experiment.pix).fft
     # The factors that depend on |\vec{L} - \vec{l}''|. Assume \vec{L} points along x axis.
-    T_fg_filtered_shifted = shift_array(projected_y_profile / (experiment.cl_len.cltt + experiment.nltt) \
+    T_fg_filtered_shifted = shift_array(projected_y_profile / (experiment.cl_len.cltt + experiment.nltt)
                                   , experiment, L).fft.real
 
     # Calculate the inner reconstruction
@@ -91,7 +91,7 @@ def shift_array(array_to_paste, exp, lx_shift, ly_shift=0):
     """
     lx, ly = ql.maps.cfft(exp.nx, exp.dx).get_lxly()
     shifted_ells = np.sqrt((lx_shift + lx) ** 2 + (ly_shift + ly) ** 2).flatten()
-    return ql.maps.cfft(exp.nx, exp.dx, fft=np.interp(shifted_ells, exp.ls, \
+    return ql.maps.cfft(exp.nx, exp.dx, fft=np.interp(shifted_ells, exp.ls,
                                                       array_to_paste).reshape(exp.nx, exp.nx))
 
 def get_inner_reconstruction(experiment, T_fg_filtered_shifted, projected_kappa_profile):
@@ -107,7 +107,7 @@ def get_inner_reconstruction(experiment, T_fg_filtered_shifted, projected_kappa_
     lx, ly = ret.get_lxly()
 
     # The cl factors that depend on |\vec{l}''|
-    cltt_filters = ql.spec.cl2cfft(experiment.cl_unl.cltt * experiment.cl_len.cltt / \
+    cltt_filters = ql.spec.cl2cfft(experiment.cl_unl.cltt * experiment.cl_len.cltt /
                                    (experiment.cl_len.cltt + experiment.nltt), experiment.pix).fft
 
     # Convert kappa to phi and paste onto grid
