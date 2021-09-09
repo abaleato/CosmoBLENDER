@@ -7,7 +7,7 @@ from lensing_rec_biases_code import qest
 import multiprocessing
 from functools import partial
 
-def get_secondary_bispec_bias(lbins, exp_param_list, projected_y_profile, projected_kappa_profile, parallelise=False):
+def get_secondary_bispec_bias(lbins, exp_param_list, projected_y_profile, projected_kappa_profile, parallelise=True):
     """
     Calculate contributions to secondary bispectrum bias from given profiles, either serially or via multiple processes
     Input:
