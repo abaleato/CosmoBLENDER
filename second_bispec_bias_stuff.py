@@ -7,7 +7,7 @@ from lensing_rec_biases_code import qest
 import multiprocessing
 from functools import partial
 
-def get_secondary_bispec_bias(lbins, exp_param_list, projected_y_profile, projected_kappa_profile, parallelise=True):
+def get_secondary_bispec_bias(lbins, exp_param_list, projected_y_profile, projected_kappa_profile, parallelise=False):
     """
     Calculate contributions to secondary bispectrum bias from given profiles, either serially or via multiple processes
     Input:
@@ -68,17 +68,16 @@ def get_secondary_bispec_bias_at_L(projected_y_profile, projected_kappa_profile,
     # Carry out the 2D integral over x and y
     # Note that the \vec{L} \cdot \vec{l} simplifies because we assume that L is aligned with x-axis
     # We roll the arrays so that that domain of integration is sorted sequentially as required by np.trapz
-
     full_integrand = np.roll( np.roll(lx * W_T * inner_rec * T_fg_filtered_shifted, experiment.nx // 2, axis=-1),
                               experiment.nx // 2, axis = 0)
 
-    integral_over_x = np.trapz(full_integrand, np.roll(lx[0, :], experiment.nx//2), axis=-1)
+    integral_over_x = np.trapz(full_integrand, np.roll(lx[0, :], experiment.nx//2, axis=-1), axis=-1)
 
     # TODO: implement experiment.ny in addition to experiment.nx
     integral_over_y = np.trapz( integral_over_x, np.roll(ly[:, 0], experiment.nx//2, axis=0), axis=-1)
 
     # Normalise the two QEs involved here
-    lbins = np.arange(0, experiment.lmax, 40)
+    lbins = np.arange(10, experiment.lmax, 40)
     qe_norm_1D = experiment.qe_norm.get_ml(lbins)
     qe_norm_at_L = np.interp(L, qe_norm_1D.ls, qe_norm_1D.specs['cl'])
 
