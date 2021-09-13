@@ -111,7 +111,7 @@ class hm_framework:
             lbins = np.arange(1,self.lmax_out+1,bin_width_out)
 
         if get_secondary_bispec_bias:
-            lbins_second_bispec_bias = np.arange(1,self.lmax_out+1,bin_width_out_second_bispec_bias)
+            lbins_second_bispec_bias = np.arange(10, self.lmax_out+1, bin_width_out_second_bispec_bias)
             # No need for a conversion factor btw kapp and phi bc this is already impletemented in get_inner_reconstruction()
             conversion_factor_second_bispec_bias = 1 #np.nan_to_num(1 / (0.5 * lbins_second_bispec_bias * (lbins_second_bispec_bias + 1)))
 
