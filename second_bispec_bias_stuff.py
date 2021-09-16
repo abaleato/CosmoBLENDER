@@ -126,3 +126,26 @@ def get_inner_reconstruction(experiment, T_fg_filtered_shifted, projected_kappa_
     ret *= 1 / (ret.dx * ret.dy)
 
     return ret
+
+def test_integral_eval_at_L(exp_param_list, L):
+    ''' Test the evaluation of integrals by calculating the QE normalisation computed by brute force
+        with the result given by Quicklens'''
+
+    # Initialise experiment object. (We do this bc instances cannot be passed via the multiprocessing pipe)
+    experiment = qest.experiment(*exp_param_list)
+
+    lx, ly = ql.maps.cfft(experiment.nx, experiment.dx).get_lxly()
+
+    # Wiener filters in T. Depends on |\vec{l}''|. Note the use of lensed cltt to optimise lensing reconstruction
+    W_T = ql.spec.cl2cfft(experiment.cl_len.cltt / (experiment.cl_len.cltt + experiment.nltt), experiment.pix).fft
+
+    # Carry out the 2D integral over x and y
+    # Note that the \vec{L} \cdot \vec{l} simplifies because we assume that L is aligned with x-axis
+    # We roll the arrays so that that domain of integration is sorted sequentially as required by np.trapz
+    full_integrand = np.roll(np.roll(lx * (lx - L) * W_T , experiment.nx // 2, axis=-1),
+                             experiment.nx // 2, axis=0)
+
+    integral_over_x = np.trapz(full_integrand, np.roll(lx[0, :], experiment.nx // 2, axis=-1), axis=-1)
+    integral_over_y = np.trapz(integral_over_x, np.roll(ly[:, 0], experiment.nx // 2, axis=0), axis=-1)
+
+    return L**2 * integral_over_y  / (2*np.pi)**2 
