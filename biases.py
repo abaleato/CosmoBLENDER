@@ -158,7 +158,7 @@ class hm_framework:
                     # The part with the nested lensing reconstructions
                     # FIXME: currently the following is incompatible with fftlog_way=False (bc of kfft, conversion_factor, etc)
                     secondary_bispec_bias_reconstructions = sbbs.get_secondary_bispec_bias(lbins_second_bispec_bias, exp_param_list, y, kfft) # FIXME: change input to exp_param_list in CIB as well
-                    integrand_oneHalo_second_bispec[..., j] = secondary_bispec_bias_reconstructions
+                    integrand_oneHalo_second_bispec[..., j] = hcos.nzm[i,j] * secondary_bispec_bias_reconstructions
                     # FIXME:add the 2-halo term. Should be easy.
 
             # Perform the m integrals
