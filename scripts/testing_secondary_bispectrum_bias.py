@@ -15,19 +15,21 @@ if __name__ == '__main__':
     nlev_t = 18.  # uK arcmin
     beam_size = 1.  # arcmin
     lmax = 3000  # Maximum ell for the reconstruction
+    nx = 256
+    dx_arcmin = * 2
 
     # Initialise an experiment object. Store the list of params so we can later initialise it again within multiple processes
     massCut_Mvir=5e15
-    exp_param_list = [nlev_t, beam_size, lmax, massCut_Mvir]
+    exp_param_list = [nlev_t, beam_size, lmax, massCut_Mvir, nx, dx_arcmin]
     SPT_5e15 = qest.experiment(*exp_param_list)
 
     # This should roughly match the cosmology in Nick's tSZ papers
     cosmoParams = {'As': 2.4667392631170437e-09, 'ns': .96, 'omch2': (0.25 - .043) * .7 ** 2, 'ombh2': 0.044 * .7 ** 2,
                    'H0': 70.}  # Note that for now there is still cosmology dpendence in the cls defined within the experiment class
 
-    nZs = 30 #30
-    nMasses = 30 #30
-    bin_width_out_second_bispec_bias = 1000 #60
+    nZs = 30
+    nMasses = 30
+    bin_width_out_second_bispec_bias = 500
 
     # Initialise a halo model object for the calculation, using mostly default parameters
     hm_calc = biases.hm_framework(cosmoParams=cosmoParams, nZs=nZs, nMasses=nMasses)
@@ -46,11 +48,11 @@ if __name__ == '__main__':
 
     convention_correction = 1 # 1 when using QL #1 / (2 * np.pi)  # match FT convetion in QL
 
-    plt.plot(experiment.biases['second_bispec_bias_ells'][experiment.biases[which_bias]['second_bispec']['1h'] > 0],
+    plt.loglog(experiment.biases['second_bispec_bias_ells'][experiment.biases[which_bias]['second_bispec']['1h'] > 0],
              (scaling * convention_correction * experiment.biases[which_bias]['second_bispec']['1h'])[
                  experiment.biases[which_bias]['second_bispec']['1h'] > 0], color='r',
              label=r'{}$^2-\kappa$, 1h'.format(which_bias), ls='--')
-    plt.plot(experiment.biases['second_bispec_bias_ells'][experiment.biases[which_bias]['second_bispec']['1h'] < 0],
+    plt.loglog(experiment.biases['second_bispec_bias_ells'][experiment.biases[which_bias]['second_bispec']['1h'] < 0],
              -(scaling * convention_correction * experiment.biases[which_bias]['second_bispec']['1h'])[
                  experiment.biases[which_bias]['second_bispec']['1h'] < 0], color='r', ls='--')
 
