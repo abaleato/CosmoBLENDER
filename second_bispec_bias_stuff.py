@@ -51,19 +51,20 @@ def get_secondary_bispec_bias_at_L(projected_y_profile, projected_kappa_profile,
     - Returns:
         * A Float. The value of the secondary bispectrum bias at L.
     """
+    # TODO: adapt choice of nx and dx to avoid most of the grid being zero given the lmax of the QE
     # Initialise experiment object. (We do this bc instances cannot be passed via the multiprocessing pipe)
     experiment = qest.experiment(*exp_param_list)
 
     lx, ly = ql.maps.cfft(experiment.nx, experiment.dx).get_lxly()
 
     # Wiener filters in T. Depends on |\vec{l}''|. Note the use of lensed cltt to optimise lensing reconstruction
-    W_T = ql.spec.cl2cfft(experiment.cl_len.cltt / (experiment.cl_len.cltt + experiment.nltt), experiment.pix).fft
+    W_T = ql.spec.cl2cfft(experiment.cl_len.cltt / (experiment.cl_len.cltt + experiment.nltt), experiment.pix).fft.real
     # The factors that depend on |\vec{L} - \vec{l}''|. Assume \vec{L} points along x axis.
     T_fg_filtered_shifted = shift_array(projected_y_profile / (experiment.cl_len.cltt + experiment.nltt)
                                   , experiment, L).fft.real
 
     # Calculate the inner reconstruction
-    inner_rec = get_inner_reconstruction(experiment, T_fg_filtered_shifted, projected_kappa_profile).fft
+    inner_rec = get_inner_reconstruction(experiment, T_fg_filtered_shifted, projected_kappa_profile).fft.real
 
     # Carry out the 2D integral over x and y
     # Note that the \vec{L} \cdot \vec{l} simplifies because we assume that L is aligned with x-axis
@@ -103,7 +104,6 @@ def get_inner_reconstruction(experiment, T_fg_filtered_shifted, projected_kappa_
     """
     # TODO: Document better
     # TODO: check prefactors of 2pi
-    # TODO: write some tests
 
     ret = ql.maps.cfft(nx=experiment.pix.nx, dx=experiment.pix.dx, ny=experiment.pix.ny, dy=experiment.pix.dy)
 
@@ -111,11 +111,11 @@ def get_inner_reconstruction(experiment, T_fg_filtered_shifted, projected_kappa_
 
     # The cl factors that depend on |\vec{l}''|
     cltt_filters = ql.spec.cl2cfft(experiment.cl_unl.cltt * experiment.cl_len.cltt /
-                                   (experiment.cl_len.cltt + experiment.nltt), experiment.pix).fft
+                                   (experiment.cl_len.cltt + experiment.nltt), experiment.pix).fft.real
 
     # Convert kappa to phi and paste onto grid
     phi = ql.spec.cl2cfft(np.nan_to_num(projected_kappa_profile / (0.5 * experiment.cl_unl.ls *
-                                        (experiment.cl_unl.ls + 1))), experiment.pix).fft
+                                        (experiment.cl_unl.ls + 1))), experiment.pix).fft.real
 
     # Carry out integral using convolution theorem
     ret.fft = np.fft.fft2(np.fft.ifft2(cltt_filters * T_fg_filtered_shifted * lx**2 ) * np.fft.ifft2(lx * phi)) \
