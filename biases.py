@@ -111,9 +111,9 @@ class hm_framework:
             lbins = np.arange(1,self.lmax_out+1,bin_width_out)
 
         if get_secondary_bispec_bias:
-            lbins_second_bispec_bias = np.arange(1,self.lmax_out+1,bin_width_out_second_bispec_bias)
-            # FIXME: IMPORTANT: shouldn't this be INSIDE the integrals involving phi?
-            conversion_factor_second_bispec_bias = np.nan_to_num(1 / (0.5 * lbins_second_bispec_bias * (lbins_second_bispec_bias + 1)))
+            lbins_second_bispec_bias = np.arange(10, self.lmax_out+1, bin_width_out_second_bispec_bias)
+            # No need for a conversion factor btw kapp and phi bc this is already impletemented in get_inner_reconstruction()
+            conversion_factor_second_bispec_bias = 1 #np.nan_to_num(1 / (0.5 * lbins_second_bispec_bias * (lbins_second_bispec_bias + 1)))
 
         nx = self.lmax_out+1 if fftlog_way else exp.pix.nx
 
@@ -158,7 +158,7 @@ class hm_framework:
                     # The part with the nested lensing reconstructions
                     # FIXME: currently the following is incompatible with fftlog_way=False (bc of kfft, conversion_factor, etc)
                     secondary_bispec_bias_reconstructions = sbbs.get_secondary_bispec_bias(lbins_second_bispec_bias, exp_param_list, y, kfft) # FIXME: change input to exp_param_list in CIB as well
-                    integrand_oneHalo_second_bispec[..., j] = secondary_bispec_bias_reconstructions
+                    integrand_oneHalo_second_bispec[..., j] = hcos.nzm[i,j] * secondary_bispec_bias_reconstructions
                     # FIXME:add the 2-halo term. Should be easy.
 
             # Perform the m integrals
@@ -197,7 +197,8 @@ class hm_framework:
                                                             *(hcos.h_of_z(hcos.zs)**2),hcos.zs,axis=-1)
         if get_secondary_bispec_bias:
         # FIXME: check the prefactors here
-            exp.biases['tsz']['second_bispec']['1h'] = conversion_factor_second_bispec_bias * tls.scale_sz(
+            # Note the factor of 4 coming from the different permutations
+            exp.biases['tsz']['second_bispec']['1h'] = 4 * conversion_factor_second_bispec_bias * tls.scale_sz(
                 exp.freq_GHz) ** 2 * self.T_CMB ** 2 * np.trapz( oneHalo_second_bispec * 1.\
                                                                  / hcos.comoving_radial_distance(hcos.zs) ** 4\
                                                                  * (hcos.h_of_z(hcos.zs) ** 2), hcos.zs, axis=-1)

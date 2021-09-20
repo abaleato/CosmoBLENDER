@@ -15,19 +15,21 @@ if __name__ == '__main__':
     nlev_t = 18.  # uK arcmin
     beam_size = 1.  # arcmin
     lmax = 3000  # Maximum ell for the reconstruction
+    nx = 256
+    dx_arcmin = 1.0 * 2
 
     # Initialise an experiment object. Store the list of params so we can later initialise it again within multiple processes
     massCut_Mvir=5e15
-    exp_param_list = [nlev_t, beam_size, lmax, massCut_Mvir]
+    exp_param_list = [nlev_t, beam_size, lmax, massCut_Mvir, nx, dx_arcmin]
     SPT_5e15 = qest.experiment(*exp_param_list)
 
     # This should roughly match the cosmology in Nick's tSZ papers
     cosmoParams = {'As': 2.4667392631170437e-09, 'ns': .96, 'omch2': (0.25 - .043) * .7 ** 2, 'ombh2': 0.044 * .7 ** 2,
                    'H0': 70.}  # Note that for now there is still cosmology dpendence in the cls defined within the experiment class
 
-    nZs = 3 #30
-    nMasses = 3 #30
-    bin_width_out_second_bispec_bias = 1000 #60
+    nZs = 5
+    nMasses = 5
+    bin_width_out_second_bispec_bias = 1000#250
 
     # Initialise a halo model object for the calculation, using mostly default parameters
     hm_calc = biases.hm_framework(cosmoParams=cosmoParams, nZs=nZs, nMasses=nMasses)
@@ -54,7 +56,9 @@ if __name__ == '__main__':
              -(scaling * convention_correction * experiment.biases[which_bias]['second_bispec']['1h'])[
                  experiment.biases[which_bias]['second_bispec']['1h'] < 0], color='r', ls='--')
 
+    plt.yscale('log')
     plt.xlim([2, 3000])
+    plt.ylim([1e-12, 1e-7])
 
     ax = plt.gca()
     ax.tick_params(axis='both', which='major', labelsize=8)

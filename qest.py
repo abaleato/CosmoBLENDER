@@ -7,7 +7,7 @@ import pickle
 import sys
 
 class experiment:
-    def __init__(self, nlev_t, beam_size, lmax, massCut_Mvir = np.inf, fname_scalar=None, fname_lensed=None, freq_GHz=150., nx=512, dx_arcmin=1.0):
+    def __init__(self, nlev_t, beam_size, lmax, massCut_Mvir = np.inf, nx=512, dx_arcmin=1.0, fname_scalar=None, fname_lensed=None, freq_GHz=150.):
         """ Initialise a cosmology and experimental charactierstics
             - Inputs:
                 * nlev_t = temperature noise level, In uK.arcmin.
