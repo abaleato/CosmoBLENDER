@@ -35,9 +35,6 @@ def get_secondary_bispec_bias(lbins, exp_param_list, projected_y_profile, projec
     return second_bispec_bias
 
 def get_secondary_bispec_bias_at_L(projected_y_profile, projected_kappa_profile, exp_param_list, L):
-    # FIXME: careful with the 'real' assertions here
-    # FIXME: Dont you need some factors to go from discrete to cts?
-    # FIXME: Various prefactors (mostly the three factors of 2pi when following Lewis & Challinor conventions)
     # TODO: Add 2h term
     """ Calculate the outer QE reconstruction in the secondary bispectrum bias, for given profiles.
         This involves brute-force integration of a shifted tsz profile times another, "inner" reconstruction,
