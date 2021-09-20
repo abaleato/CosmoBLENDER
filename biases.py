@@ -194,9 +194,8 @@ class hm_framework:
                                                  * np.trapz(twoHalo_cross*1./hcos.comoving_radial_distance(hcos.zs)**4\
                                                             *(hcos.h_of_z(hcos.zs)**2),hcos.zs,axis=-1)
         if get_secondary_bispec_bias:
-        # FIXME: check the prefactors here
             # Note the factor of 4 coming from the different permutations
-            exp.biases['tsz']['second_bispec']['1h'] = 4 * conversion_factor_second_bispec_bias * tls.scale_sz(
+            exp.biases['tsz']['second_bispec']['1h'] = 4 * tls.scale_sz(
                 exp.freq_GHz) ** 2 * self.T_CMB ** 2 * np.trapz( oneHalo_second_bispec * 1.\
                                                                  / hcos.comoving_radial_distance(hcos.zs) ** 4\
                                                                  * (hcos.h_of_z(hcos.zs) ** 2), hcos.zs, axis=-1)
@@ -252,7 +251,8 @@ class hm_framework:
         ps_twoHalo_tSZ = np.zeros(ps_oneHalo_tSZ.shape)
         return ps_oneHalo_tSZ, ps_twoHalo_tSZ
 
-    def get_cib_bias(self, exp, fftlog_way=True, bin_width_out=30):
+    def get_cib_bias(self, exp, fftlog_way=True, get_secondary_bispec_bias=False, bin_width_out=30, \
+                     bin_width_out_second_bispec_bias=1000, exp_param_list=None):
         """
         Calculate the CIB biases given an "experiment" object (defined in qest.py)
         Input:
@@ -260,7 +260,7 @@ class hm_framework:
             * (optional) fftlog_way = Boolean. If true, use 1D fftlog reconstructions, otherwise use 2D qiucklens
             * (optional) bin_width_out = int. Bin width of the output lensing reconstruction
         """
-        # FIXME: change input to exp_param_list in CIB as well
+        # FIXME: update docs of input
         hcos = self.hcos
         self.get_consistency(exp)
 
@@ -279,11 +279,18 @@ class hm_framework:
         IIII_1h = np.zeros([nx,self.nZs])+0j if fftlog_way else np.zeros([nx,nx,self.nZs])+0j
         IIII_2h = IIII_1h.copy(); oneHalo_cross = IIII_1h.copy(); twoHalo_cross = IIII_1h.copy()
 
+        if get_secondary_bispec_bias:
+            lbins_second_bispec_bias = np.arange(10, self.lmax_out + 1, bin_width_out_second_bispec_bias)
+            oneHalo_second_bispec = np.zeros([len(lbins_second_bispec_bias),self.nZs])+0j
+
         for i,z in enumerate(hcos.zs):
             #Temporary storage
             integrand_oneHalo_cross=np.zeros([nx,self.nMasses])+0j if fftlog_way else np.zeros([nx,nx,self.nMasses])+0j
             integrand_oneHalo_IIII=integrand_oneHalo_cross.copy(); integrand_twoHalo_k=integrand_oneHalo_cross.copy()
             integrand_twoHalo_II=integrand_oneHalo_cross.copy()
+
+            if get_secondary_bispec_bias:
+                integrand_oneHalo_second_bispec = np.zeros([len(lbins_second_bispec_bias),self.nMasses])+0j
 
             # M integral.
             for j,m in enumerate(hcos.ms):
@@ -305,10 +312,21 @@ class hm_framework:
                 integrand_twoHalo_k[...,j] = np.conjugate(kfft) * hcos.nzm[i,j] * hcos.bh[i,j]
                 integrand_twoHalo_II[...,j] = hod_fact_2gal[i, j] * phi_estimate_cfft_uu * hcos.nzm[i,j] * hcos.bh[i,j]
 
+                if get_secondary_bispec_bias:
+                    # Temporary secondary bispectrum bias stuff
+                    # The part with the nested lensing reconstructions
+                    # FIXME: if you remove the z-scaling dividing ms_rescaled in kfft, do it here too
+                    secondary_bispec_bias_reconstructions = sbbs.get_secondary_bispec_bias(lbins_second_bispec_bias, exp_param_list, u, kap*self.ms_rescaled[j]/(1+hcos.zs[i])**3)
+                    integrand_oneHalo_second_bispec[..., j] = hod_fact_2gal[i, j] * hcos.nzm[i,j] * secondary_bispec_bias_reconstructions
+                    # FIXME:add the 2-halo term. Should be easy.
+
             # Perform the m integrals
             IIII_1h[...,i]=np.trapz(integrand_oneHalo_IIII,hcos.ms,axis=-1)
 
             oneHalo_cross[...,i]=np.trapz(integrand_oneHalo_cross,hcos.ms,axis=-1)
+
+            if get_secondary_bispec_bias:
+                oneHalo_second_bispec[...,i]=np.trapz(integrand_oneHalo_second_bispec,hcos.ms,axis=-1)
 
             # This is the two halo term. P_k times the M integrals
             pk = tls.pkToPell(hcos.comoving_radial_distance(hcos.zs[i]),hcos.ks,hcos.Pzk[i], ellmax=self.lmax_out)
@@ -336,6 +354,14 @@ class hm_framework:
                                                                                hcos.zs, axis=-1)
         exp.biases['cib']['prim_bispec']['2h'] = conversion_factor * np.trapz( twoHalo_cross*kII_integrand,
                                                                                hcos.zs, axis=-1)
+
+        if get_secondary_bispec_bias:
+            # Note the factor of 4 coming from the different permutations
+            exp.biases['cib']['second_bispec']['1h'] = 4 * tls.scale_sz(
+                exp.freq_GHz) ** 2 * self.T_CMB ** 2 * np.trapz( oneHalo_second_bispec * 1.\
+                                                                 / hcos.comoving_radial_distance(hcos.zs) ** 4\
+                                                                 * (hcos.h_of_z(hcos.zs) ** 2), hcos.zs, axis=-1)
+            exp.biases['second_bispec_bias_ells'] = lbins_second_bispec_bias
 
         if fftlog_way:
             exp.biases['ells'] = np.arange(self.lmax_out+1)
