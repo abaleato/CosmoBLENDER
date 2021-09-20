@@ -16,7 +16,7 @@ if __name__ == '__main__':
     beam_size = 1.  # arcmin
     lmax = 3000  # Maximum ell for the reconstruction
     nx = 256
-    dx_arcmin = * 2
+    dx_arcmin = 1.0 * 2
 
     # Initialise an experiment object. Store the list of params so we can later initialise it again within multiple processes
     massCut_Mvir=5e15
@@ -27,9 +27,9 @@ if __name__ == '__main__':
     cosmoParams = {'As': 2.4667392631170437e-09, 'ns': .96, 'omch2': (0.25 - .043) * .7 ** 2, 'ombh2': 0.044 * .7 ** 2,
                    'H0': 70.}  # Note that for now there is still cosmology dpendence in the cls defined within the experiment class
 
-    nZs = 30
-    nMasses = 30
-    bin_width_out_second_bispec_bias = 500
+    nZs = 5
+    nMasses = 5
+    bin_width_out_second_bispec_bias = 1000#250
 
     # Initialise a halo model object for the calculation, using mostly default parameters
     hm_calc = biases.hm_framework(cosmoParams=cosmoParams, nZs=nZs, nMasses=nMasses)
@@ -48,15 +48,17 @@ if __name__ == '__main__':
 
     convention_correction = 1 # 1 when using QL #1 / (2 * np.pi)  # match FT convetion in QL
 
-    plt.loglog(experiment.biases['second_bispec_bias_ells'][experiment.biases[which_bias]['second_bispec']['1h'] > 0],
+    plt.plot(experiment.biases['second_bispec_bias_ells'][experiment.biases[which_bias]['second_bispec']['1h'] > 0],
              (scaling * convention_correction * experiment.biases[which_bias]['second_bispec']['1h'])[
                  experiment.biases[which_bias]['second_bispec']['1h'] > 0], color='r',
              label=r'{}$^2-\kappa$, 1h'.format(which_bias), ls='--')
-    plt.loglog(experiment.biases['second_bispec_bias_ells'][experiment.biases[which_bias]['second_bispec']['1h'] < 0],
+    plt.plot(experiment.biases['second_bispec_bias_ells'][experiment.biases[which_bias]['second_bispec']['1h'] < 0],
              -(scaling * convention_correction * experiment.biases[which_bias]['second_bispec']['1h'])[
                  experiment.biases[which_bias]['second_bispec']['1h'] < 0], color='r', ls='--')
 
+    plt.yscale('log')
     plt.xlim([2, 3000])
+    plt.ylim([1e-12, 1e-7])
 
     ax = plt.gca()
     ax.tick_params(axis='both', which='major', labelsize=8)
