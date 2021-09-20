@@ -140,6 +140,7 @@ class hm_framework:
                 # Get the kappa map
                 kap = tls.pkToPell(hcos.comoving_radial_distance(hcos.zs[i]),hcos.ks,hcos.uk_profiles['nfw'][i,j]\
                                    *hcos.lensing_window(hcos.zs[i],1100.), ellmax=self.lmax_out)
+                # FIXME: if you remove the z-scaling dividing ms_rescaled, do it in the input to sbbs.get_secondary_bispec_bias as well
                 kfft = kap*self.ms_rescaled[j]/(1+hcos.zs[i])**3 if fftlog_way else ql.spec.cl2cfft(kap,exp.pix).fft*self.ms_rescaled[j]/(1+hcos.zs[i])**3
 
                 phi_estimate_cfft = exp.get_TT_qe(fftlog_way, ells_out, y,y)
@@ -153,8 +154,8 @@ class hm_framework:
                 if get_secondary_bispec_bias:
                     # Temporary secondary bispectrum bias stuff
                     # The part with the nested lensing reconstructions
-                    # FIXME: currently the following is incompatible with fftlog_way=False (bc of kfft, conversion_factor, etc)
-                    secondary_bispec_bias_reconstructions = sbbs.get_secondary_bispec_bias(lbins_second_bispec_bias, exp_param_list, y, kfft) # FIXME: change input to exp_param_list in CIB as well
+                    # FIXME: if you remove the z-scaling dividing ms_rescaled in kfft, do it here too
+                    secondary_bispec_bias_reconstructions = sbbs.get_secondary_bispec_bias(lbins_second_bispec_bias, exp_param_list, y, kap*self.ms_rescaled[j]/(1+hcos.zs[i])**3)
                     integrand_oneHalo_second_bispec[..., j] = hcos.nzm[i,j] * secondary_bispec_bias_reconstructions
                     # FIXME:add the 2-halo term. Should be easy.
 
@@ -259,6 +260,7 @@ class hm_framework:
             * (optional) fftlog_way = Boolean. If true, use 1D fftlog reconstructions, otherwise use 2D qiucklens
             * (optional) bin_width_out = int. Bin width of the output lensing reconstruction
         """
+        # FIXME: change input to exp_param_list in CIB as well
         hcos = self.hcos
         self.get_consistency(exp)
 
