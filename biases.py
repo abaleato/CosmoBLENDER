@@ -110,11 +110,6 @@ class hm_framework:
         if not fftlog_way:
             lbins = np.arange(1,self.lmax_out+1,bin_width_out)
 
-        if get_secondary_bispec_bias:
-            lbins_second_bispec_bias = np.arange(10, self.lmax_out+1, bin_width_out_second_bispec_bias)
-            # No need for a conversion factor btw kapp and phi bc this is already impletemented in get_inner_reconstruction()
-            conversion_factor_second_bispec_bias = 1 #np.nan_to_num(1 / (0.5 * lbins_second_bispec_bias * (lbins_second_bispec_bias + 1)))
-
         nx = self.lmax_out+1 if fftlog_way else exp.pix.nx
 
         # The one and two halo bias terms -- these store the integrand to be integrated over z.
@@ -123,7 +118,9 @@ class hm_framework:
         twoHalo_4pt = np.zeros([nx,self.nZs])+0j if fftlog_way else np.zeros([nx,nx,self.nZs])+0j
         oneHalo_cross = np.zeros([nx,self.nZs])+0j if fftlog_way else np.zeros([nx,nx,self.nZs])+0j
         twoHalo_cross = np.zeros([nx,self.nZs])+0j if fftlog_way else np.zeros([nx,nx,self.nZs])+0j
+
         if get_secondary_bispec_bias:
+            lbins_second_bispec_bias = np.arange(10, self.lmax_out + 1, bin_width_out_second_bispec_bias)
             oneHalo_second_bispec = np.zeros([len(lbins_second_bispec_bias),self.nZs])+0j
 
         for i,z in enumerate(hcos.zs):
