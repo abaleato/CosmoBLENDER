@@ -18,6 +18,8 @@ if __name__ == '__main__':
     nx = 256
     dx_arcmin = 1.0 * 2
 
+    # Set CIB halo model
+    cib_model = 'planck13'  # 'vierro'
     # Initialise an experiment object. Store the list of params so we can later initialise it again within multiple processes
     massCut_Mvir=5e15
     exp_param_list = [nlev_t, beam_size, lmax, massCut_Mvir, nx, dx_arcmin]
@@ -29,15 +31,21 @@ if __name__ == '__main__':
 
     nZs = 5
     nMasses = 5
-    bin_width_out_second_bispec_bias = 1000#250
+    bin_width_out_second_bispec_bias = 1000
+    which_bias = 'cib' #'tsz'
 
     # Initialise a halo model object for the calculation, using mostly default parameters
-    hm_calc = biases.hm_framework(cosmoParams=cosmoParams, nZs=nZs, nMasses=nMasses)
+    hm_calc = biases.hm_framework(cosmoParams=cosmoParams, nZs=nZs, nMasses=nMasses, cib_model=cib_model)
 
     experiment = SPT_5e15
 
-    hm_calc.get_tsz_bias(SPT_5e15, get_secondary_bispec_bias=True, \
-                         bin_width_out_second_bispec_bias=bin_width_out_second_bispec_bias, exp_param_list=exp_param_list)
+    if which_bias=='tsz':
+        hm_calc.get_tsz_bias(SPT_5e15, get_secondary_bispec_bias=True, \
+                             bin_width_out_second_bispec_bias=bin_width_out_second_bispec_bias, exp_param_list=exp_param_list)
+    elif which_bias=='cib':
+        hm_calc.get_cib_bias(SPT_5e15, get_secondary_bispec_bias=True, \
+                             bin_width_out_second_bispec_bias=bin_width_out_second_bispec_bias,
+                             exp_param_list=exp_param_list)
 
     # Save a dictionary with the bias we calculated to file
     experiment.save_biases()
@@ -63,7 +71,7 @@ if __name__ == '__main__':
     ax = plt.gca()
     ax.tick_params(axis='both', which='major', labelsize=8)
     ax.tick_params(axis='both', which='minor', labelsize=8)
-    plt.savefig('testing_second_bispec_bias_nZs{}_nMasses{}_bin_width_out_second_bispec_bias{}.png'.format(nZs, nMasses, bin_width_out_second_bispec_bias))
+    plt.savefig('testing_second_bispec_bias_nZs{}_nMasses{}_which_bias{}_bin_width_out_second_bispec_bias{}.png'.format(nZs, nMasses, which_bias, bin_width_out_second_bispec_bias))
     plt.close()
     t1 = time.time()
     print('time taken:', t1-t0)
