@@ -91,7 +91,7 @@ class hm_framework:
         return (f_sat / f_cen)**j * ( (1 + j) * f_cen +  f_sat )
 
     def get_tsz_bias(self, exp, fftlog_way=True, get_secondary_bispec_bias=False, bin_width_out=30, \
-                     bin_width_out_second_bispec_bias=1000, exp_param_list=None):
+                     bin_width_out_second_bispec_bias=1000, exp_param_list=None, parallelise_secondbispec=True):
         """
         Calculate the tsz biases given an "experiment" object (defined in qest.py)
         Input:
@@ -155,7 +155,9 @@ class hm_framework:
                     # Temporary secondary bispectrum bias stuff
                     # The part with the nested lensing reconstructions
                     # FIXME: if you remove the z-scaling dividing ms_rescaled in kfft, do it here too
-                    secondary_bispec_bias_reconstructions = sbbs.get_secondary_bispec_bias(lbins_second_bispec_bias, exp_param_list, y, kap*self.ms_rescaled[j]/(1+hcos.zs[i])**3)
+                    secondary_bispec_bias_reconstructions = sbbs.get_secondary_bispec_bias(lbins_second_bispec_bias, exp_param_list,\
+                                                                                           y, kap*self.ms_rescaled[j]/(1+hcos.zs[i])**3,\
+                                                                                           parallelise=parallelise_secondbispec)
                     integrand_oneHalo_second_bispec[..., j] = hcos.nzm[i,j] * secondary_bispec_bias_reconstructions
                     # FIXME:add the 2-halo term. Should be easy.
 
@@ -252,7 +254,7 @@ class hm_framework:
         return ps_oneHalo_tSZ, ps_twoHalo_tSZ
 
     def get_cib_bias(self, exp, fftlog_way=True, get_secondary_bispec_bias=False, bin_width_out=30, \
-                     bin_width_out_second_bispec_bias=1000, exp_param_list=None):
+                     bin_width_out_second_bispec_bias=1000, exp_param_list=None, parallelise_secondbispec=True):
         """
         Calculate the CIB biases given an "experiment" object (defined in qest.py)
         Input:
@@ -316,7 +318,9 @@ class hm_framework:
                     # Temporary secondary bispectrum bias stuff
                     # The part with the nested lensing reconstructions
                     # FIXME: if you remove the z-scaling dividing ms_rescaled in kfft, do it here too
-                    secondary_bispec_bias_reconstructions = sbbs.get_secondary_bispec_bias(lbins_second_bispec_bias, exp_param_list, u, kap*self.ms_rescaled[j]/(1+hcos.zs[i])**3)
+                    secondary_bispec_bias_reconstructions = sbbs.get_secondary_bispec_bias(lbins_second_bispec_bias, exp_param_list,\
+                                                                                           u, kap*self.ms_rescaled[j]/(1+hcos.zs[i])**3,\
+                                                                                           parallelise=parallelise_secondbispec)
                     integrand_oneHalo_second_bispec[..., j] = hod_fact_2gal[i, j] * hcos.nzm[i,j] * secondary_bispec_bias_reconstructions
                     # FIXME:add the 2-halo term. Should be easy.
 
@@ -425,7 +429,7 @@ class hm_framework:
         return clCIBCIB_oneHalo_ps, clCIBCIB_twoHalo_ps
 
     def get_mixed_biases(self, exp, fftlog_way=True, get_secondary_bispec_bias=False, bin_width_out=30, \
-                         bin_width_out_second_bispec_bias=1000, exp_param_list=None):
+                         bin_width_out_second_bispec_bias=1000, exp_param_list=None, parallelise_secondbispec=True):
         """
         Calculate the biases involving both CIB and tSZ given an "experiment" object (defined in qest.py)
         Input:
@@ -506,7 +510,8 @@ class hm_framework:
                     # The part with the nested lensing reconstructions
                     # FIXME: if you remove the z-scaling dividing ms_rescaled in kfft, do it here too
                     secondary_bispec_bias_reconstructions = sbbs.get_secondary_bispec_bias(lbins_second_bispec_bias, exp_param_list,\
-                                                                                           u, kap*self.ms_rescaled[j]/(1+hcos.zs[i])**3, y)
+                                                                                           u, kap*self.ms_rescaled[j]/(1+hcos.zs[i])**3,\
+                                                                                           y, parallelise=parallelise_secondbispec)
                     integrand_oneHalo_second_bispec[..., j] = hod_fact_1gal[i, j] * hcos.nzm[i,j] * secondary_bispec_bias_reconstructions
 
             # Perform the m integrals
@@ -558,7 +563,7 @@ class hm_framework:
         if get_secondary_bispec_bias:
             # Note the factor of 4 coming from the different permutations
             #FIXME: what's the correct permutation here?
-            exp.biases['cib']['second_bispec']['1h'] = np.trapz( oneHalo_second_bispec * kIy_integrand, hcos.zs, axis=-1)
+            exp.biases['mixed']['second_bispec']['1h'] = np.trapz( oneHalo_second_bispec * kIy_integrand, hcos.zs, axis=-1)
             exp.biases['second_bispec_bias_ells'] = lbins_second_bispec_bias
 
         if fftlog_way:
