@@ -551,19 +551,24 @@ class hm_framework:
         kIy_integrand  = 2 * (1+hcos.zs)**-1 * hcos.comoving_radial_distance(hcos.zs)**-4 * hcos.h_of_z(hcos.zs)
 
         # Integrate over z
-        exp.biases['mixed']['trispec']['1h'] = np.trapz( Iyyy_integrand*Iyyy_1h + IIyy_integrand*IIyy_1h
-                                                         + IyIy_integrand*IyIy_1h + yIII_integrand*yIII_1h, hcos.zs, axis=-1)
-        exp.biases['mixed']['trispec']['2h'] = np.trapz( Iyyy_integrand*Iyyy_2h + IIyy_integrand*IIyy_2h
-                                                         + IyIy_integrand*IyIy_2h + yIII_integrand*yIII_2h, hcos.zs, axis=-1)
-        exp.biases['mixed']['prim_bispec']['1h'] = conversion_factor * np.trapz( oneHalo_cross*kIy_integrand,
-                                                                               hcos.zs, axis=-1)
-        exp.biases['mixed']['prim_bispec']['2h'] = conversion_factor * np.trapz( twoHalo_cross*kIy_integrand,
-                                                                               hcos.zs, axis=-1)
+        exp.biases['mixed']['trispec']['1h'] = np.trapz( tls.scale_sz(exp.freq_GHz)**3 * self.T_CMB**3 * Iyyy_integrand*Iyyy_1h
+                                                         + tls.scale_sz(exp.freq_GHz)**2 * self.T_CMB**2 * IIyy_integrand*IIyy_1h
+                                                         + tls.scale_sz(exp.freq_GHz)**2 * self.T_CMB**2 * IyIy_integrand*IyIy_1h
+                                                         + tls.scale_sz(exp.freq_GHz) * self.T_CMB * yIII_integrand*yIII_1h, hcos.zs, axis=-1)
+        exp.biases['mixed']['trispec']['2h'] = np.trapz( tls.scale_sz(exp.freq_GHz)**3 * self.T_CMB**3 * Iyyy_integrand*Iyyy_2h
+                                                         + tls.scale_sz(exp.freq_GHz)**2 * self.T_CMB**2 * IIyy_integrand*IIyy_2h
+                                                         + tls.scale_sz(exp.freq_GHz)**2 * self.T_CMB**2 * IyIy_integrand*IyIy_2h
+                                                         + tls.scale_sz(exp.freq_GHz) * self.T_CMB * yIII_integrand*yIII_2h, hcos.zs, axis=-1)
+        exp.biases['mixed']['prim_bispec']['1h'] = tls.scale_sz(exp.freq_GHz) * self.T_CMB * conversion_factor\
+                                                   * np.trapz( oneHalo_cross*kIy_integrand, hcos.zs, axis=-1)
+        exp.biases['mixed']['prim_bispec']['2h'] = tls.scale_sz(exp.freq_GHz) * self.T_CMB * conversion_factor\
+                                                   * np.trapz( twoHalo_cross*kIy_integrand, hcos.zs, axis=-1)
 
         if get_secondary_bispec_bias:
             # Note the factor of 4 coming from the different permutations
             #FIXME: what's the correct permutation here?
-            exp.biases['mixed']['second_bispec']['1h'] = np.trapz( oneHalo_second_bispec * kIy_integrand, hcos.zs, axis=-1)
+            exp.biases['mixed']['second_bispec']['1h'] = tls.scale_sz(exp.freq_GHz) * self.T_CMB * \
+                                                         np.trapz( oneHalo_second_bispec * kIy_integrand, hcos.zs, axis=-1)
             exp.biases['second_bispec_bias_ells'] = lbins_second_bispec_bias
 
         if fftlog_way:
