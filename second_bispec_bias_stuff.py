@@ -7,43 +7,49 @@ from lensing_rec_biases_code import qest
 import multiprocessing
 from functools import partial
 
-def get_secondary_bispec_bias(lbins, exp_param_list, projected_y_profile, projected_kappa_profile, parallelise=False):
+def get_secondary_bispec_bias(lbins, exp_param_list, projected_fg_profile_1, \
+                              projected_kappa_profile, parallelise=False, projected_fg_profile_2=None):
     """
     Calculate contributions to secondary bispectrum bias from given profiles, either serially or via multiple processes
     Input:
         * lbins = np array. bins centres at which to evaluate the secondary bispec bias
         * exp_param_list = list of inputs to initialise the 'exp' experiment object
-        * projected_y_profile = 1D numpy array. Project y/density profile.
+        * projected_fg_profile_1 = 1D numpy array. Project y/density profile.
         * projected_kappa_profile = 1D numpy array. The 1D projected kappa that we will paste to 2D.
-        parallelise = Boolean. If True, use multiple processes. Alternatively, proceed serially.
+        * parallelise = Boolean. If True, use multiple processes. Alternatively, proceed serially.
+        * projected_fg_profile_2 (optional) = 1D numpy array. Project y/density profile. By default, equals projected_fg_profile_1
+
     - Returns:
         * A np array with the size of lbins containing contributions to the secondary bispectrum bias
     """
-
     if parallelise:
         # Use multiprocessing to speed up calculation
         pool = multiprocessing.Pool(multiprocessing.cpu_count() - 1) # Start as many processes as machine can handle
         # Helper function (pool.map can only take one, iterable input)
-        func = partial(get_secondary_bispec_bias_at_L, projected_y_profile, projected_kappa_profile, exp_param_list)
+        func = partial(get_secondary_bispec_bias_at_L, projected_fg_profile_1, projected_kappa_profile, exp_param_list,\
+                       projected_fg_profile_2)
         second_bispec_bias = np.array(pool.map(func, lbins))
         pool.close()
 
     else:
         second_bispec_bias = np.zeros(lbins.shape)
         for i, L in enumerate(lbins):
-            second_bispec_bias[i] = get_secondary_bispec_bias_at_L(projected_y_profile, projected_kappa_profile, exp_param_list, L)
+            second_bispec_bias[i] = get_secondary_bispec_bias_at_L(projected_fg_profile_1, projected_kappa_profile, \
+                                                                   exp_param_list, L, projected_fg_profile_2)
     return second_bispec_bias
 
-def get_secondary_bispec_bias_at_L(projected_y_profile, projected_kappa_profile, exp_param_list, L):
+def get_secondary_bispec_bias_at_L(projected_fg_profile_1, projected_kappa_profile,\
+                                   exp_param_list, L, projected_fg_profile_2=None):
     # TODO: Add 2h term
     """ Calculate the outer QE reconstruction in the secondary bispectrum bias, for given profiles.
         This involves brute-force integration of a shifted tsz profile times another, "inner" reconstruction,
         which we call along the way. We align L with the x-axis.
     - Inputs:
-        * L = Float or int. Multipole at which to return the bias
-        * projected_y_profile = 1D numpy array. Project y/density profile.
+        * projected_fg_profile_1 = 1D numpy array. Project y/density profile.
         * projected_kappa_profile = 1D numpy array. The 1D projected kappa that we will paste to 2D.
         * exp_param_list = list of inputs to initialise the 'exp' experiment object
+        * L = Float or int. Multipole at which to return the bias
+        * projected_fg_profile_2 (optional) = 1D numpy array. Project y/density profile.
 
     - Returns:
         * A Float. The value of the secondary bispectrum bias at L.
@@ -57,8 +63,13 @@ def get_secondary_bispec_bias_at_L(projected_y_profile, projected_kappa_profile,
     # Wiener filters in T. Depends on |\vec{l}''|. Note the use of lensed cltt to optimise lensing reconstruction
     W_T = ql.spec.cl2cfft(experiment.cl_len.cltt / (experiment.cl_len.cltt + experiment.nltt), experiment.pix).fft.real
     # The factors that depend on |\vec{L} - \vec{l}''|. Assume \vec{L} points along x axis.
-    T_fg_filtered_shifted = shift_array(projected_y_profile / (experiment.cl_len.cltt + experiment.nltt)
+    T_fg_filtered_shifted = shift_array(projected_fg_profile_1 / (experiment.cl_len.cltt + experiment.nltt)
                                   , experiment, L).fft.real
+    if projected_fg_profile_2 is None:
+        T_fg_filtered_shifted_2 = T_fg_filtered_shifted
+    else:
+        T_fg_filtered_shifted_2 = shift_array(projected_fg_profile_2 / (experiment.cl_len.cltt + experiment.nltt)
+                                            , experiment, L).fft.real
 
     # Calculate the inner reconstruction
     inner_rec = get_inner_reconstruction(experiment, T_fg_filtered_shifted, projected_kappa_profile).fft.real
@@ -66,7 +77,7 @@ def get_secondary_bispec_bias_at_L(projected_y_profile, projected_kappa_profile,
     # Carry out the 2D integral over x and y
     # Note that the \vec{L} \cdot \vec{l} simplifies because we assume that L is aligned with x-axis
     # We roll the arrays so that that domain of integration is sorted sequentially as required by np.trapz
-    full_integrand = np.roll( np.roll(lx * W_T * inner_rec * T_fg_filtered_shifted, experiment.nx // 2, axis=-1),
+    full_integrand = np.roll( np.roll(lx * W_T * inner_rec * T_fg_filtered_shifted_2, experiment.nx // 2, axis=-1),
                               experiment.nx // 2, axis = 0)
 
     integral_over_x = np.trapz(full_integrand, np.roll(lx[0, :], experiment.nx//2, axis=-1), axis=-1)
