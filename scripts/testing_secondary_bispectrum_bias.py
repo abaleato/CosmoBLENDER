@@ -29,10 +29,10 @@ if __name__ == '__main__':
     cosmoParams = {'As': 2.4667392631170437e-09, 'ns': .96, 'omch2': (0.25 - .043) * .7 ** 2, 'ombh2': 0.044 * .7 ** 2,
                    'H0': 70.}  # Note that for now there is still cosmology dpendence in the cls defined within the experiment class
 
-    nZs = 5
-    nMasses = 5
+    nZs = 10
+    nMasses = 10
     bin_width_out_second_bispec_bias = 1000
-    which_bias = 'cib' #'tsz'
+    which_bias = 'mixed'#'cib' #'tsz'
 
     # Initialise a halo model object for the calculation, using mostly default parameters
     hm_calc = biases.hm_framework(cosmoParams=cosmoParams, nZs=nZs, nMasses=nMasses, cib_model=cib_model)
@@ -41,9 +41,14 @@ if __name__ == '__main__':
 
     if which_bias=='tsz':
         hm_calc.get_tsz_bias(SPT_5e15, get_secondary_bispec_bias=True, \
-                             bin_width_out_second_bispec_bias=bin_width_out_second_bispec_bias, exp_param_list=exp_param_list)
+                             bin_width_out_second_bispec_bias=bin_width_out_second_bispec_bias,\
+                             exp_param_list=exp_param_list)
     elif which_bias=='cib':
         hm_calc.get_cib_bias(SPT_5e15, get_secondary_bispec_bias=True, \
+                             bin_width_out_second_bispec_bias=bin_width_out_second_bispec_bias,
+                             exp_param_list=exp_param_list)
+    elif which_bias=='mixed':
+        hm_calc.get_mixed_biases(SPT_5e15, get_secondary_bispec_bias=True, \
                              bin_width_out_second_bispec_bias=bin_width_out_second_bispec_bias,
                              exp_param_list=exp_param_list)
 
