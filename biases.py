@@ -445,7 +445,6 @@ class hm_framework:
         hod_fact_1gal = self.get_hod_factorial(1, exp)
         hod_fact_2gal = self.get_hod_factorial(2, exp)
         hod_fact_3gal = self.get_hod_factorial(3, exp)
-        hod_fact_4gal = self.get_hod_factorial(4, exp)
 
         # Output ells
         ells_out = np.arange(self.lmax_out+1)
@@ -474,7 +473,6 @@ class hm_framework:
 
             if get_secondary_bispec_bias:
                 integrand_oneHalo_second_bispec = np.zeros([len(lbins_second_bispec_bias),self.nMasses])+0j
-
 
             # M integral.
             for j,m in enumerate(hcos.ms):
