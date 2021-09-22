@@ -196,8 +196,8 @@ class hm_framework:
                                                  * np.trapz(twoHalo_cross*1./hcos.comoving_radial_distance(hcos.zs)**4\
                                                             *(hcos.h_of_z(hcos.zs)**2),hcos.zs,axis=-1)
         if get_secondary_bispec_bias:
-            # Note the factor of 4 coming from the different permutations
-            exp.biases['tsz']['second_bispec']['1h'] = 4 * tls.scale_sz(
+            # Perm factors implemented in the get_secondary_bispec_bias_at_L() function
+            exp.biases['tsz']['second_bispec']['1h'] = tls.scale_sz(
                 exp.freq_GHz) ** 2 * self.T_CMB ** 2 * np.trapz( oneHalo_second_bispec * 1.\
                                                                  / hcos.comoving_radial_distance(hcos.zs) ** 4\
                                                                  * (hcos.h_of_z(hcos.zs) ** 2), hcos.zs, axis=-1)
@@ -348,8 +348,9 @@ class hm_framework:
         conversion_factor = np.nan_to_num(1 / (0.5 * ells_out*(ells_out+1) )) if fftlog_way else ql.spec.cl2cfft(np.nan_to_num(1 / (0.5 * np.arange(self.lmax_out+1)*(np.arange(self.lmax_out+1)+1) )),exp.pix).fft
 
         # Integrand factors from Limber projection (adapted to hmvec conventions)
+        # kII_integrand has a perm factor of 2
         IIII_integrand = (1+hcos.zs)**-4 * hcos.comoving_radial_distance(hcos.zs)**-6 * hcos.h_of_z(hcos.zs)**-1
-        kII_integrand  = (1+hcos.zs)**-2 * hcos.comoving_radial_distance(hcos.zs)**-4
+        kII_integrand  = 2 * (1+hcos.zs)**-2 * hcos.comoving_radial_distance(hcos.zs)**-4
 
         # Integrate over z
         exp.biases['cib']['trispec']['1h'] = np.trapz( IIII_integrand*IIII_1h, hcos.zs, axis=-1)
@@ -360,8 +361,8 @@ class hm_framework:
                                                                                hcos.zs, axis=-1)
 
         if get_secondary_bispec_bias:
-            # Note the factor of 4 coming from the different permutations
-            exp.biases['cib']['second_bispec']['1h'] = 4 * np.trapz( oneHalo_second_bispec * kII_integrand, hcos.zs, axis=-1)
+            # Perm factors implemented in the get_secondary_bispec_bias_at_L() function
+            exp.biases['cib']['second_bispec']['1h'] = np.trapz( oneHalo_second_bispec * kII_integrand, hcos.zs, axis=-1)
             exp.biases['second_bispec_bias_ells'] = lbins_second_bispec_bias
 
         if fftlog_way:
@@ -544,7 +545,7 @@ class hm_framework:
         # Integrand factors from Limber projection (adapted to hmvec conventions)
         Iyyy_integrand = 4 * (1+hcos.zs)**-1 * hcos.comoving_radial_distance(hcos.zs)**-6 * hcos.h_of_z(hcos.zs)**2
         IIyy_integrand = 2 * (1+hcos.zs)**-2 * hcos.comoving_radial_distance(hcos.zs)**-6 * hcos.h_of_z(hcos.zs)
-        IyIy_integrand = 2 * IIyy_integrand
+        IyIy_integrand = 2 * IIyy_integrand # FIXME: not sure if this perm factor should be a 2 or a 4
         yIII_integrand = 4 * (1+hcos.zs)**-3 * hcos.comoving_radial_distance(hcos.zs)**-6
         kIy_integrand  = 2 * (1+hcos.zs)**-1 * hcos.comoving_radial_distance(hcos.zs)**-4 * hcos.h_of_z(hcos.zs)
 
@@ -563,8 +564,9 @@ class hm_framework:
                                                    * np.trapz( twoHalo_cross*kIy_integrand, hcos.zs, axis=-1)
 
         if get_secondary_bispec_bias:
-            # Note the factor of 4 coming from the different permutations
-            #FIXME: what's the correct permutation here?
+            # Perm factor of 4 implemented in the get_secondary_bispec_bias_at_L() function
+            # kIy_integrand contains a perm factor of 2 is for the exchange of I and y relative to the cib or tsz only cases
+            # TODO: check that this perm factor of 2 is right
             exp.biases['mixed']['second_bispec']['1h'] = tls.scale_sz(exp.freq_GHz) * self.T_CMB * \
                                                          np.trapz( oneHalo_second_bispec * kIy_integrand, hcos.zs, axis=-1)
             exp.biases['second_bispec_bias_ells'] = lbins_second_bispec_bias
