@@ -43,6 +43,19 @@ def pkToPell(chi,ks,pk,ellmax=9001):
     interp = interp1d(ks*chi,pk,kind='cubic',bounds_error=False,fill_value=0)
     return interp(np.arange(0,ellmax+1))
 
+def gal_window(zs, survey_name):
+    """ Galaxy window function (as in eq. 10 of Ferraro & Hill 18)
+    """
+    if survey_name=='LSST':
+        # LSST “gold” sample with i-band magnitude i < 25.3 (See arXiv:1809.02120)
+        z_0 = 0.3
+        dndz = (zs / z_0)**2 * np.exp(-zs/z_0) / (2*z_0)
+        linear_tracer_bias = 1+ 0.84*zs
+        return dndz * linear_tracer_bias
+    else:
+        print('Please implement the desired galaxy distribution')
+        pass
+
 # Now some useful decorators, inspired by James Fergusson
 
 def debug(func):
