@@ -171,8 +171,10 @@ class experiment:
             * (optional) key = String. The quadratic estimator key for quicklens. Default is 'ptt' for TT
 
         """
+        if profile_leg2 is None:
+            profile_leg2 = profile_leg1
         if fftlog_way:
-            al_F_1, al_F_2 = self.get_filtered_profiles_fftlog(profile_leg1, profile_leg2=None)
+            al_F_1, al_F_2 = self.get_filtered_profiles_fftlog(profile_leg1, profile_leg2)
             # Calculate unnormalised QE
             unnorm_TT_qe = self.unnorm_TT_qe_fftlog(al_F_1, al_F_2, N_l, lmin, alpha)(ell_out)
             # Project the QE normalisation to 1D
