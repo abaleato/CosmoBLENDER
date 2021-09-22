@@ -249,18 +249,18 @@ class hm_framework:
                 if m> exp.massCut: continue
                 y = tls.pkToPell(hcos.comoving_radial_distance(hcos.zs[i]),hcos.ks,hcos.pk_profiles['y'][i,j]\
                                  *(1-np.exp(-(hcos.ks/hcos.p['kstar_damping']))), ellmax=exp.lmax)
-                # Get the galaxy map --- we call it kappa by analogy with the auto-biases. Note that we need a factor of
+                # Get the galaxy map --- analogous to kappa in the auto-biases. Note that we need a factor of
                 # H dividing the galaxy window function to translate the hmvec convention to e.g. Ferraro & Hill 18
-                kap = tls.pkToPell(hcos.comoving_radial_distance(hcos.zs[i]),hcos.ks,hcos.uk_profiles['nfw'][i,j]\
+                gal = tls.pkToPell(hcos.comoving_radial_distance(hcos.zs[i]),hcos.ks,hcos.uk_profiles['nfw'][i,j]\
                                    * tls.gal_window(hcos.zs[i], survey_name) / hcos.h_of_z(hcos.zs[i]), ellmax=self.lmax_out)
                 # FIXME: if you remove the z-scaling dividing ms_rescaled, do it in the input to sbbs.get_secondary_bispec_bias as well
-                kfft = kap*self.ms_rescaled[j]/(1+hcos.zs[i])**3 if fftlog_way else ql.spec.cl2cfft(kap,exp.pix).fft*self.ms_rescaled[j]/(1+hcos.zs[i])**3
+                galfft = gal*self.ms_rescaled[j]/(1+hcos.zs[i])**3 if fftlog_way else ql.spec.cl2cfft(gal,exp.pix).fft*self.ms_rescaled[j]/(1+hcos.zs[i])**3
 
                 phi_estimate_cfft = exp.get_TT_qe(fftlog_way, ells_out, y,y)
 
                 # Accumulate the integrands
-                integrand_oneHalo_cross[...,j] = phi_estimate_cfft*np.conjugate(kfft)*hcos.nzm[i,j]
-                integrand_twoHalo_1g[...,j] = np.conjugate(kfft)*hcos.nzm[i,j]*hcos.bh[i,j]
+                integrand_oneHalo_cross[...,j] = phi_estimate_cfft*np.conjugate(galfft)*hcos.nzm[i,j]
+                integrand_twoHalo_1g[...,j] = np.conjugate(galfft)*hcos.nzm[i,j]*hcos.bh[i,j]
                 integrand_twoHalo_2g[...,j] = phi_estimate_cfft*hcos.nzm[i,j]*hcos.bh[i,j]
 
             # Perform the m integrals
