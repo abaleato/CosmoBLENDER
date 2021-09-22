@@ -442,9 +442,9 @@ class hm_framework:
         self.get_consistency(exp)
 
         # Get the HOD factorial we will be needing #FIXME: there are much better ways of doing this
-        hod_fact_1gal = self.get_hod_factorial(2, exp)
+        hod_fact_1gal = self.get_hod_factorial(1, exp)
         hod_fact_2gal = self.get_hod_factorial(2, exp)
-        hod_fact_3gal = self.get_hod_factorial(2, exp)
+        hod_fact_3gal = self.get_hod_factorial(3, exp)
         hod_fact_4gal = self.get_hod_factorial(4, exp)
 
         # Output ells
