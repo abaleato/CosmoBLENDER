@@ -29,8 +29,8 @@ if __name__ == '__main__':
     cosmoParams = {'As': 2.4667392631170437e-09, 'ns': .96, 'omch2': (0.25 - .043) * .7 ** 2, 'ombh2': 0.044 * .7 ** 2,
                    'H0': 70.}  # Note that for now there is still cosmology dpendence in the cls defined within the experiment class
 
-    nZs = 10
-    nMasses = 10
+    nZs = 3
+    nMasses = 3
     bin_width_out_second_bispec_bias = 1000
     which_bias = 'mixed'#'cib' #'tsz'
 

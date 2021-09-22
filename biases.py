@@ -537,7 +537,7 @@ class hm_framework:
             tmpCorr =np.trapz(integrand_twoHalo_k,hcos.ms,axis=-1)
             twoHalo_cross[...,i]=np.trapz(integrand_twoHalo_Iy,hcos.ms,axis=-1)\
                                  *(tmpCorr + hcos.lensing_window(hcos.zs,1100.)[i] - hcos.lensing_window(hcos.zs[i],1100.)\
-                                   *self.consistency[i])*pk#
+                                   *self.consistency[i])*pk
 
         # Convert the NFW profile in the cross bias from kappa to phi
         conversion_factor = np.nan_to_num(1 / (0.5 * ells_out*(ells_out+1) )) if fftlog_way else ql.spec.cl2cfft(np.nan_to_num(1 / (0.5 * np.arange(self.lmax_out+1)*(np.arange(self.lmax_out+1)+1) )),exp.pix).fft
