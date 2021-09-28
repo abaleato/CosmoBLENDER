@@ -154,7 +154,7 @@ class hm_framework:
                     # Temporary secondary bispectrum bias stuff
                     # The part with the nested lensing reconstructions
                     # FIXME: if you remove the z-scaling dividing ms_rescaled in kfft, do it here too
-                    exp_param_list = [exp.nlev_t, exp.beam_size, exp.lmax, exp.massCu, exp.nx, exp.dx*60.*180./np.pi]
+                    exp_param_list = [exp.nlev_t, exp.beam_size, exp.lmax, exp.massCut, exp.nx, exp.dx*60.*180./np.pi]
                     secondary_bispec_bias_reconstructions = sbbs.get_secondary_bispec_bias(lbins_second_bispec_bias, exp_param_list,\
                                                                                            y, kap*self.ms_rescaled[j]/(1+hcos.zs[i])**3,\
                                                                                            parallelise=parallelise_secondbispec)
