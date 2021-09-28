@@ -338,8 +338,7 @@ class hm_framework:
 
     def get_cib_auto_biases(self, exp, fftlog_way=True, get_secondary_bispec_bias=False, bin_width_out=30, \
                      bin_width_out_second_bispec_bias=250, parallelise_secondbispec=True):
-       """
-        Calculate the CIB biases to the lensing auto-spectrum given an "experiment" object (defined in qest.py)
+        """
         Input:
             * exp = a qest.experiment object
             * (optional) fftlog_way = Boolean. If true, use 1D fftlog reconstructions, otherwise use 2D qiucklens
