@@ -91,7 +91,7 @@ class hm_framework:
         return (f_sat / f_cen)**j * ( (1 + j) * f_cen +  f_sat )
 
     def get_tsz_bias(self, exp, fftlog_way=True, get_secondary_bispec_bias=False, bin_width_out=30, \
-                     bin_width_out_second_bispec_bias=1000, exp_param_list=None, parallelise_secondbispec=True):
+                     bin_width_out_second_bispec_bias=250, parallelise_secondbispec=True):
         """
         Calculate the tsz biases given an "experiment" object (defined in qest.py)
         Input:
@@ -100,7 +100,6 @@ class hm_framework:
             * (optional) get_secondary_bispec_bias = False. Compute and return the secondary bispectrum bias (slow)
             * (optional) bin_width_out = int. Bin width of the output lensing reconstruction
             * (optional) bin_width_out_second_bispec_bias = int. Bin width of the output secondary bispectrum bias
-            * (optional) exp_param_list = list of inputs to initialise the 'exp' experiment object
         """
         hcos = self.hcos
         self.get_consistency(exp)
@@ -155,6 +154,7 @@ class hm_framework:
                     # Temporary secondary bispectrum bias stuff
                     # The part with the nested lensing reconstructions
                     # FIXME: if you remove the z-scaling dividing ms_rescaled in kfft, do it here too
+                    exp_param_list = [exp.nlev_t, exp.beam_size, exp.lmax, exp.massCu, exp.nx, exp.dx*60.*180./np.pi]
                     secondary_bispec_bias_reconstructions = sbbs.get_secondary_bispec_bias(lbins_second_bispec_bias, exp_param_list,\
                                                                                            y, kap*self.ms_rescaled[j]/(1+hcos.zs[i])**3,\
                                                                                            parallelise=parallelise_secondbispec)
@@ -254,7 +254,7 @@ class hm_framework:
         return ps_oneHalo_tSZ, ps_twoHalo_tSZ
 
     def get_cib_bias(self, exp, fftlog_way=True, get_secondary_bispec_bias=False, bin_width_out=30, \
-                     bin_width_out_second_bispec_bias=1000, exp_param_list=None, parallelise_secondbispec=True):
+                     bin_width_out_second_bispec_bias=250, parallelise_secondbispec=True):
         """
         Calculate the CIB biases given an "experiment" object (defined in qest.py)
         Input:
@@ -318,6 +318,7 @@ class hm_framework:
                     # Temporary secondary bispectrum bias stuff
                     # The part with the nested lensing reconstructions
                     # FIXME: if you remove the z-scaling dividing ms_rescaled in kfft, do it here too
+                    exp_param_list = [exp.nlev_t, exp.beam_size, exp.lmax, exp.massCut, exp.nx, exp.dx*60.*180./np.pi]
                     secondary_bispec_bias_reconstructions = sbbs.get_secondary_bispec_bias(lbins_second_bispec_bias, exp_param_list,\
                                                                                            u, kap*self.ms_rescaled[j]/(1+hcos.zs[i])**3,\
                                                                                            parallelise=parallelise_secondbispec)
@@ -430,7 +431,7 @@ class hm_framework:
         return clCIBCIB_oneHalo_ps, clCIBCIB_twoHalo_ps
 
     def get_mixed_biases(self, exp, fftlog_way=True, get_secondary_bispec_bias=False, bin_width_out=30, \
-                         bin_width_out_second_bispec_bias=1000, exp_param_list=None, parallelise_secondbispec=True):
+                         bin_width_out_second_bispec_bias=250, parallelise_secondbispec=True):
         """
         Calculate the biases involving both CIB and tSZ given an "experiment" object (defined in qest.py)
         Input:
@@ -508,6 +509,7 @@ class hm_framework:
                     # Temporary secondary bispectrum bias stuff
                     # The part with the nested lensing reconstructions
                     # FIXME: if you remove the z-scaling dividing ms_rescaled in kfft, do it here too
+                    exp_param_list = [exp.nlev_t, exp.beam_size, exp.lmax, exp.massCut, exp.nx, exp.dx*60.*180./np.pi]
                     secondary_bispec_bias_reconstructions = sbbs.get_secondary_bispec_bias(lbins_second_bispec_bias, exp_param_list,\
                                                                                            u, kap*self.ms_rescaled[j]/(1+hcos.zs[i])**3,\
                                                                                            y, parallelise=parallelise_secondbispec)

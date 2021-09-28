@@ -41,16 +41,13 @@ if __name__ == '__main__':
 
     if which_bias=='tsz':
         hm_calc.get_tsz_bias(SPT_5e15, get_secondary_bispec_bias=True, \
-                             bin_width_out_second_bispec_bias=bin_width_out_second_bispec_bias,\
-                             exp_param_list=exp_param_list)
+                             bin_width_out_second_bispec_bias=bin_width_out_second_bispec_bias)
     elif which_bias=='cib':
         hm_calc.get_cib_bias(SPT_5e15, get_secondary_bispec_bias=True, \
-                             bin_width_out_second_bispec_bias=bin_width_out_second_bispec_bias,
-                             exp_param_list=exp_param_list)
+                             bin_width_out_second_bispec_bias=bin_width_out_second_bispec_bias)
     elif which_bias=='mixed':
         hm_calc.get_mixed_biases(SPT_5e15, get_secondary_bispec_bias=True, \
-                             bin_width_out_second_bispec_bias=bin_width_out_second_bispec_bias,
-                             exp_param_list=exp_param_list)
+                             bin_width_out_second_bispec_bias=bin_width_out_second_bispec_bias)
 
     # Save a dictionary with the bias we calculated to file
     experiment.save_biases()
