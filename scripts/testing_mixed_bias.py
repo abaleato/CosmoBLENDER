@@ -68,13 +68,25 @@ if __name__ == '__main__':
 
         plt.plot(experiment.biases['ells'], scaling * trispec_tot_pos, color=color, label=r'{} trispec. bias, tot '.format(which_bias))
         plt.plot(experiment.biases['ells'], scaling * trispec_tot_neg, color=color)
-        plt.plot(experiment.biases['ells'], scaling * prim_bispec_tot_pos, color=color, ls='--', label=r'{} prim. bispec. bias, tot'.format(which_bias))
-        plt.plot(experiment.biases['ells'], scaling * prim_bispec_tot_neg, color=color, ls='--')
+        plt.plot(experiment.biases['ells'], scaling * prim_bispec_1h_pos, color=color, ls='--', label=r'{} prim. bispec. bias, tot'.format(which_bias))
+        plt.plot(experiment.biases['ells'], scaling * prim_bispec_1h_neg, color=color, ls='--')
 
-    plt.plot(experiment.biases['ells'], scaling * (experiment.biases['tsz']['prim_bispec']['1h'] +
-                                                   experiment.biases['cib']['prim_bispec']['1h']), color='g')
-    plt.plot(experiment.biases['ells'], -scaling * (experiment.biases['tsz']['prim_bispec']['1h'] +
-                                                   experiment.biases['cib']['prim_bispec']['1h']), color='g')
+
+    prim_bispec_tot_pos, prim_bispec_tot_neg = tls.split_positive_negative(
+           experiment.biases['tsz']['prim_bispec']['1h'] + experiment.biases['tsz']['prim_bispec']['2h']
+           + experiment.biases['cib']['prim_bispec']['1h'] + experiment.biases['cib']['prim_bispec']['2h']
+           + experiment.biases['mixed']['prim_bispec']['1h'] + experiment.biases['mixed']['prim_bispec']['2h'])
+
+    trispec_tot_pos, trispec_tot_neg = tls.split_positive_negative(
+        experiment.biases['tsz']['trispec']['1h'] + experiment.biases['tsz']['trispec']['2h']
+        + experiment.biases['cib']['trispec']['1h'] + experiment.biases['cib']['trispec']['2h']
+        + experiment.biases['mixed']['trispec']['1h'] + experiment.biases['mixed']['trispec']['2h'])
+
+    plt.plot(experiment.biases['ells'], scaling * prim_bispec_tot_pos, color='g', ls='--', label=r'total prim. bispec. bias ')
+    plt.plot(experiment.biases['ells'], scaling * prim_bispec_tot_neg, color='g', ls='--', label=r'total prim. bispec. bias ')
+
+    plt.plot(experiment.biases['ells'], scaling * trispec_tot_pos, color='g', label=r'total trispec. bias ')
+    plt.plot(experiment.biases['ells'], scaling * trispec_tot_neg, color='g', label=r'total trispec. bias ')
 
     plt.yscale('log')
     plt.xlim([2, 3000])
