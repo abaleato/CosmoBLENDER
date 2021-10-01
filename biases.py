@@ -119,7 +119,7 @@ class hm_framework:
         twoHalo_cross = np.zeros([nx,self.nZs])+0j if fftlog_way else np.zeros([nx,nx,self.nZs])+0j
 
         if get_secondary_bispec_bias:
-            lbins_second_bispec_bias = np.arange(10, self.lmax_out + 1, bin_width_out_second_bispec_bias)
+            lbins_second_bispec_bias = np.arange(100, self.lmax_out + 1, bin_width_out_second_bispec_bias)
             oneHalo_second_bispec = np.zeros([len(lbins_second_bispec_bias),self.nZs])+0j
 
         for i,z in enumerate(hcos.zs):
@@ -282,7 +282,7 @@ class hm_framework:
         IIII_2h = IIII_1h.copy(); oneHalo_cross = IIII_1h.copy(); twoHalo_cross = IIII_1h.copy()
 
         if get_secondary_bispec_bias:
-            lbins_second_bispec_bias = np.arange(10, self.lmax_out + 1, bin_width_out_second_bispec_bias)
+            lbins_second_bispec_bias = np.arange(100, self.lmax_out + 1, bin_width_out_second_bispec_bias)
             oneHalo_second_bispec = np.zeros([len(lbins_second_bispec_bias),self.nZs])+0j
 
         for i,z in enumerate(hcos.zs):
@@ -462,7 +462,7 @@ class hm_framework:
         IyIy_2h = Iyyy_1h.copy(); IyIy_1h = Iyyy_1h.copy()
 
         if get_secondary_bispec_bias:
-            lbins_second_bispec_bias = np.arange(10, self.lmax_out + 1, bin_width_out_second_bispec_bias)
+            lbins_second_bispec_bias = np.arange(100, self.lmax_out + 1, bin_width_out_second_bispec_bias)
             oneHalo_second_bispec = np.zeros([len(lbins_second_bispec_bias),self.nZs])+0j
 
         for i,z in enumerate(hcos.zs):
