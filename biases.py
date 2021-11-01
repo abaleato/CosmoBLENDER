@@ -274,7 +274,7 @@ class hm_framework:
             tmpCorr =np.trapz(integrand_twoHalo_1g,hcos.ms,axis=-1)
             #FIXME: do we need to apply consistency condition to integral over fg profiles too? So far only kappa part
             twoHalo_cross[...,i]=np.trapz(integrand_twoHalo_2g,hcos.ms,axis=-1)\
-                                 *(tmpCorr + tls.gal_window(hcos.zs[i], survey_name)[i]\
+                                 *(tmpCorr + tls.gal_window(hcos.zs, survey_name)[i]\
                                    - tls.gal_window(hcos.zs[i], survey_name)*self.consistency[i])*pk
 
         # Convert the NFW profile in the cross bias from kappa to phi
