@@ -9,6 +9,7 @@ from lensing_rec_biases_code import qest
 from lensing_rec_biases_code import biases
 import time
 import tools as tls
+import quicklens as ql
 
 # Press the green button in the gutter to run the script.
 if __name__ == '__main__':
@@ -52,7 +53,7 @@ if __name__ == '__main__':
     cross_w_gals_2h_pos, cross_w_gals_2h_neg = tls.split_positive_negative(
             experiment.biases[which_bias]['cross_w_gals']['2h'])
 
-
+    plt.plot(experiment.cl_unl.ls, 0.05 * experiment.cl_unl.ls ** 4 * experiment.cl_unl.clpp / (2 * np.pi), 'k')
 
     plt.plot(experiment.biases['ells'], scaling * cross_w_gals_1h_pos, color='b')
     plt.plot(experiment.biases['ells'], scaling * cross_w_gals_1h_neg, color='b', ls='--')
