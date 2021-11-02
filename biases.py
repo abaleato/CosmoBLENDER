@@ -283,10 +283,10 @@ class hm_framework:
         # Integrate over z
         exp.biases['tsz']['cross_w_gals']['1h'] = conversion_factor * tls.scale_sz(exp.freq_GHz)**2 * self.T_CMB**2 \
                                                  * np.trapz(oneHalo_cross * hcos.comoving_radial_distance(hcos.zs)**-8\
-                                                            * hcos.h_of_z(hcos.zs)**-1,hcos.zs,axis=-1)
+                                                            * hcos.h_of_z(hcos.zs),hcos.zs,axis=-1)
         exp.biases['tsz']['cross_w_gals']['2h'] = conversion_factor * tls.scale_sz(exp.freq_GHz)**2 * self.T_CMB**2 \
                                                  * np.trapz(twoHalo_cross * hcos.comoving_radial_distance(hcos.zs)**-8\
-                                                            * hcos.h_of_z(hcos.zs)**-1,hcos.zs,axis=-1)
+                                                            * hcos.h_of_z(hcos.zs),hcos.zs,axis=-1)
 
         if fftlog_way:
             exp.biases['ells'] = np.arange(self.lmax_out+1)
