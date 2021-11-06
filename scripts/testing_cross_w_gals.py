@@ -14,7 +14,7 @@ import quicklens as ql
 # Press the green button in the gutter to run the script.
 if __name__ == '__main__':
     t0 = time.time() # Time the run
-    which_bias = 'tsz' #'tsz' or 'cib'
+    which_bias = 'cib' #'tsz' or 'cib'
     nlev_t = 18.  # uK arcmin
     beam_size = 1.  # arcmin
     lmax = 3000  # Maximum ell for the reconstruction
@@ -42,7 +42,10 @@ if __name__ == '__main__':
 
     experiment = SPT_5e15
 
-    hm_calc.get_tsz_cross_biases(SPT_5e15)
+    if which_bias=='tsz':
+        hm_calc.get_tsz_cross_biases(SPT_5e15)
+    elif which_bias=='cib':
+        hm_calc.get_cib_cross_biases(SPT_5e15)
 
     plt.figure(figsize=(5, 5))
     scaling = experiment.biases['ells'] ** 4 / (2 * np.pi)
@@ -63,10 +66,11 @@ if __name__ == '__main__':
 
     plt.yscale('log')
     plt.xlim([2, 3000])
+    plt.ylim([1e-12,1e-7])
     ax = plt.gca()
     ax.tick_params(axis='both', which='major', labelsize=8)
     ax.tick_params(axis='both', which='minor', labelsize=8)
-    plt.savefig('testing_crosswgals_bias_nZs{}_nMasses{}.png'.format(nZs, nMasses))
+    plt.savefig('testing_crosswgals_{}bias_nZs{}_nMasses{}.png'.format(which_bias, nZs, nMasses))
     plt.show()
     plt.close()
     t1 = time.time()
