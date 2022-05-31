@@ -14,7 +14,7 @@ import quicklens as ql
 # Press the green button in the gutter to run the script.
 if __name__ == '__main__':
     t0 = time.time() # Time the run
-    which_bias = 'cib' #'tsz' or 'cib'
+    which_bias = 'tsz' #'tsz' or 'cib'
     nlev_t = 18.  # uK arcmin
     beam_size = 1.  # arcmin
     lmax = 3000  # Maximum ell for the reconstruction
