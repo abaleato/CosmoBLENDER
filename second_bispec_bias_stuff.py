@@ -3,7 +3,7 @@
 
 import numpy as np
 import quicklens as ql
-from lensing_rec_biases_code import qest
+import qest
 import multiprocessing
 from functools import partial
 
