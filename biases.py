@@ -583,3 +583,82 @@ class hm_framework:
             exp.biases['mixed']['prim_bispec']['1h'] = ql.maps.cfft(exp.nx,exp.dx,fft=exp.biases['mixed']['prim_bispec']['1h']).get_ml(lbins).specs['cl']
             exp.biases['mixed']['prim_bispec']['2h'] = ql.maps.cfft(exp.nx,exp.dx,fft=exp.biases['mixed']['prim_bispec']['2h']).get_ml(lbins).specs['cl']
             return
+
+    def get_bias_to_delensed_clbb(self, exp, get_cib=True, get_tsz=True, get_mixed=False, fftlog_way=True,
+                                  get_secondary_bispec_bias=False, bin_width_out=30, \
+                                  bin_width_out_second_bispec_bias=250, parallelise_secondbispec=True, lmax_clkk=None,
+                                  bin_width=30, lmin_clbb=2, lmax_clbb=1000):
+        """
+        Calculate the leading biases to the power spectrum of delensed B-mode, eqns (24) and (25) in arXiv:2205.09000
+        Input:
+            * exp = a qest.experiment object
+            * (optional) get_cib = Boolean. Whether or not to calculate the contribution from CIB
+            * (optional) get_tsz = Boolean. Whether or not to calculate the contribution from tSZ
+            * (optional) get_mixed = Boolean. Whether or not to calculate the contribution from CIB-tSZ correlation
+            * (optional) fftlog_way = Boolean. If true, use 1D fftlog reconstructions, otherwise use 2D qiucklens
+            * (optional) get_secondary_bispec_bias = False. Compute and return the secondary bispectrum bias (slow)
+            * (optional) bin_width_out = int. Bin width of the output lensing reconstruction
+            * (optional) bin_width_out_second_bispec_bias = int. Bin width of the output secondary bispectrum bias
+            * (optional) lmax_clkk = int. The size of the array containing the bias to clkk. In practice, anything
+                         larger than 2000 is irrelevant for large-scale-B-mode delensing
+            * (optional) bin_width = int. Bin width of the output clbb spectra
+            * (optional) lmin_clbb = int. lmin of the output clbb spectra
+            * (optional) lmax_clbb = int. lmax of the output clbb spectra
+        Returns:
+            * ells, cl_Btemp_x_Blens_bias, cl_Btemp_x_Btemp_bias, cl_Bdel_x_Bdel_bias
+              where cl_Btemp_x_Blens_bias, cl_Btemp_x_Btemp_bias, cl_Bdel_x_Bdel_bias are numpy arrays containing the
+              bias to the binned cls describe by the variable name, and ells are the corresponding bin centers
+        """
+        if lmax_clkk==None:
+            lmax_clkk = exp.lmax
+        # Initialize array with all biases to kappa rec auto
+        clkk_bias_tot = np.zeros(lmax_clkk+1, dtype='complex128')
+        # Initialize array with biases to kappa rec cross true kappa (i.e., just the primary bispectrum bias, without
+        # the permutation factor of 2
+        clkcross_bias_tot = np.zeros(lmax_clkk+1, dtype='complex128')
+
+        # Define bins for the output spectra
+        lbins = np.arange(lmin_clbb, lmax_clbb, bin_width)
+
+        which_coupling_list = ['prim_bispec', 'trispec']
+        if get_secondary_bispec_bias:
+            which_coupling_list.append('second_bispec')
+
+        which_bias_list = []
+        if get_cib:
+            self.get_cib_bias(exp, get_secondary_bispec_bias=get_secondary_bispec_bias)
+            which_bias_list.append('cib')
+        if get_tsz:
+            self.get_tsz_bias(exp, get_secondary_bispec_bias=get_secondary_bispec_bias)
+            which_bias_list.append('tsz')
+        if get_mixed:
+            self.get_cib_bias(exp, get_secondary_bispec_bias=get_secondary_bispec_bias)
+            which_bias_list.append('mixed')
+
+        for which_bias in which_bias_list:
+            for which_coupling in which_coupling_list:
+                if which_coupling=='second_bispec':
+                    ells = exp.biases['second_bispec_bias_ells']
+                    which_term_list = ['1h']
+                    # TODO: Implement 2h term for sec bispec bias and incorporate into delensing bias calculation
+                    print('2halo term not yet implemented for secondary bispectrum bias!')
+                else:
+                    ells = exp.biases['ells']
+                    which_term_list = ['1h', '2h']
+
+                for which_term in which_term_list:
+                    clkk_bias_tot += np.nan_to_num(np.interp(np.arange(lmax_clkk+1), ells,
+                                               exp.biases[which_bias][which_coupling][which_term]))
+                    if which_coupling=='prim_bispec':
+                        # The primary bispectrum bias to the rec cros true kappa is half of the prim bispec bias to the auto
+                        clkcross_bias_tot += np.nan_to_num(0.5 * np.interp(np.arange(lmax_clkk+1), ells,
+                                                             exp.biases[which_bias][which_coupling][which_term]))
+
+        # Now use clkk_bias_tot to get the bias to C_l^{B^{template}x\tilde{B}} and C_l^{B^{template}xB^{template}}
+        # TODO: speed up calculate_cl_bias() by using fftlog
+        # TODO: It might be better to have W_E and W_phi provided externally rather than calculated internally
+        cl_Btemp_x_Blens_bias_bcl = tls.calculate_cl_bias(exp.pix, exp.W_E * exp.cl_unl.clee, exp.W_phi * clkcross_bias_tot, lbins)
+        cl_Btemp_x_Btemp_bias_bcl = tls.calculate_cl_bias(exp.pix, exp.W_E**2 * (exp.cl_len.clee + exp.nlpp), exp.W_phi**2 * clkk_bias_tot, lbins)
+        cl_Bdel_x_Bdel_bias_array = - 2 * cl_Btemp_x_Blens_bias_bcl.specs['cl'] + cl_Btemp_x_Btemp_bias_bcl.specs['cl']
+
+        return cl_Btemp_x_Blens_bias_bcl.ls, cl_Btemp_x_Blens_bias_bcl.specs['cl'], cl_Btemp_x_Btemp_bias_bcl.specs['cl'], cl_Bdel_x_Bdel_bias_array

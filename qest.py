@@ -7,7 +7,7 @@ import pickle
 import sys
 
 class experiment:
-    def __init__(self, nlev_t, beam_size, lmax, massCut_Mvir = np.inf, nx=512, dx_arcmin=1.0, fname_scalar=None, fname_lensed=None, freq_GHz=150.):
+    def __init__(self, nlev_t, beam_size, lmax, massCut_Mvir = np.inf, nx=1024, dx_arcmin=1.0, fname_scalar=None, fname_lensed=None, freq_GHz=150.):
         """ Initialise a cosmology and experimental charactierstics
             - Inputs:
                 * nlev_t = temperature noise level, In uK.arcmin.
@@ -34,9 +34,12 @@ class experiment:
                                     # Tinker mass function in hmvec uses) using the relation from White 01.
 
         self.nlev_t = nlev_t
+        self.nlev_p = np.sqrt(2) * nlev_t
         self.beam_size = beam_size
         self.bl = ql.spec.bl(beam_size, lmax) # beam transfer function.
         self.nltt = (np.pi/180./60.*nlev_t)**2 / self.bl**2
+        self.nlee = (np.pi / 180. / 60. * self.nlev_p) ** 2 / self.bl ** 2
+        self.W_E = np.nan_to_num(self.cl_len.clee / (self.cl_len.clee + self.nlee))
 
         # Set up grid for Quicklens calculations
         self.nx = nx
@@ -47,6 +50,8 @@ class experiment:
         self.inverse_variance_filters()
         # Calculate QE norm
         self.get_qe_norm()
+        self.nlpp = self.get_nlpp()
+        self.W_phi = self.cl_unl.clpp / (self.cl_unl.clpp + self.nlpp)
 
         # Initialise an empty dictionary to store the biases
         empty_arr = {}
@@ -84,6 +89,12 @@ class experiment:
         """
         self.qest_lib = ql.sims.qest.library(self.cl_unl, self.cl_len, self.ivf_lib)
         self.qe_norm = self.qest_lib.get_qr(key)
+
+    def get_nlpp(self):
+        # TODO: this N0 is not smooth. Find a better way to calculate
+        lbins = np.arange(8, 3000, 30)
+        norm = self.qe_norm.get_ml(lbins)
+        return np.interp(self.cl_unl.ls, norm.ls, np.nan_to_num(1./norm.specs['cl']))
 
     def __getattr__(self, spec):
         try:
