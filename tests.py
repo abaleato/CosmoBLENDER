@@ -6,20 +6,29 @@ import hmvec as hm
 import tools as tls
 import biases
 
+def test_clbb_bias(hm_calc, exp):
+    """ Check the biases to the power spectrum of delensed B-modes"""
+    ells, cl_Btemp_x_Blens_bias, cl_Btemp_x_Btemp_bias, cl_Bdel_x_Bdel_bias = hm_calc.get_bias_to_delensed_clbb(exp)
+    plt.loglog(ells, cl_Btemp_x_Blens_bias, label=r'Btemp_x_Blens')
+    plt.loglog(ells, cl_Btemp_x_Btemp_bias, label=r'Btemp_x_Btemp')
+    plt.loglog(ells, cl_Bdel_x_Bdel_bias, label=r'Bdel_x_Bdel')
+    plt.ylabel(r'$C_l^{BB}$ [$\mu$K$^2$]')
+    plt.xlabel(r'$l$')
+    plt.legend()
+    return
 
 def test_cib_ps(hm_object, exp_object):
     """ Check the CIB power spectrum"""
     clCIBCIB_oneHalo_ps, clCIBCIB_twoHalo_ps = hm_object.get_cib_ps(exp_object)
-    plt.loglog(clCIBCIB_oneHalo_ps + clCIBCIB_twoHalo_ps, label='total', 'r')
-    plt.loglog(clCIBCIB_oneHalo_ps, label='1 halo term', 'g')
-    plt.loglog(clCIBCIB_twoHalo_ps, label='2 halo term', 'b')
+    plt.loglog(clCIBCIB_oneHalo_ps + clCIBCIB_twoHalo_ps, label='total', color='r')
+    plt.loglog(clCIBCIB_oneHalo_ps, label='1 halo term', color='g')
+    plt.loglog(clCIBCIB_twoHalo_ps, label='2 halo term', color='b')
     plt.xlabel(r'l')
     plt.legend()
     plt.ylabel(r'$C_l\,[\mathrm{Jy}^2\,\mathrm{sr}^{-1}]$')
     plt.xlim([10, 1e4])
     plt.title('CIB power spectrum')
     return
-
 
 def test_tsz_ps(hm_object):
     """ Check the tSZ power spectrum as a function of the pressure profile xmax out to which we integrate
@@ -70,7 +79,7 @@ def test_tsz_ps(hm_object):
     plt.grid(which='both')
 
 if __name__ == '__main__':
-    which_test = 'test_CIB' # 'test_CIB' or 'test_tSZ'
+    which_test = 'test_clbb_bias' # 'test_CIB' or 'test_tSZ' or 'test_clbb_bias'
 
     # Initialise the experiment and halo model object for which to run the tests
     # This should roughly match the cosmology in Nick's tSZ papers
@@ -110,6 +119,23 @@ if __name__ == '__main__':
         hm_calc = biases.hm_framework(cosmoParams=cosmoParams, nZs=nZs, nMasses=nMasses, z_max=z_max)
         # Check CIB power spectrum
         test_cib_ps(hm_calc, SPT_nocut)
+
+    elif which_test=='test_clbb_bias':
+        # Initialise experiment object
+        nlev_t = 18.  # uK arcmin
+        beam_size = 1.  # arcmin
+        lmax = 3000  # Maximum ell for the reconstruction
+        freq_GHz = 545.
+        massCut_Mvir = 5e17
+        # Initialise experiments with various different mass cuts
+        SPT_nocut = qest.experiment(nlev_t, beam_size, lmax, massCut_Mvir=massCut_Mvir, freq_GHz=freq_GHz)
+        # Initialise a halo model object for the CIB PS calculation, using mostly default parameters
+        nZs = 30  # 30
+        nMasses = 30  # 30
+        z_max = 4
+        hm_calc = biases.hm_framework(cosmoParams=cosmoParams, nZs=nZs, nMasses=nMasses, z_max=z_max)
+        # Check CIB power spectrum
+        test_clbb_bias(hm_calc, SPT_nocut)
 
     plt.show()
 
