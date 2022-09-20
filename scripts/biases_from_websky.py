@@ -200,6 +200,7 @@ if __name__ == '__main__':
     np.save(output_dir + '{}only_rec_map'.format(which_bias), fgonly_rec_map)
 
     # Perform the reconstruction with MIXED FOREGROUND AND CMB INPUTS
+    # TODO: There is probably a minus sign missing somewhere here, bc the 2ndary bispec bias is coming out +ve
     # Zeroth order T and fg
     mixed_unlensedandfg_rec_map = get_qe_rec_map(cmbT_unlensed_alm_filtered, fgT_alm_filtered)
     np.save(output_dir + 'mixed_unlensedcmb{}_rec_map'.format(which_bias), mixed_unlensedandfg_rec_map)
