@@ -139,6 +139,7 @@ class hm_framework:
                 # Get the kappa map
                 kap = tls.pkToPell(hcos.comoving_radial_distance(hcos.zs[i]),hcos.ks,hcos.uk_profiles['nfw'][i,j]\
                                    *hcos.lensing_window(hcos.zs[i],1100.), ellmax=self.lmax_out)
+                # TODO: why don't we soften the nfw profile like we soften the y profile?
                 # FIXME: if you remove the z-scaling dividing ms_rescaled, do it in the input to sbbs.get_secondary_bispec_bias as well
                 kfft = kap*self.ms_rescaled[j]/(1+hcos.zs[i])**3 if fftlog_way else ql.spec.cl2cfft(kap,exp.pix).fft*self.ms_rescaled[j]/(1+hcos.zs[i])**3
 
@@ -222,6 +223,7 @@ class hm_framework:
             * exp = a qest.experiment object
             * (optional) fftlog_way = Boolean. If true, use 1D fftlog reconstructions, otherwise use 2D quicklens
             * (optional) bin_width_out = int. Bin width of the output lensing reconstruction
+            * (optional) survey_name = str. Name labelling the HOD characterizing the survey we are x-ing lensing with
         """
         hcos = self.hcos
         self.get_consistency(exp)
@@ -252,16 +254,16 @@ class hm_framework:
                 # Get the galaxy map --- analogous to kappa in the auto-biases. Note that we need a factor of
                 # H dividing the galaxy window function to translate the hmvec convention to e.g. Ferraro & Hill 18 #TODO: why do you say that?
                 gal = tls.pkToPell(hcos.comoving_radial_distance(hcos.zs[i]),hcos.ks,hcos.uk_profiles['nfw'][i,j]\
-                                   * tls.gal_window(hcos.zs[i], survey_name), ellmax=self.lmax_out)
+                                   * tls.gal_window(hcos.zs[i]), ellmax=self.lmax_out)
                 # FIXME: if you remove the z-scaling dividing ms_rescaled, do it in the input to sbbs.get_secondary_bispec_bias as well
-                galfft = gal*self.ms_rescaled[j]/(1+hcos.zs[i])**3 if fftlog_way else ql.spec.cl2cfft(gal,exp.pix).fft*self.ms_rescaled[j]/(1+hcos.zs[i])**3
-
-                phi_estimate_cfft = exp.get_TT_qe(fftlog_way, ells_out, y,y)
+                galfft = gal / hcos.hods[survey_name]['ngal'][i] / (1 + hcos.zs[i]) ** 3 if fftlog_way else ql.spec.cl2cfft(gal, exp.pix).fft / hcos.hods[survey_name]['ngal'][i] / (1 + hcos.zs[i]) ** 3
+                phi_estimate_cfft = exp.get_TT_qe(fftlog_way, ells_out, y, y)
 
                 # Accumulate the integrands
-                integrand_oneHalo_cross[...,j] = phi_estimate_cfft*np.conjugate(galfft)*hcos.nzm[i,j]
-                integrand_twoHalo_1g[...,j] = np.conjugate(galfft)*hcos.nzm[i,j]*hcos.bh[i,j]
-                integrand_twoHalo_2g[...,j] = phi_estimate_cfft*hcos.nzm[i,j]*hcos.bh[i,j]
+                mean_Ngal = hcos.hods[survey_name]['Nc'][i, j] + hcos.hods[survey_name]['Ns'][i, j]
+                integrand_oneHalo_cross[..., j] = mean_Ngal * phi_estimate_cfft * np.conjugate(galfft) * hcos.nzm[i, j]
+                integrand_twoHalo_1g[..., j] = mean_Ngal * np.conjugate(galfft) * hcos.nzm[i, j] * hcos.bh[i, j]
+                integrand_twoHalo_2g[..., j] = phi_estimate_cfft * hcos.nzm[i, j] * hcos.bh[i, j]
 
             # Perform the m integrals
             oneHalo_cross[...,i]=np.trapz(integrand_oneHalo_cross,hcos.ms,axis=-1)
@@ -274,20 +276,19 @@ class hm_framework:
             tmpCorr =np.trapz(integrand_twoHalo_1g,hcos.ms,axis=-1)
             #FIXME: do we need to apply consistency condition to integral over fg profiles too? So far only kappa part
             twoHalo_cross[...,i]=np.trapz(integrand_twoHalo_2g,hcos.ms,axis=-1)\
-                                 *(tmpCorr + tls.gal_window(hcos.zs, survey_name)[i]\
-                                   - tls.gal_window(hcos.zs[i], survey_name)*self.consistency[i])*pk
+                                 *(tmpCorr + tls.gal_window(hcos.zs)[i]\
+                                   - tls.gal_window(hcos.zs[i])*self.consistency[i])*pk
 
         # Convert the NFW profile in the cross bias from kappa to phi
-        conversion_factor = np.nan_to_num(1 / (0.5 * ells_out*(ells_out+1) )) if fftlog_way else ql.spec.cl2cfft(np.nan_to_num(1 / (0.5 * np.arange(self.lmax_out+1)*(np.arange(self.lmax_out+1)+1) )),exp.pix).fft
+        conversion_factor = 1#np.nan_to_num(1 / (0.5 * ells_out*(ells_out+1) )) if fftlog_way else ql.spec.cl2cfft(np.nan_to_num(1 / (0.5 * np.arange(self.lmax_out+1)*(np.arange(self.lmax_out+1)+1) )),exp.pix).fft
 
         # Integrate over z
         exp.biases['tsz']['cross_w_gals']['1h'] = conversion_factor * tls.scale_sz(exp.freq_GHz)**2 * self.T_CMB**2 \
-                                                 * np.trapz(oneHalo_cross * hcos.comoving_radial_distance(hcos.zs)**-8\
+                                                 * np.trapz(oneHalo_cross * hcos.comoving_radial_distance(hcos.zs)**-4\
                                                             * hcos.h_of_z(hcos.zs),hcos.zs,axis=-1)
         exp.biases['tsz']['cross_w_gals']['2h'] = conversion_factor * tls.scale_sz(exp.freq_GHz)**2 * self.T_CMB**2 \
-                                                 * np.trapz(twoHalo_cross * hcos.comoving_radial_distance(hcos.zs)**-8\
+                                                 * np.trapz(twoHalo_cross * hcos.comoving_radial_distance(hcos.zs)**-4\
                                                             * hcos.h_of_z(hcos.zs),hcos.zs,axis=-1)
-
         if fftlog_way:
             exp.biases['ells'] = np.arange(self.lmax_out+1)
             return
@@ -499,16 +500,17 @@ class hm_framework:
                 # Get the galaxy map --- analogous to kappa in the auto-biases. Note that we need a factor of
                 # H dividing the galaxy window function to translate the hmvec convention to e.g. Ferraro & Hill 18 # TODO:Why?
                 gal = tls.pkToPell(hcos.comoving_radial_distance(hcos.zs[i]),hcos.ks,hcos.uk_profiles['nfw'][i,j]\
-                                   * tls.gal_window(hcos.zs[i], survey_name), ellmax=self.lmax_out)
+                                   * tls.gal_window(hcos.zs[i]), ellmax=self.lmax_out)
                 # FIXME: if you remove the z-scaling dividing ms_rescaled, do it in the input to sbbs.get_secondary_bispec_bias as well
-                galfft = gal*self.ms_rescaled[j]/(1+hcos.zs[i])**3 if fftlog_way else ql.spec.cl2cfft(gal,exp.pix).fft*self.ms_rescaled[j]/(1+hcos.zs[i])**3
-
+                galfft = gal / hcos.hods[survey_name]['ngal'][i] / (1 + hcos.zs[i]) ** 3 if fftlog_way else ql.spec.cl2cfft(gal, exp.pix).fft / \
+                                                                    hcos.hods[survey_name]['ngal'][i] / (1 + hcos.zs[i]) ** 3
 
                 phi_estimate_cfft_uu =  exp.get_TT_qe(fftlog_way, ells_out, u, u)
 
                 # Accumulate the integrands
+                mean_Ngal = hcos.hods[survey_name]['Nc'][i, j] + hcos.hods[survey_name]['Ns'][i, j]
                 integrand_oneHalo_cross[...,j] = hod_fact_2gal[i, j] * phi_estimate_cfft_uu * np.conjugate(galfft) * hcos.nzm[i,j]
-                integrand_twoHalo_k[...,j] = np.conjugate(galfft) * hcos.nzm[i,j] * hcos.bh[i,j]
+                integrand_twoHalo_k[...,j] = mean_Ngal * np.conjugate(galfft) * hcos.nzm[i,j] * hcos.bh[i,j]
                 integrand_twoHalo_II[...,j] = hod_fact_2gal[i, j] * phi_estimate_cfft_uu * hcos.nzm[i,j] * hcos.bh[i,j]
 
             oneHalo_cross[...,i]=np.trapz(integrand_oneHalo_cross,hcos.ms,axis=-1)
@@ -521,13 +523,14 @@ class hm_framework:
             tmpCorr =np.trapz(integrand_twoHalo_k,hcos.ms,axis=-1)
             # FIXME: do we need to apply consistency condition to integral over fg profiles too? So far only kappa part
             twoHalo_cross[...,i]=np.trapz(integrand_twoHalo_II,hcos.ms,axis=-1)\
-                                 *(tmpCorr + tls.gal_window(hcos.zs,survey_name)[i] - tls.gal_window(hcos.zs[i],survey_name)*self.consistency[i])\
+                                 *(tmpCorr + tls.gal_window(hcos.zs)[i] - tls.gal_window(hcos.zs[i])*self.consistency[i])\
                                  *pk
 
         # Convert the NFW profile in the cross bias from kappa to phi
-        conversion_factor = np.nan_to_num(1 / (0.5 * ells_out*(ells_out+1) )) if fftlog_way else ql.spec.cl2cfft(np.nan_to_num(1 / (0.5 * np.arange(self.lmax_out+1)*(np.arange(self.lmax_out+1)+1) )),exp.pix).fft
+        conversion_factor = 1#np.nan_to_num(1 / (0.5 * ells_out*(ells_out+1) )) if fftlog_way else ql.spec.cl2cfft(np.nan_to_num(1 / (0.5 * np.arange(self.lmax_out+1)*(np.arange(self.lmax_out+1)+1) )),exp.pix).fft
 
         # Integrand factors from Limber projection (adapted to hmvec conventions)
+        # Note there's only a (1+z)**-2 dependence. This is because there's another factor of (1+z)**-1 in the gal_window
         kII_integrand  = hcos.h_of_z(hcos.zs)**-1 * (1+hcos.zs)**-2 * hcos.comoving_radial_distance(hcos.zs)**-4
 
         # Integrate over z
