@@ -14,7 +14,7 @@ if __name__ == '__main__':
     which_bias = 'tsz' #'tsz' or 'cib'
     nlev_t = 18.  # uK arcmin
     beam_size = 1.  # arcmin
-    lmax = 3000  # Maximum ell for the reconstruction
+    lmax = 3500  # Maximum ell for the reconstruction
     nx = 256
     dx_arcmin = 1.0 * 2
 
@@ -32,7 +32,7 @@ if __name__ == '__main__':
     nZs = 3
     nMasses = 3
     bin_width_out_second_bispec_bias = 1000
-    which_bias = 'mixed'#'cib' #'tsz'
+    which_bias = 'tsz'#'cib' #'tsz'
 
     # Initialise a halo model object for the calculation, using mostly default parameters
     hm_calc = biases.hm_framework(cosmoParams=cosmoParams, nZs=nZs, nMasses=nMasses, cib_model=cib_model)
@@ -40,13 +40,13 @@ if __name__ == '__main__':
     experiment = SPT_5e15
 
     if which_bias=='tsz':
-        hm_calc.get_tsz_bias(SPT_5e15, get_secondary_bispec_bias=True, \
+        hm_calc.get_tsz_auto_biases(SPT_5e15, get_secondary_bispec_bias=True, \
                              bin_width_out_second_bispec_bias=bin_width_out_second_bispec_bias)
     elif which_bias=='cib':
-        hm_calc.get_cib_bias(SPT_5e15, get_secondary_bispec_bias=True, \
+        hm_calc.get_cib_auto_biases(SPT_5e15, get_secondary_bispec_bias=True, \
                              bin_width_out_second_bispec_bias=bin_width_out_second_bispec_bias)
     elif which_bias=='mixed':
-        hm_calc.get_mixed_biases(SPT_5e15, get_secondary_bispec_bias=True, \
+        hm_calc.get_mixed_auto_biases(SPT_5e15, get_secondary_bispec_bias=True, \
                              bin_width_out_second_bispec_bias=bin_width_out_second_bispec_bias)
 
     # Save a dictionary with the bias we calculated to file

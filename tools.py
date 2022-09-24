@@ -105,6 +105,12 @@ def calculate_cl_bias(pix, clee, clpp, lbins, clee_ls=None, clpp_ls=None, aux_e_
 
     return ret.get_ml(lbins)
 
+def gal_window(zs):
+    """ Galaxy window function
+    """
+    # Todo:check this
+    return 1./(1.+zs)
+
 # Now some useful decorators, inspired by James Fergusson
 
 def debug(func):

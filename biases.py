@@ -90,10 +90,10 @@ class hm_framework:
         f_sat = tls.from_Jypersr_to_uK(exp.freq_GHz) * self.hcos._get_fsat(autofreq[0], cibinteg='trap', satmf='Tinker')[:,:,0]
         return (f_sat / f_cen)**j * ( (1 + j) * f_cen +  f_sat )
 
-    def get_tsz_bias(self, exp, fftlog_way=True, get_secondary_bispec_bias=False, bin_width_out=30, \
+    def get_tsz_auto_biases(self, exp, fftlog_way=True, get_secondary_bispec_bias=False, bin_width_out=30, \
                      bin_width_out_second_bispec_bias=250, parallelise_secondbispec=True):
         """
-        Calculate the tsz biases given an "experiment" object (defined in qest.py)
+        Calculate the tsz biases to the lensing auto-spectrum given an "experiment" object (defined in qest.py)
         Input:
             * exp = a qest.experiment object
             * (optional) fftlog_way = Boolean. If true, use 1D fftlog reconstructions, otherwise use 2D quicklens
@@ -139,6 +139,7 @@ class hm_framework:
                 # Get the kappa map
                 kap = tls.pkToPell(hcos.comoving_radial_distance(hcos.zs[i]),hcos.ks,hcos.uk_profiles['nfw'][i,j]\
                                    *hcos.lensing_window(hcos.zs[i],1100.), ellmax=self.lmax_out)
+                # TODO: why don't we soften the nfw profile like we soften the y profile?
                 # FIXME: if you remove the z-scaling dividing ms_rescaled, do it in the input to sbbs.get_secondary_bispec_bias as well
                 kfft = kap*self.ms_rescaled[j]/(1+hcos.zs[i])**3 if fftlog_way else ql.spec.cl2cfft(kap,exp.pix).fft*self.ms_rescaled[j]/(1+hcos.zs[i])**3
 
@@ -214,6 +215,89 @@ class hm_framework:
             exp.biases['tsz']['prim_bispec']['2h'] = ql.maps.cfft(exp.nx,exp.dx,fft=exp.biases['tsz']['prim_bispec']['2h']).get_ml(lbins).specs['cl']
             return
 
+    def get_tsz_cross_biases(self, exp, fftlog_way=True, bin_width_out=30, survey_name='LSST'):
+        """
+        Calculate the tsz biases to the cross-correlation of CMB lensing with a galaxy survey,
+        given an "experiment" object (defined in qest.py)
+        Input:
+            * exp = a qest.experiment object
+            * (optional) fftlog_way = Boolean. If true, use 1D fftlog reconstructions, otherwise use 2D quicklens
+            * (optional) bin_width_out = int. Bin width of the output lensing reconstruction
+            * (optional) survey_name = str. Name labelling the HOD characterizing the survey we are x-ing lensing with
+        """
+        hcos = self.hcos
+        self.get_consistency(exp)
+
+        # Output ells
+        ells_out = np.arange(self.lmax_out+1)
+        if not fftlog_way:
+            lbins = np.arange(1,self.lmax_out+1,bin_width_out)
+
+        nx = self.lmax_out+1 if fftlog_way else exp.pix.nx
+
+        # The one and two halo bias terms -- these store the integrand to be integrated over z.
+        # Dimensions depend on method
+        oneHalo_cross = np.zeros([nx,self.nZs])+0j if fftlog_way else np.zeros([nx,nx,self.nZs])+0j
+        twoHalo_cross = np.zeros([nx,self.nZs])+0j if fftlog_way else np.zeros([nx,nx,self.nZs])+0j
+
+        for i,z in enumerate(hcos.zs):
+            #Temporary storage
+            integrand_oneHalo_cross =np.zeros([nx,self.nMasses])+0j if fftlog_way else np.zeros([nx,nx,self.nMasses])+0j
+            integrand_twoHalo_2g = np.zeros([nx,self.nMasses])+0j if fftlog_way else np.zeros([nx,nx,self.nMasses])+0j
+            integrand_twoHalo_1g = np.zeros([nx,self.nMasses])+0j if fftlog_way else np.zeros([nx,nx,self.nMasses])+0j
+
+            # M integral.
+            for j,m in enumerate(hcos.ms):
+                if m> exp.massCut: continue
+                y = tls.pkToPell(hcos.comoving_radial_distance(hcos.zs[i]),hcos.ks,hcos.pk_profiles['y'][i,j]\
+                                 *(1-np.exp(-(hcos.ks/hcos.p['kstar_damping']))), ellmax=exp.lmax)
+                # Get the galaxy map --- analogous to kappa in the auto-biases. Note that we need a factor of
+                # H dividing the galaxy window function to translate the hmvec convention to e.g. Ferraro & Hill 18 #TODO: why do you say that?
+                gal = tls.pkToPell(hcos.comoving_radial_distance(hcos.zs[i]),hcos.ks,hcos.uk_profiles['nfw'][i,j]\
+                                   * tls.gal_window(hcos.zs[i]), ellmax=self.lmax_out)
+                # FIXME: if you remove the z-scaling dividing ms_rescaled, do it in the input to sbbs.get_secondary_bispec_bias as well
+                galfft = gal / hcos.hods[survey_name]['ngal'][i] / (1 + hcos.zs[i]) ** 3 if fftlog_way else ql.spec.cl2cfft(gal, exp.pix).fft / hcos.hods[survey_name]['ngal'][i] / (1 + hcos.zs[i]) ** 3
+                phi_estimate_cfft = exp.get_TT_qe(fftlog_way, ells_out, y, y)
+
+                # Accumulate the integrands
+                mean_Ngal = hcos.hods[survey_name]['Nc'][i, j] + hcos.hods[survey_name]['Ns'][i, j]
+                integrand_oneHalo_cross[..., j] = mean_Ngal * phi_estimate_cfft * np.conjugate(galfft) * hcos.nzm[i, j]
+                integrand_twoHalo_1g[..., j] = mean_Ngal * np.conjugate(galfft) * hcos.nzm[i, j] * hcos.bh[i, j]
+                integrand_twoHalo_2g[..., j] = phi_estimate_cfft * hcos.nzm[i, j] * hcos.bh[i, j]
+
+            # Perform the m integrals
+            oneHalo_cross[...,i]=np.trapz(integrand_oneHalo_cross,hcos.ms,axis=-1)
+
+            # This is the two halo term. P_k times the M integrals
+            pk = tls.pkToPell(hcos.comoving_radial_distance(hcos.zs[i]),hcos.ks,hcos.Pzk[i], ellmax=self.lmax_out)
+            if not fftlog_way:
+                pk = ql.spec.cl2cfft(pk, exp.pix).fft
+
+            tmpCorr =np.trapz(integrand_twoHalo_1g,hcos.ms,axis=-1)
+            #FIXME: do we need to apply consistency condition to integral over fg profiles too? So far only kappa part
+            twoHalo_cross[...,i]=np.trapz(integrand_twoHalo_2g,hcos.ms,axis=-1)\
+                                 *(tmpCorr + tls.gal_window(hcos.zs)[i]\
+                                   - tls.gal_window(hcos.zs[i])*self.consistency[i])*pk
+
+        # Convert the NFW profile in the cross bias from kappa to phi
+        conversion_factor = 1#np.nan_to_num(1 / (0.5 * ells_out*(ells_out+1) )) if fftlog_way else ql.spec.cl2cfft(np.nan_to_num(1 / (0.5 * np.arange(self.lmax_out+1)*(np.arange(self.lmax_out+1)+1) )),exp.pix).fft
+
+        # Integrate over z
+        exp.biases['tsz']['cross_w_gals']['1h'] = conversion_factor * tls.scale_sz(exp.freq_GHz)**2 * self.T_CMB**2 \
+                                                 * np.trapz(oneHalo_cross * hcos.comoving_radial_distance(hcos.zs)**-4\
+                                                            * hcos.h_of_z(hcos.zs),hcos.zs,axis=-1)
+        exp.biases['tsz']['cross_w_gals']['2h'] = conversion_factor * tls.scale_sz(exp.freq_GHz)**2 * self.T_CMB**2 \
+                                                 * np.trapz(twoHalo_cross * hcos.comoving_radial_distance(hcos.zs)**-4\
+                                                            * hcos.h_of_z(hcos.zs),hcos.zs,axis=-1)
+        if fftlog_way:
+            exp.biases['ells'] = np.arange(self.lmax_out+1)
+            return
+        else:
+            exp.biases['ells'] = ql.maps.cfft(exp.nx,exp.dx,fft=exp.biases['tsz']['trispec']['1h']).get_ml(lbins).ls
+            exp.biases['tsz']['cross_w_gals']['1h'] = ql.maps.cfft(exp.nx,exp.dx,fft=exp.biases['tsz']['cross_w_gals']['1h']).get_ml(lbins).specs['cl']
+            exp.biases['tsz']['cross_w_gals']['2h'] = ql.maps.cfft(exp.nx,exp.dx,fft=exp.biases['tsz']['cross_w_gals']['2h']).get_ml(lbins).specs['cl']
+            return
+
     def get_tsz_ps(self, exp):
         """
         Calculate the tSZ power spectrum
@@ -253,10 +337,9 @@ class hm_framework:
         ps_twoHalo_tSZ = np.zeros(ps_oneHalo_tSZ.shape)
         return ps_oneHalo_tSZ, ps_twoHalo_tSZ
 
-    def get_cib_bias(self, exp, fftlog_way=True, get_secondary_bispec_bias=False, bin_width_out=30, \
+    def get_cib_auto_biases(self, exp, fftlog_way=True, get_secondary_bispec_bias=False, bin_width_out=30, \
                      bin_width_out_second_bispec_bias=250, parallelise_secondbispec=True):
         """
-        Calculate the CIB biases given an "experiment" object (defined in qest.py)
         Input:
             * exp = a qest.experiment object
             * (optional) fftlog_way = Boolean. If true, use 1D fftlog reconstructions, otherwise use 2D qiucklens
@@ -377,6 +460,181 @@ class hm_framework:
             exp.biases['cib']['prim_bispec']['2h'] = ql.maps.cfft(exp.nx,exp.dx,fft=exp.biases['cib']['prim_bispec']['2h']).get_ml(lbins).specs['cl']
             return
 
+    def get_cib_cross_biases(self, exp, fftlog_way=True, bin_width_out=30, survey_name='LSST'):
+        """
+        Calculate the tsz biases to the cross-correlation of CMB lensing with a galaxy survey,
+        given an "experiment" object (defined in qest.py)
+        Input:
+            * exp = a qest.experiment object
+            * (optional) fftlog_way = Boolean. If true, use 1D fftlog reconstructions, otherwise use 2D quicklens
+            * (optional) bin_width_out = int. Bin width of the output lensing reconstruction
+        """
+        # FIXME: update docs of input
+        hcos = self.hcos
+        self.get_consistency(exp)
+
+        # Get the HOD factorial we will be needing #FIXME: there are much better ways of doing this
+        hod_fact_2gal = self.get_hod_factorial(2, exp)
+
+        # Output ells
+        ells_out = np.arange(self.lmax_out+1)
+        if not fftlog_way:
+            lbins = np.arange(1,self.lmax_out+1,bin_width_out)
+
+        nx = self.lmax_out+1 if fftlog_way else exp.nx
+
+        # The one and two halo bias terms -- these store the integrand to be integrated over z
+        oneHalo_cross = np.zeros([nx,self.nZs])+0j if fftlog_way else np.zeros([nx,nx,self.nZs])+0j; twoHalo_cross = oneHalo_cross.copy()
+
+        for i,z in enumerate(hcos.zs):
+            #Temporary storage
+            integrand_oneHalo_cross=np.zeros([nx,self.nMasses])+0j if fftlog_way else np.zeros([nx,nx,self.nMasses])+0j; integrand_twoHalo_k=integrand_oneHalo_cross.copy()
+            integrand_twoHalo_II=integrand_oneHalo_cross.copy()
+
+            # M integral.
+            for j,m in enumerate(hcos.ms):
+                if m> exp.massCut: continue
+                #project the galaxy profiles
+                u = tls.pkToPell(hcos.comoving_radial_distance(hcos.zs[i]), hcos.ks, hcos.uk_profiles['nfw'][i, j] * \
+                                         (1-np.exp(-(hcos.ks/hcos.p['kstar_damping']))), ellmax=exp.lmax)
+                # Get the galaxy map --- analogous to kappa in the auto-biases. Note that we need a factor of
+                # H dividing the galaxy window function to translate the hmvec convention to e.g. Ferraro & Hill 18 # TODO:Why?
+                gal = tls.pkToPell(hcos.comoving_radial_distance(hcos.zs[i]),hcos.ks,hcos.uk_profiles['nfw'][i,j]\
+                                   * tls.gal_window(hcos.zs[i]), ellmax=self.lmax_out)
+                # FIXME: if you remove the z-scaling dividing ms_rescaled, do it in the input to sbbs.get_secondary_bispec_bias as well
+                galfft = gal / hcos.hods[survey_name]['ngal'][i] / (1 + hcos.zs[i]) ** 3 if fftlog_way else ql.spec.cl2cfft(gal, exp.pix).fft / \
+                                                                    hcos.hods[survey_name]['ngal'][i] / (1 + hcos.zs[i]) ** 3
+
+                phi_estimate_cfft_uu =  exp.get_TT_qe(fftlog_way, ells_out, u, u)
+
+                # Accumulate the integrands
+                mean_Ngal = hcos.hods[survey_name]['Nc'][i, j] + hcos.hods[survey_name]['Ns'][i, j]
+                integrand_oneHalo_cross[...,j] = mean_Ngal * hod_fact_2gal[i, j] * phi_estimate_cfft_uu * np.conjugate(galfft) * hcos.nzm[i,j]
+                integrand_twoHalo_k[...,j] = mean_Ngal * np.conjugate(galfft) * hcos.nzm[i,j] * hcos.bh[i,j]
+                integrand_twoHalo_II[...,j] = hod_fact_2gal[i, j] * phi_estimate_cfft_uu * hcos.nzm[i,j] * hcos.bh[i,j]
+
+            oneHalo_cross[...,i]=np.trapz(integrand_oneHalo_cross,hcos.ms,axis=-1)
+
+            # This is the two halo term. P_k times the M integrals
+            pk = tls.pkToPell(hcos.comoving_radial_distance(hcos.zs[i]),hcos.ks,hcos.Pzk[i], ellmax=self.lmax_out)
+            if not fftlog_way:
+                pk = ql.spec.cl2cfft(pk, exp.pix).fft
+
+            tmpCorr =np.trapz(integrand_twoHalo_k,hcos.ms,axis=-1)
+            # FIXME: do we need to apply consistency condition to integral over fg profiles too? So far only kappa part
+            twoHalo_cross[...,i]=np.trapz(integrand_twoHalo_II,hcos.ms,axis=-1)\
+                                 *(tmpCorr + tls.gal_window(hcos.zs)[i] - tls.gal_window(hcos.zs[i])*self.consistency[i])\
+                                 *pk
+
+        # Convert the NFW profile in the cross bias from kappa to phi
+        conversion_factor = 1#np.nan_to_num(1 / (0.5 * ells_out*(ells_out+1) )) if fftlog_way else ql.spec.cl2cfft(np.nan_to_num(1 / (0.5 * np.arange(self.lmax_out+1)*(np.arange(self.lmax_out+1)+1) )),exp.pix).fft
+
+        # Integrand factors from Limber projection (adapted to hmvec conventions)
+        # Note there's only a (1+z)**-2 dependence. This is because there's another factor of (1+z)**-1 in the gal_window
+        kII_integrand  = hcos.h_of_z(hcos.zs)**-1 * (1+hcos.zs)**-2 * hcos.comoving_radial_distance(hcos.zs)**-4
+
+        # Integrate over z
+        exp.biases['cib']['cross_w_gals']['1h'] = conversion_factor * np.trapz( oneHalo_cross*kII_integrand, hcos.zs, axis=-1)
+        exp.biases['cib']['cross_w_gals']['2h'] = conversion_factor * np.trapz( twoHalo_cross*kII_integrand, hcos.zs, axis=-1)
+
+        if fftlog_way:
+            exp.biases['ells'] = np.arange(self.lmax_out+1)
+            return
+        else:
+            exp.biases['ells'] = ql.maps.cfft(exp.nx,exp.dx,fft=exp.biases['cib']['trispec']['1h']).get_ml(lbins).ls
+            exp.biases['cib']['cross_w_gals']['1h'] = ql.maps.cfft(exp.nx,exp.dx,fft=exp.biases['cib']['cross_w_gals']['1h']).get_ml(lbins).specs['cl']
+            exp.biases['cib']['cross_w_gals']['2h'] = ql.maps.cfft(exp.nx,exp.dx,fft=exp.biases['cib']['cross_w_gals']['2h']).get_ml(lbins).specs['cl']
+            return
+
+    def get_mixed_cross_biases(self, exp, fftlog_way=True, bin_width_out=30, survey_name='LSST'):
+        """
+        Calculate the mixed tsz-cib  biases to the cross-correlation of CMB lensing with a galaxy survey,
+        given an "experiment" object (defined in qest.py)
+        Input:
+            * exp = a qest.experiment object
+            * (optional) fftlog_way = Boolean. If true, use 1D fftlog reconstructions, otherwise use 2D quicklens
+            * (optional) bin_width_out = int. Bin width of the output lensing reconstruction
+        """
+        # FIXME: update docs of input
+        hcos = self.hcos
+        self.get_consistency(exp)
+
+        # Get the HOD factorial we will be needing #FIXME: there are much better ways of doing this
+        hod_fact_1gal = self.get_hod_factorial(1, exp)
+        hod_fact_2gal = self.get_hod_factorial(2, exp)
+
+        # Output ells
+        ells_out = np.arange(self.lmax_out+1)
+        if not fftlog_way:
+            lbins = np.arange(1,self.lmax_out+1,bin_width_out)
+
+        nx = self.lmax_out+1 if fftlog_way else exp.nx
+
+        # The one and two halo bias terms -- these store the integrand to be integrated over z
+        oneHalo_cross = np.zeros([nx,self.nZs])+0j if fftlog_way else np.zeros([nx,nx,self.nZs])+0j; twoHalo_cross = oneHalo_cross.copy()
+
+        for i,z in enumerate(hcos.zs):
+            #Temporary storage
+            integrand_oneHalo_cross=np.zeros([nx,self.nMasses])+0j if fftlog_way else np.zeros([nx,nx,self.nMasses])+0j; integrand_twoHalo_k=integrand_oneHalo_cross.copy()
+            integrand_twoHalo_II=integrand_oneHalo_cross.copy()
+
+            # M integral.
+            for j,m in enumerate(hcos.ms):
+                if m> exp.massCut: continue
+                y = tls.pkToPell(hcos.comoving_radial_distance(hcos.zs[i]),hcos.ks,hcos.pk_profiles['y'][i,j]\
+                                 *(1-np.exp(-(hcos.ks/hcos.p['kstar_damping']))), ellmax=exp.lmax)
+                #project the galaxy profiles
+                u = tls.pkToPell(hcos.comoving_radial_distance(hcos.zs[i]), hcos.ks, hcos.uk_profiles['nfw'][i, j] * \
+                                         (1-np.exp(-(hcos.ks/hcos.p['kstar_damping']))), ellmax=exp.lmax)
+                # Get the galaxy map --- analogous to kappa in the auto-biases. Note that we need a factor of
+                # H dividing the galaxy window function to translate the hmvec convention to e.g. Ferraro & Hill 18 # TODO:Why?
+                gal = tls.pkToPell(hcos.comoving_radial_distance(hcos.zs[i]),hcos.ks,hcos.uk_profiles['nfw'][i,j]\
+                                   * tls.gal_window(hcos.zs[i]), ellmax=self.lmax_out)
+                # FIXME: if you remove the z-scaling dividing ms_rescaled, do it in the input to sbbs.get_secondary_bispec_bias as well
+                galfft = gal / hcos.hods[survey_name]['ngal'][i] / (1 + hcos.zs[i]) ** 3 if fftlog_way else ql.spec.cl2cfft(gal, exp.pix).fft / \
+                                                                    hcos.hods[survey_name]['ngal'][i] / (1 + hcos.zs[i]) ** 3
+
+                phi_estimate_cfft_uy =  exp.get_TT_qe(fftlog_way, ells_out, u, y)
+
+                # Accumulate the integrands
+                mean_Ngal = hcos.hods[survey_name]['Nc'][i, j] + hcos.hods[survey_name]['Ns'][i, j]
+                integrand_oneHalo_cross[...,j] = hod_fact_1gal[i, j] * mean_Ngal * phi_estimate_cfft_uy * np.conjugate(galfft) * hcos.nzm[i,j]
+                integrand_twoHalo_k[...,j] = mean_Ngal * np.conjugate(galfft) * hcos.nzm[i,j] * hcos.bh[i,j]
+                integrand_twoHalo_II[...,j] = hod_fact_1gal[i, j] * phi_estimate_cfft_uy * hcos.nzm[i,j] * hcos.bh[i,j]
+
+            oneHalo_cross[...,i]=np.trapz(integrand_oneHalo_cross,hcos.ms,axis=-1)
+
+            # This is the two halo term. P_k times the M integrals
+            pk = tls.pkToPell(hcos.comoving_radial_distance(hcos.zs[i]),hcos.ks,hcos.Pzk[i], ellmax=self.lmax_out)
+            if not fftlog_way:
+                pk = ql.spec.cl2cfft(pk, exp.pix).fft
+
+            tmpCorr =np.trapz(integrand_twoHalo_k,hcos.ms,axis=-1)
+            # FIXME: do we need to apply consistency condition to integral over fg profiles too? So far only kappa part
+            twoHalo_cross[...,i]=np.trapz(integrand_twoHalo_II,hcos.ms,axis=-1)\
+                                 *(tmpCorr + tls.gal_window(hcos.zs)[i] - tls.gal_window(hcos.zs[i])*self.consistency[i])\
+                                 *pk
+
+        # Convert the NFW profile in the cross bias from kappa to phi
+        conversion_factor = 1#np.nan_to_num(1 / (0.5 * ells_out*(ells_out+1) )) if fftlog_way else ql.spec.cl2cfft(np.nan_to_num(1 / (0.5 * np.arange(self.lmax_out+1)*(np.arange(self.lmax_out+1)+1) )),exp.pix).fft
+
+        # Integrand factors from Limber projection (adapted to hmvec conventions)
+        # Note there's only a (1+z)**-1 dependence. This is because there's another factor of (1+z)**-1 in the gal_window
+        gIy_integrand  = (1+hcos.zs)**-1 * hcos.comoving_radial_distance(hcos.zs)**-4
+
+        # Integrate over z
+        exp.biases['mixed']['cross_w_gals']['1h'] = conversion_factor * np.trapz( 2 * oneHalo_cross*gIy_integrand, hcos.zs, axis=-1)
+        exp.biases['mixed']['cross_w_gals']['2h'] = conversion_factor * np.trapz( twoHalo_cross*gIy_integrand, hcos.zs, axis=-1)
+
+        if fftlog_way:
+            exp.biases['ells'] = np.arange(self.lmax_out+1)
+            return
+        else:
+            exp.biases['ells'] = ql.maps.cfft(exp.nx,exp.dx,fft=exp.biases['cib']['trispec']['1h']).get_ml(lbins).ls
+            exp.biases['mixed']['cross_w_gals']['1h'] = ql.maps.cfft(exp.nx,exp.dx,fft=exp.biases['mixed']['cross_w_gals']['1h']).get_ml(lbins).specs['cl']
+            exp.biases['mixed']['cross_w_gals']['2h'] = ql.maps.cfft(exp.nx,exp.dx,fft=exp.biases['mixed']['cross_w_gals']['2h']).get_ml(lbins).specs['cl']
+            return
+
     def get_cib_ps(self, exp):
         """
         Calculate the CIB power spectrum
@@ -430,10 +688,10 @@ class hm_framework:
             hcos.zs, axis=-1)
         return clCIBCIB_oneHalo_ps, clCIBCIB_twoHalo_ps
 
-    def get_mixed_biases(self, exp, fftlog_way=True, get_secondary_bispec_bias=False, bin_width_out=30, \
+    def get_mixed_auto_biases(self, exp, fftlog_way=True, get_secondary_bispec_bias=False, bin_width_out=30, \
                          bin_width_out_second_bispec_bias=250, parallelise_secondbispec=True):
         """
-        Calculate the biases involving both CIB and tSZ given an "experiment" object (defined in qest.py)
+        Calculate the biases to the lensing auto-spectrum involving both CIB and tSZ given an "experiment" object (defined in qest.py)
         Input:
             * exp = a qest.experiment object
             * (optional) fftlog_way = Boolean. If true, use 1D fftlog reconstructions, otherwise use 2D qiucklens
