@@ -14,7 +14,7 @@ import quicklens as ql
 # Press the green button in the gutter to run the script.
 if __name__ == '__main__':
     t0 = time.time() # Time the run
-    which_bias = 'cib' #'tsz' or 'cib'
+    which_bias = 'tsz' #'tsz' or 'cib'
     nlev_t = 18.  # uK arcmin
     beam_size = 1.  # arcmin
     lmax = 3500  # Maximum ell for the reconstruction
@@ -33,8 +33,8 @@ if __name__ == '__main__':
     cosmoParams = {'As': 2.4667392631170437e-09, 'ns': .96, 'omch2': (0.25 - .043) * .7 ** 2, 'ombh2': 0.044 * .7 ** 2,
                    'H0': 70.}  # Note that for now there is still cosmology dpendence in the cls defined within the experiment class
 
-    nZs = 50
-    nMasses = 50
+    nZs = 30
+    nMasses = 30
     m_min = 2e11
     #which_bias = 'mixed'#'cib' #'tsz'
 
@@ -64,7 +64,7 @@ if __name__ == '__main__':
     pgm_2h = hm_calc.hcos.get_power_2halo("nfw", survey_name)
     Pgm = pgm_1h + pgm_2h
     ells = np.linspace(2, 3000, 300)
-    Cls = hm_calc.hcos.C_kg(ells, hm_calc.hcos.zs, hm_calc.hcos.ks, Pgm, gzs=0.8, lzs=2.5)
+    Cls = hm_calc.hcos.C_kg(ells, hm_calc.hcos.zs, hm_calc.hcos.ks, Pgm, gzs=0.8, lzs=1100.)
     plt.plot(ells, 0.05 * Cls, 'k')
     #plt.plot(experiment.cl_unl.ls, 0.05 * experiment.cl_unl.ls ** 4 * experiment.cl_unl.clpp / (2 * np.pi), 'k')
 
