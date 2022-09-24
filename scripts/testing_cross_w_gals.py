@@ -14,7 +14,7 @@ import quicklens as ql
 # Press the green button in the gutter to run the script.
 if __name__ == '__main__':
     t0 = time.time() # Time the run
-    which_bias = 'tsz' #'tsz' or 'cib'
+    which_bias = 'mixed' #'tsz' or 'cib' or 'mixed'
     nlev_t = 18.  # uK arcmin
     beam_size = 1.  # arcmin
     lmax = 3500  # Maximum ell for the reconstruction
@@ -49,6 +49,8 @@ if __name__ == '__main__':
         hm_calc.get_tsz_cross_biases(SPT_5e15, survey_name=survey_name)
     elif which_bias=='cib':
         hm_calc.get_cib_cross_biases(SPT_5e15, survey_name=survey_name)
+    elif which_bias=='mixed':
+        hm_calc.get_mixed_cross_biases(SPT_5e15, survey_name=survey_name)
 
     plt.figure(figsize=(5, 5))
     scaling = 1#experiment.biases['ells'] ** 4 / (2 * np.pi)
