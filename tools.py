@@ -4,6 +4,7 @@ import functools
 from astropy import units as u
 from astropy.cosmology import Planck15
 import quicklens as ql
+from astropy.cosmology import FlatLambdaCDM
 
 def scale_sz(freq=150.):
     """ f_nu in the literature. this is only the non-relativistic formula. note that the formula in alexs paper is wrong. get it from sehgal et al."""
@@ -110,6 +111,74 @@ def gal_window(zs):
     """
     # Todo:check this
     return 1./(1.+zs)
+
+# Functions associated with galaxy hods
+
+def get_DESI_surface_ngal_of_z(sample, n_of_z_dir='/Users/antonbaleatolizancos/Projects/kappa_delensing/DESI_dndzs/'):
+    # TODO: Make this usable by anyone.
+    ''' Return a numpy array with the galaxy number density per unit area in the sky for various DESI samples,
+        as given in https://desi.lbl.gov/trac/wiki/keyprojects/y1kp1#no1
+        Inputs:
+            -  sample = string. One of {'bgs','lrg','bgs'}
+        Returns:
+            - z_mean = Float. Central redshift of each bin of the given n(z)
+            - surface_ngal_of_z = binned ngal(z) in units of deg^{-2}
+    '''
+    table = np.loadtxt(n_of_z_dir + 'nz_{}_final.dat'.format(sample), skiprows=1)
+    zmin = table[:, 0]
+    zmax = table[:, 1]
+    surface_ngal_of_z = table[:, 2]
+    return (zmax + zmin) / 2., surface_ngal_of_z
+
+
+def comoving_density_single_bin(ntot, z_low, z_hi, area, H0=68., Om0=0.3, error=False):
+    '''
+    Calculate co-moving number density. From Rongpu Zhou
+
+    Inputs
+    ------
+    ntot: sample size;
+    z_low, z_hi: lower and upper limit of the redshift bin;
+    area: area in sq. deg.
+
+    Output
+    ------
+    density: comoving number density in units of per Mpc^3;
+    density_err (optional): Poisson error on density.
+    '''
+
+    area_sphere = 41252.96  # Total area of the sky in sq. deg.
+    cosmo = FlatLambdaCDM(H0=H0, Om0=Om0)
+
+    volume = area / area_sphere * (cosmo.comoving_volume(z_hi) - cosmo.comoving_volume(z_low))
+    # convert to Python scalar
+    volume = float(volume / (1 * u.Mpc) ** 3)
+    density = ntot / volume
+    if error:
+        density_err = np.sqrt(ntot) / volume
+        return density, density_err
+    else:
+        return density
+
+
+def get_comoving_from_surface_ngal(z_bins, surface_ngal):
+    '''
+    Convert a surface number density of galaxies (at each z) into its comoving number density (at each z)
+    Inputs:
+        - z_bins = Array of size (nzs,). Central redshift of each bin. We assume the bins are uniform
+        - surface_ngal = Array of size (nzs,). Surface number density (in deg^{-2} units) at each of z_bins
+        Returns:
+        - comoving_ngal = Array of size (nzs,). Comoving number density (in Mpc^{-3} units) at each of z_bins
+    '''
+    comoving_ngal = np.zeros_like(surface_ngal)
+
+    # Get bin width, assuming bins are uniform
+    Delta_z = (z_bins[1] - z_bins[0])
+    for i, z_bin in enumerate(z_bins):
+        # TODO: vectorize this
+        comoving_ngal[i] = comoving_density_single_bin(surface_ngal[i], z_bin - Delta_z / 2., z_bin + Delta_z / 2., 1.)
+    return comoving_ngal
+
 
 # Now some useful decorators, inspired by James Fergusson
 
