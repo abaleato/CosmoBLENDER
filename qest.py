@@ -4,24 +4,30 @@ from pyccl.pyutils import _fftlog_transform
 from scipy.integrate import quad
 import quicklens as ql
 import pickle
-import sys
+from cmb_ilc import CMBILC
 
 class experiment:
-    def __init__(self, nlev_t, beam_size, lmax, massCut_Mvir = np.inf, nx=1024, dx_arcmin=1.0, fname_scalar=None, fname_lensed=None, freq_GHz=150., ILC_weights=1., ILC_weights_ells=None):
+    def __init__(self, nlev_t, beam_size, lmax, massCut_Mvir = np.inf, nx=1024, dx_arcmin=1.0, fname_scalar=None,
+                 fname_lensed=None, freq_GHz=np.array([150.]), ILC_weights=1., ILC_weights_ells=None, atm_fg=True,
+                 MV_ILC_bool=False, deproject_tSZ=True, deproject_CIB=True):
         """ Initialise a cosmology and experimental charactierstics
             - Inputs:
-                * nlev_t = temperature noise level, In uK.arcmin.
-                * beam_size = beam fwhm (symmetric). In arcmin.
+                * nlev_t = np array. temperature noise level, In uK.arcmin. Either a single value or one for each frequency
+                * beam_size = np array. beam fwhm (symmetric). In arcmin. Either a single value or one for each frequency
                 * lmax = reconstruction lmax.
                 * (optional) massCut_Mvir = Maximum halo virial masss, in solar masses. Default is no cut (infinite)
                 * (optional) fname_scalar = CAMB files for unlensed CMB
                 * (optional) fname_lensed = CAMB files for lensed CMB
                 * (otional) nx = int. Width in number of pixels of grid used in quicklens computations
                 * (optional) dx = float. Pixel width in arcmin for quicklens computations
-                * (optional) freq_GHz = float or array of floats. Frequency of observqtion (in GHZ). If array,
+                * (optional) freq_GHz =np array of one or many floats. Frequency of observqtion (in GHZ). If array,
                                         frequencies that get combined as ILC using ILC_weights as weights
                 * (optional) ILC_weights = 1 if len(freq_GHz)=1. Otherwise, array of floats of size (len(freq_GHz), len(ILC_weights_ells))
                 * (optional) ILC_weights_ells = Multipoles at which ILC_weights is defined. Required if ILC_weights!=1.
+                * (optional) atm_fg = Whether or not to include atmospheric fg power in inverse-variance filter
+                *  MV_ILC_bool = Bool. If true, form a MV ILC of freqs
+                *  deproject_tSZ = Bool. If true, form an ILC deprojecting tSZ and retaining unit response to CMB
+                *  deproject_CIB = Bool. If true, form an ILC deprojecting CIB and retaining unit response to CMB
         """
         if fname_scalar is None:
             fname_scalar = None#'~/Software/Quicklens-with-fixes/quicklens/data/cl/planck_wp_highL/planck_lensing_wp_highL_bestFit_20130627_scalCls.dat'
@@ -33,12 +39,7 @@ class experiment:
         self.cl_len = ql.spec.get_camb_lensedcl(fname_lensed, lmax=lmax)
         self.ls = self.cl_len.ls
         self.lmax = lmax
-
-        assert len(freq_GHz) == ILC_weights.shape[0], "Please provide harmonic ILC weights for each frequency channel"
-        assert ILC_weights.shape[1]== len(ILC_weights_ells), "Please provide ILC_weights_ells where ILC_weights is defined"
         self.freq_GHz = freq_GHz
-        self.ILC_weights = ILC_weights
-        self.ILC_weights_ells = ILC_weights_ells
 
         self.massCut = massCut_Mvir #Convert from M_vir (which is what Alex uses) to M_200 (which is what the
                                     # Tinker mass function in hmvec uses) using the relation from White 01.
@@ -46,10 +47,18 @@ class experiment:
         self.nlev_t = nlev_t
         self.nlev_p = np.sqrt(2) * nlev_t
         self.beam_size = beam_size
-        self.bl = ql.spec.bl(beam_size, lmax) # beam transfer function.
-        self.nltt = (np.pi/180./60.*nlev_t)**2 / self.bl**2
         self.nlee = (np.pi / 180. / 60. * self.nlev_p) ** 2 / self.bl ** 2
         self.W_E = np.nan_to_num(self.cl_len.clee / (self.cl_len.clee + self.nlee))
+
+        #Initialise sky model
+        self.sky = CMBILC(freq_GHz/1e9, beam_size, nlev_t, atm=atm_fg, lMaxT=self.lmax)
+        # Compute total TT power (incl. noise, fgs, cmb) for use in inverse-variance filtering
+        self.cltt_tot = self.get_total_TT_power()
+        # In cases where there are several, compute ILC weights for combining different channels
+        if len(self.freq_GHz)>1:
+            assert MV_ILC_bool or deproject_tSZ or deproject_CIB, 'Please indicate how to combine different channels'
+            assert not (MV_ILC_bool and (deproject_tSZ or deproject_CIB)), 'Only one ILC type at a time!'
+            get_ilc_weights()
 
         # Set up grid for Quicklens calculations
         self.nx = nx
@@ -94,20 +103,67 @@ class experiment:
         cl_theory  = ql.spec.clmat_teb( ql.util.dictobj( {'lmax' : self.lmax, 'cltt' : self.cl_len.cltt, 'clee' : self.cl_len.clee, 'clbb' : self.cl_len.clbb} ) )
         self.ivf_lib = ql.sims.ivf.library_l_mask( ql.sims.ivf.library_diag_emp(tqumap, cl_theory, transf=transf, nlev_t=self.nlev_t), lmin=lmin, lmax=self.lmax)
 
+    def get_ilc_weights(self):
+        """
+        Get the harmonic ILC weights
+        """
+        lmin_cutoff = 14
+        W_sILC_Ls = np.arange(lmin_cutoff, self.lmax, 1)
+
+        if self.MV_ILC_bool:
+            W_sILC = np.array(
+                list(map(self.sky.weightsIlcCmb, W_sILC_Ls)))
+        elif self.deproject_tSZ and self.deproject_CIB:
+            W_sILC = np.array(
+                list(map(self.sky.weightsDeprojTszCIB, W_sILC_Ls)))
+        elif self.deproject_tSZ:
+            W_sILC = np.array(
+                list(map(self.sky.weightsDeprojTsz, W_sILC_Ls)))
+        elif self.deproject_CIB:
+            W_sILC = np.array(
+                list(map(self.sky.weightsDeprojCIB, W_sILC_Ls)))
+
+        # Extrapolate to low l weights which are usually problematic bc of artifacts in tsz/ksz fit
+        self.ILC_weights = np.pad(W_sILC, ((lmin_cutoff, 0), (0, 0)), mode='edge')
+        self.ILC_weights_ells = np.arange(self.lmax)
+        return
+
     def get_tsz_filter(self):
         """
         Calculate the ell-dependent filter to be applied to the y-profile harmonics. In the single-frequency scenario,
         this just applies the tSZ frequency-dependence. If doing ILC cleaning, it includes both the frequency
         dependence and the effect of the frequency-and-ell-dependent weights
         """
-        if type(self.ILC_weights) is np.ndarray:
+        if len(self.freq_GHz)>1:
             # Multiply the ILC weights at each freq by the tSZ scaling at that freq, then sum them together at every multipole
-            tsz_filter = np.sum(tls.scale_sz(self.freqs)[:,None] * self.ILC_weights, axis=0)
+            tsz_filter = np.sum(tls.scale_sz(self.freq_GHz)[:,None] * self.ILC_weights, axis=0)
             # Return the filter interpolated at every ell where we will perform lensing reconstructions, i.e. [0, self.lmax]
             return np.interp(self.lmax, self.ILC_weights_ells, tsz_filter, left=0, right=0)
         else:
             # Single-frequency scenario. Return a single number.
             return tls.scale_sz(self.freq_GHz)
+
+    def get_total_TT_power(self):
+        """
+        Get total TT power from CMB, noise and fgs.
+        Note that if both self.deproject_tSZ=1 and self.deproject_CIB=1, both are deprojected
+        """
+        if type(self.freqs_GHz) is not np.ndarray:
+            return self.sky.cmb[0, 0].ftotalTT(self.cl_unl.ls)
+        else:
+            nL = 201
+            L = np.logspace(np.log10(self.lmin), np.log10(self.lmax), nL)
+            # ToDo: sample better in L
+            if self.MV_ILC_bool:
+                f = lambda l: self.sky.powerIlc(self.sky.weightsIlcCmb(l), l)
+            elif self.deproject_tSZ and self.deproject_CIB:
+                f = lambda l: self.sky.powerIlc(self.sky.weightsDeprojTszCIB(l), l)
+            elif self.deproject_tSZ:
+                f = lambda l: self.sky.powerIlc(self.sky.weightsDeprojTsz(l), l)
+            elif self.deproject_CIB:
+                f = lambda l: self.sky.powerIlc(self.sky.weightsDeprojCIB(l), l)
+            #TODO: turn zeros into infinities to avoid issues when dividing by this
+            return np.interp(self.cl_unl.ls, L, np.array(list(map(f, L))))
 
     def get_qe_norm(self, key='ptt'):
         """
@@ -135,10 +191,6 @@ class experiment:
         massCut = '{:.2e}'.format(self.massCut)
         beam_size = '{:.2f}'.format(self.beam_size)
         nlev_t = '{:.2f}'.format(self.nlev_t)
-        try:
-            freq_GHz = '{:.2f}'.format(self.freq_GHz)
-        except:
-            freq_GHz = freq_GHz
 
         return 'Mass Cut: ' + massCut + '  lmax: ' + str(self.lmax) + '  Beam FWHM: '+ beam_size + ' Noise (uK arcmin): ' + nlev_t + '  Freq (GHz): ' + freq_GHz
 
@@ -163,8 +215,8 @@ class experiment:
         if profile_leg2 is None:
             profile_leg2 = profile_leg1
 
-        F_1_of_l = profile_leg1 / (self.cl_len.cltt + self.nltt)
-        F_2_of_l = self.cl_len.cltt * profile_leg2/(self.cl_len.cltt + self.nltt)
+        F_1_of_l = profile_leg1 / self.cltt_tot
+        F_2_of_l = self.cl_len.cltt * profile_leg2/ self.cltt_tot
             
         al_F_1 = interp1d(self.ls, F_1_of_l, bounds_error=False,  fill_value='extrapolate')
         al_F_2 = interp1d(self.ls, F_2_of_l, bounds_error=False,  fill_value='extrapolate')
