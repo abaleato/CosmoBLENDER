@@ -29,7 +29,6 @@ def from_Jypersr_to_uK(freq_GHz):
     equiv = u.thermodynamic_temperature(freq, Planck15.Tcmb0)
     return (1. * u.Jy / u.sr).to(u.uK, equivalencies=equiv).value
 
-
 def split_positive_negative(spectrum):
     """ Separately return the positive and negative parts of an input np.array named spectrum.
     """

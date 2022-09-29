@@ -111,6 +111,9 @@ class hm_framework:
 
         nx = self.lmax_out+1 if fftlog_way else exp.pix.nx
 
+        # Get frequency scaling of tSZ, possibly including harmonic ILC cleaning
+        tsz_filter = exp.get_tsz_filter()
+
         # The one and two halo bias terms -- these store the integrand to be integrated over z.
         # Dimensions depend on method
         oneHalo_4pt = np.zeros([nx,self.nZs])+0j if fftlog_way else np.zeros([nx,nx,self.nZs])+0j
@@ -134,7 +137,7 @@ class hm_framework:
             # M integral.
             for j,m in enumerate(hcos.ms):
                 if m> exp.massCut: continue
-                y = tls.pkToPell(hcos.comoving_radial_distance(hcos.zs[i]), hcos.ks, hcos.pk_profiles['y'][i,j]\
+                y = tsz_filter * tls.pkToPell(hcos.comoving_radial_distance(hcos.zs[i]), hcos.ks, hcos.pk_profiles['y'][i,j]\
                                  *(1-np.exp(-(hcos.ks/hcos.p['kstar_damping']))), ellmax=exp.lmax)
                 # Get the kappa map
                 kap = tls.pkToPell(hcos.comoving_radial_distance(hcos.zs[i]),hcos.ks,hcos.uk_profiles['nfw'][i,j]\
@@ -184,22 +187,21 @@ class hm_framework:
         conversion_factor = np.nan_to_num(1 / (0.5 * ells_out*(ells_out+1) )) if fftlog_way else ql.spec.cl2cfft(np.nan_to_num(1 / (0.5 * np.arange(self.lmax_out+1)*(np.arange(self.lmax_out+1)+1) )),exp.pix).fft
 
         # Integrate over z
-        exp.biases['tsz']['trispec']['1h'] = tls.scale_sz(exp.freq_GHz)**4 * self.T_CMB**4 \
+        exp.biases['tsz']['trispec']['1h'] = self.T_CMB**4 \
                                              * np.trapz(oneHalo_4pt*hcos.comoving_radial_distance(hcos.zs)**-6\
                                                         *(hcos.h_of_z(hcos.zs)**3),hcos.zs,axis=-1)
-        exp.biases['tsz']['trispec']['2h'] = tls.scale_sz(exp.freq_GHz)**4 * self.T_CMB**4 \
+        exp.biases['tsz']['trispec']['2h'] = self.T_CMB**4 \
                                              * np.trapz(twoHalo_4pt*hcos.comoving_radial_distance(hcos.zs)**-6\
                                                         *(hcos.h_of_z(hcos.zs)**3),hcos.zs,axis=-1)
-        exp.biases['tsz']['prim_bispec']['1h'] = 2*conversion_factor * tls.scale_sz(exp.freq_GHz)**2 * self.T_CMB**2 \
+        exp.biases['tsz']['prim_bispec']['1h'] = 2 * conversion_factor * self.T_CMB**2 \
                                                  * np.trapz(oneHalo_cross*1./hcos.comoving_radial_distance(hcos.zs)**4\
                                                             *(hcos.h_of_z(hcos.zs)**2),hcos.zs,axis=-1)
-        exp.biases['tsz']['prim_bispec']['2h'] = 2*conversion_factor * tls.scale_sz(exp.freq_GHz)**2 * self.T_CMB**2 \
+        exp.biases['tsz']['prim_bispec']['2h'] = 2 * conversion_factor * self.T_CMB**2 \
                                                  * np.trapz(twoHalo_cross*1./hcos.comoving_radial_distance(hcos.zs)**4\
                                                             *(hcos.h_of_z(hcos.zs)**2),hcos.zs,axis=-1)
         if get_secondary_bispec_bias:
             # Perm factors implemented in the get_secondary_bispec_bias_at_L() function
-            exp.biases['tsz']['second_bispec']['1h'] = tls.scale_sz(
-                exp.freq_GHz) ** 2 * self.T_CMB ** 2 * np.trapz( oneHalo_second_bispec * 1.\
+            exp.biases['tsz']['second_bispec']['1h'] = self.T_CMB ** 2 * np.trapz( oneHalo_second_bispec * 1.\
                                                                  / hcos.comoving_radial_distance(hcos.zs) ** 4\
                                                                  * (hcos.h_of_z(hcos.zs) ** 2), hcos.zs, axis=-1)
             exp.biases['second_bispec_bias_ells'] = lbins_second_bispec_bias

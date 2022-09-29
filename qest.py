@@ -7,7 +7,7 @@ import pickle
 import sys
 
 class experiment:
-    def __init__(self, nlev_t, beam_size, lmax, massCut_Mvir = np.inf, nx=1024, dx_arcmin=1.0, fname_scalar=None, fname_lensed=None, freq_GHz=150.):
+    def __init__(self, nlev_t, beam_size, lmax, massCut_Mvir = np.inf, nx=1024, dx_arcmin=1.0, fname_scalar=None, fname_lensed=None, freq_GHz=150., ILC_weights=1., ILC_weights_ells=None):
         """ Initialise a cosmology and experimental charactierstics
             - Inputs:
                 * nlev_t = temperature noise level, In uK.arcmin.
@@ -18,6 +18,10 @@ class experiment:
                 * (optional) fname_lensed = CAMB files for lensed CMB
                 * (otional) nx = int. Width in number of pixels of grid used in quicklens computations
                 * (optional) dx = float. Pixel width in arcmin for quicklens computations
+                * (optional) freq_GHz = float or array of floats. Frequency of observqtion (in GHZ). If array,
+                                        frequencies that get combined as ILC using ILC_weights as weights
+                * (optional) ILC_weights = 1 if len(freq_GHz)=1. Otherwise, array of floats of size (len(freq_GHz), len(ILC_weights_ells))
+                * (optional) ILC_weights_ells = Multipoles at which ILC_weights is defined. Required if ILC_weights!=1.
         """
         if fname_scalar is None:
             fname_scalar = None#'~/Software/Quicklens-with-fixes/quicklens/data/cl/planck_wp_highL/planck_lensing_wp_highL_bestFit_20130627_scalCls.dat'
@@ -29,7 +33,13 @@ class experiment:
         self.cl_len = ql.spec.get_camb_lensedcl(fname_lensed, lmax=lmax)
         self.ls = self.cl_len.ls
         self.lmax = lmax
-        self.freq_GHz=freq_GHz
+
+        assert len(freq_GHz) == ILC_weights.shape[0], "Please provide harmonic ILC weights for each frequency channel"
+        assert ILC_weights.shape[1]== len(ILC_weights_ells), "Please provide ILC_weights_ells where ILC_weights is defined"
+        self.freq_GHz = freq_GHz
+        self.ILC_weights = ILC_weights
+        self.ILC_weights_ells = ILC_weights_ells
+
         self.massCut = massCut_Mvir #Convert from M_vir (which is what Alex uses) to M_200 (which is what the
                                     # Tinker mass function in hmvec uses) using the relation from White 01.
 
@@ -84,6 +94,21 @@ class experiment:
         cl_theory  = ql.spec.clmat_teb( ql.util.dictobj( {'lmax' : self.lmax, 'cltt' : self.cl_len.cltt, 'clee' : self.cl_len.clee, 'clbb' : self.cl_len.clbb} ) )
         self.ivf_lib = ql.sims.ivf.library_l_mask( ql.sims.ivf.library_diag_emp(tqumap, cl_theory, transf=transf, nlev_t=self.nlev_t), lmin=lmin, lmax=self.lmax)
 
+    def get_tsz_filter(self):
+        """
+        Calculate the ell-dependent filter to be applied to the y-profile harmonics. In the single-frequency scenario,
+        this just applies the tSZ frequency-dependence. If doing ILC cleaning, it includes both the frequency
+        dependence and the effect of the frequency-and-ell-dependent weights
+        """
+        if type(self.ILC_weights) is np.ndarray:
+            # Multiply the ILC weights at each freq by the tSZ scaling at that freq, then sum them together at every multipole
+            tsz_filter = np.sum(tls.scale_sz(self.freqs)[:,None] * self.ILC_weights, axis=0)
+            # Return the filter interpolated at every ell where we will perform lensing reconstructions, i.e. [0, self.lmax]
+            return np.interp(self.lmax, self.ILC_weights_ells, tsz_filter, left=0, right=0)
+        else:
+            # Single-frequency scenario. Return a single number.
+            return tls.scale_sz(self.freq_GHz)
+
     def get_qe_norm(self, key='ptt'):
         """
         Calculate the QE normalisation as the reciprocal of the N^{(0)} bias
@@ -110,7 +135,10 @@ class experiment:
         massCut = '{:.2e}'.format(self.massCut)
         beam_size = '{:.2f}'.format(self.beam_size)
         nlev_t = '{:.2f}'.format(self.nlev_t)
-        freq_GHz = '{:.2f}'.format(self.freq_GHz)
+        try:
+            freq_GHz = '{:.2f}'.format(self.freq_GHz)
+        except:
+            freq_GHz = freq_GHz
 
         return 'Mass Cut: ' + massCut + '  lmax: ' + str(self.lmax) + '  Beam FWHM: '+ beam_size + ' Noise (uK arcmin): ' + nlev_t + '  Freq (GHz): ' + freq_GHz
 
