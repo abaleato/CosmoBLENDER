@@ -8,7 +8,7 @@ from cmb_ilc import CMBILC
 
 class experiment:
     def __init__(self, nlev_t, beam_size, lmax, massCut_Mvir = np.inf, nx=1024, dx_arcmin=1.0, fname_scalar=None,
-                 fname_lensed=None, freq_GHz=np.array([150.]), ILC_weights=1., ILC_weights_ells=None, atm_fg=True,
+                 fname_lensed=None, freq_GHz=np.array([150.]), atm_fg=True,
                  MV_ILC_bool=False, deproject_tSZ=True, deproject_CIB=True):
         """ Initialise a cosmology and experimental charactierstics
             - Inputs:
@@ -22,12 +22,10 @@ class experiment:
                 * (optional) dx = float. Pixel width in arcmin for quicklens computations
                 * (optional) freq_GHz =np array of one or many floats. Frequency of observqtion (in GHZ). If array,
                                         frequencies that get combined as ILC using ILC_weights as weights
-                * (optional) ILC_weights = 1 if len(freq_GHz)=1. Otherwise, array of floats of size (len(freq_GHz), len(ILC_weights_ells))
-                * (optional) ILC_weights_ells = Multipoles at which ILC_weights is defined. Required if ILC_weights!=1.
                 * (optional) atm_fg = Whether or not to include atmospheric fg power in inverse-variance filter
-                *  MV_ILC_bool = Bool. If true, form a MV ILC of freqs
-                *  deproject_tSZ = Bool. If true, form an ILC deprojecting tSZ and retaining unit response to CMB
-                *  deproject_CIB = Bool. If true, form an ILC deprojecting CIB and retaining unit response to CMB
+                * (optional) MV_ILC_bool = Bool. If true, form a MV ILC of freqs
+                * (optional) deproject_tSZ = Bool. If true, form an ILC deprojecting tSZ and retaining unit response to CMB
+                * (optional) deproject_CIB = Bool. If true, form an ILC deprojecting CIB and retaining unit response to CMB
         """
         if fname_scalar is None:
             fname_scalar = None#'~/Software/Quicklens-with-fixes/quicklens/data/cl/planck_wp_highL/planck_lensing_wp_highL_bestFit_20130627_scalCls.dat'
@@ -47,8 +45,10 @@ class experiment:
         self.nlev_t = nlev_t
         self.nlev_p = np.sqrt(2) * nlev_t
         self.beam_size = beam_size
-        self.nlee = (np.pi / 180. / 60. * self.nlev_p) ** 2 / self.bl ** 2
-        self.W_E = np.nan_to_num(self.cl_len.clee / (self.cl_len.clee + self.nlee))
+
+        #TODO: Calculate W_E in the multifrequency case
+        #self.nlee = (np.pi / 180. / 60. * self.nlev_p) ** 2 / self.bl ** 2
+        #self.W_E = np.nan_to_num(self.cl_len.clee / (self.cl_len.clee + self.nlee))
 
         #Initialise sky model
         self.sky = CMBILC(freq_GHz/1e9, beam_size, nlev_t, atm=atm_fg, lMaxT=self.lmax)
@@ -93,7 +93,7 @@ class experiment:
         """
         Calculate the inverse-variance filters to be applied to the fields prior to lensing reconstruction
         """
-        lmin = 2
+        lmin = 2 #TODO: define this as a method of the class
         # Initialise a dummy set of maps for the computation
         tmap = qmap = umap = np.random.randn(self.nx,self.nx)
         tqumap = ql.maps.tqumap(self.nx, self.dx, maps=[tmap,qmap,umap])
@@ -148,7 +148,7 @@ class experiment:
         Get total TT power from CMB, noise and fgs.
         Note that if both self.deproject_tSZ=1 and self.deproject_CIB=1, both are deprojected
         """
-        if type(self.freqs_GHz) is not np.ndarray:
+        if len(self.freq_GHz)==1:
             return self.sky.cmb[0, 0].ftotalTT(self.cl_unl.ls)
         else:
             nL = 201
