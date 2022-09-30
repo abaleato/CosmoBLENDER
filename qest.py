@@ -52,9 +52,9 @@ class experiment:
         #self.W_E = np.nan_to_num(self.cl_len.clee / (self.cl_len.clee + self.nlee))
 
         #Initialise sky model
-        self.sky = cmb_ilc.CMBILC(freq_GHz/1e9, beam_size, nlev_t, atm=atm_fg, lMaxT=self.lmax)
+        self.sky = cmb_ilc.CMBILC(freq_GHz*1e9, beam_size, nlev_t, atm=atm_fg, lMaxT=self.lmax)
         # Compute total TT power (incl. noise, fgs, cmb) for use in inverse-variance filtering
-        self.cltt_tot = self.get_total_TT_power()
+        self.get_total_TT_power()
         # In cases where there are several, compute ILC weights for combining different channels
         if len(self.freq_GHz)>1:
             assert MV_ILC_bool or deproject_tSZ or deproject_CIB, 'Please indicate how to combine different channels'
@@ -106,6 +106,7 @@ class experiment:
         # TODO: find a neater way of doing this using ivf.library_diag()
         self.ivf_lib = ql.sims.ivf.library_l_mask( ql.sims.ivf.library_diag_emp(tqumap, cl_tot_theory, transf=transf,
                                                                             nlev_t=0, nlev_p=0), lmin=lmin, lmax=self.lmax)
+
     def get_ilc_weights(self):
         """
         Get the harmonic ILC weights
@@ -152,7 +153,7 @@ class experiment:
         Note that if both self.deproject_tSZ=1 and self.deproject_CIB=1, both are deprojected
         """
         if len(self.freq_GHz)==1:
-            return self.sky.cmb[0, 0].ftotalTT(self.cl_unl.ls)
+            self.cltt_tot = np.nan_to_num(self.sky.cmb[0, 0].ftotalTT(self.cl_unl.ls))
         else:
             nL = 201
             L = np.logspace(np.log10(self.lmin), np.log10(self.lmax), nL)
@@ -166,7 +167,7 @@ class experiment:
             elif self.deproject_CIB:
                 f = lambda l: self.sky.powerIlc(self.sky.weightsDeprojCIB(l), l)
             #TODO: turn zeros into infinities to avoid issues when dividing by this
-            return np.interp(self.cl_unl.ls, L, np.nan_to_num(np.array(list(map(f, L)))))
+            self.cltt_tot = np.interp(self.cl_unl.ls, L, np.nan_to_num(np.array(list(map(f, L)))))
 
     def get_qe_norm(self, key='ptt'):
         """
