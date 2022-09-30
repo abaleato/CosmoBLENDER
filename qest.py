@@ -4,12 +4,13 @@ from pyccl.pyutils import _fftlog_transform
 from scipy.integrate import quad
 import quicklens as ql
 import pickle
-from cmb_ilc import CMBILC
+import tools as tls
+import sys
+sys.path.insert(0, '/Users/antonbaleatolizancos/Software/BasicILC_py3/')
+import cmb_ilc
 
 class experiment:
-    def __init__(self, nlev_t, beam_size, lmax, massCut_Mvir = np.inf, nx=1024, dx_arcmin=1.0, fname_scalar=None,
-                 fname_lensed=None, freq_GHz=np.array([150.]), atm_fg=True,
-                 MV_ILC_bool=False, deproject_tSZ=True, deproject_CIB=True):
+    def __init__(self, nlev_t, beam_size, lmax, massCut_Mvir = np.inf, nx=1024, dx_arcmin=1.0, fname_scalar=None, fname_lensed=None, freq_GHz=np.array([150.]), atm_fg=True, MV_ILC_bool=False, deproject_tSZ=True, deproject_CIB=True):
         """ Initialise a cosmology and experimental charactierstics
             - Inputs:
                 * nlev_t = np array. temperature noise level, In uK.arcmin. Either a single value or one for each frequency
@@ -51,14 +52,14 @@ class experiment:
         #self.W_E = np.nan_to_num(self.cl_len.clee / (self.cl_len.clee + self.nlee))
 
         #Initialise sky model
-        self.sky = CMBILC(freq_GHz/1e9, beam_size, nlev_t, atm=atm_fg, lMaxT=self.lmax)
+        self.sky = cmb_ilc.CMBILC(freq_GHz/1e9, beam_size, nlev_t, atm=atm_fg, lMaxT=self.lmax)
         # Compute total TT power (incl. noise, fgs, cmb) for use in inverse-variance filtering
         self.cltt_tot = self.get_total_TT_power()
         # In cases where there are several, compute ILC weights for combining different channels
         if len(self.freq_GHz)>1:
             assert MV_ILC_bool or deproject_tSZ or deproject_CIB, 'Please indicate how to combine different channels'
             assert not (MV_ILC_bool and (deproject_tSZ or deproject_CIB)), 'Only one ILC type at a time!'
-            get_ilc_weights()
+            self.get_ilc_weights()
 
         # Set up grid for Quicklens calculations
         self.nx = nx
@@ -94,15 +95,17 @@ class experiment:
         Calculate the inverse-variance filters to be applied to the fields prior to lensing reconstruction
         """
         lmin = 2 #TODO: define this as a method of the class
+        # Initialize some dummy object that are required by quicklens
         # Initialise a dummy set of maps for the computation
-        tmap = qmap = umap = np.random.randn(self.nx,self.nx)
-        tqumap = ql.maps.tqumap(self.nx, self.dx, maps=[tmap,qmap,umap])
-        #Define the beam transfer function and pixelisation window function.
-        #This will be used for beam deconvolution and inverse-variance filtering
-        transf = ql.spec.cl2tebfft(ql.util.dictobj( {'lmax' : self.lmax, 'cltt' : self.bl, 'clee' : self.bl, 'clbb' : self.bl} ), self.pix)
-        cl_theory  = ql.spec.clmat_teb( ql.util.dictobj( {'lmax' : self.lmax, 'cltt' : self.cl_len.cltt, 'clee' : self.cl_len.clee, 'clbb' : self.cl_len.clbb} ) )
-        self.ivf_lib = ql.sims.ivf.library_l_mask( ql.sims.ivf.library_diag_emp(tqumap, cl_theory, transf=transf, nlev_t=self.nlev_t), lmin=lmin, lmax=self.lmax)
-
+        tmap = qmap = umap = np.random.randn(self.nx, self.nx)
+        tqumap = ql.maps.tqumap(self.nx, self.dx, maps=[tmap, qmap, umap])
+        transf = ql.spec.cl2tebfft(ql.util.dictobj( {'lmax' : self.lmax, 'cltt' : np.ones(self.lmax+1),
+                                                     'clee' : np.ones(self.lmax+1), 'clbb' : np.ones(self.lmax+1)} ), self.pix)
+        cl_tot_theory  = ql.spec.clmat_teb( ql.util.dictobj( {'lmax' : self.lmax, 'cltt' : self.cltt_tot,
+                                                          'clee' : np.zeros(self.lmax+1), 'clbb' :np.zeros(self.lmax+1)} ) )
+        # TODO: find a neater way of doing this using ivf.library_diag()
+        self.ivf_lib = ql.sims.ivf.library_l_mask( ql.sims.ivf.library_diag_emp(tqumap, cl_tot_theory, transf=transf,
+                                                                            nlev_t=0, nlev_p=0), lmin=lmin, lmax=self.lmax)
     def get_ilc_weights(self):
         """
         Get the harmonic ILC weights
@@ -163,7 +166,7 @@ class experiment:
             elif self.deproject_CIB:
                 f = lambda l: self.sky.powerIlc(self.sky.weightsDeprojCIB(l), l)
             #TODO: turn zeros into infinities to avoid issues when dividing by this
-            return np.interp(self.cl_unl.ls, L, np.array(list(map(f, L))))
+            return np.interp(self.cl_unl.ls, L, np.nan_to_num(np.array(list(map(f, L)))))
 
     def get_qe_norm(self, key='ptt'):
         """
@@ -191,8 +194,7 @@ class experiment:
         massCut = '{:.2e}'.format(self.massCut)
         beam_size = '{:.2f}'.format(self.beam_size)
         nlev_t = '{:.2f}'.format(self.nlev_t)
-
-        return 'Mass Cut: ' + massCut + '  lmax: ' + str(self.lmax) + '  Beam FWHM: '+ beam_size + ' Noise (uK arcmin): ' + nlev_t + '  Freq (GHz): ' + freq_GHz
+        return 'Mass Cut: ' + massCut + '  lmax: ' + str(self.lmax) + '  Beam FWHM: '+ beam_size + ' Noise (uK arcmin): ' + nlev_t + '  Freq (GHz): ' + self.freq_GHz
 
     def save_biases(self, output_filename='./dict_with_biases'):
         """
@@ -217,7 +219,7 @@ class experiment:
 
         F_1_of_l = profile_leg1 / self.cltt_tot
         F_2_of_l = self.cl_len.cltt * profile_leg2/ self.cltt_tot
-            
+
         al_F_1 = interp1d(self.ls, F_1_of_l, bounds_error=False,  fill_value='extrapolate')
         al_F_2 = interp1d(self.ls, F_2_of_l, bounds_error=False,  fill_value='extrapolate')
         return al_F_1, al_F_2
