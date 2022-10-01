@@ -10,7 +10,7 @@ sys.path.insert(0, '/Users/antonbaleatolizancos/Software/BasicILC_py3/')
 import cmb_ilc
 
 class experiment:
-    def __init__(self, nlev_t, beam_size, lmax, massCut_Mvir = np.inf, nx=1024, dx_arcmin=1.0, fname_scalar=None, fname_lensed=None, freq_GHz=np.array([150.]), atm_fg=True, MV_ILC_bool=False, deproject_tSZ=True, deproject_CIB=True):
+    def __init__(self, nlev_t, beam_size, lmax, massCut_Mvir = np.inf, nx=1024, dx_arcmin=1.0, fname_scalar=None, fname_lensed=None, freq_GHz=np.array([150.]), atm_fg=True, MV_ILC_bool=False, deproject_tSZ=False, deproject_CIB=False):
         """ Initialise a cosmology and experimental charactierstics
             - Inputs:
                 * nlev_t = np array. temperature noise level, In uK.arcmin. Either a single value or one for each frequency
@@ -38,6 +38,7 @@ class experiment:
         self.cl_len = ql.spec.get_camb_lensedcl(fname_lensed, lmax=lmax)
         self.ls = self.cl_len.ls
         self.lmax = lmax
+        self.lmin = 2
         self.freq_GHz = freq_GHz
 
         self.massCut = massCut_Mvir #Convert from M_vir (which is what Alex uses) to M_200 (which is what the
@@ -53,13 +54,16 @@ class experiment:
 
         #Initialise sky model
         self.sky = cmb_ilc.CMBILC(freq_GHz*1e9, beam_size, nlev_t, atm=atm_fg, lMaxT=self.lmax)
-        # Compute total TT power (incl. noise, fgs, cmb) for use in inverse-variance filtering
-        self.get_total_TT_power()
         # In cases where there are several, compute ILC weights for combining different channels
+        self.MV_ILC_bool = MV_ILC_bool
+        self.deproject_tSZ = deproject_tSZ
+        self.deproject_CIB = deproject_CIB
         if len(self.freq_GHz)>1:
             assert MV_ILC_bool or deproject_tSZ or deproject_CIB, 'Please indicate how to combine different channels'
             assert not (MV_ILC_bool and (deproject_tSZ or deproject_CIB)), 'Only one ILC type at a time!'
             self.get_ilc_weights()
+        # Compute total TT power (incl. noise, fgs, cmb) for use in inverse-variance filtering
+        self.get_total_TT_power()
 
         # Set up grid for Quicklens calculations
         self.nx = nx
@@ -140,9 +144,9 @@ class experiment:
         """
         if len(self.freq_GHz)>1:
             # Multiply the ILC weights at each freq by the tSZ scaling at that freq, then sum them together at every multipole
-            tsz_filter = np.sum(tls.scale_sz(self.freq_GHz)[:,None] * self.ILC_weights, axis=0)
+            tsz_filter = np.sum(tls.scale_sz(self.freq_GHz) * self.ILC_weights, axis=1)
             # Return the filter interpolated at every ell where we will perform lensing reconstructions, i.e. [0, self.lmax]
-            return np.interp(self.lmax, self.ILC_weights_ells, tsz_filter, left=0, right=0)
+            return np.interp(np.arange(self.lmax+1), self.ILC_weights_ells, tsz_filter, left=0, right=0)
         else:
             # Single-frequency scenario. Return a single number.
             return tls.scale_sz(self.freq_GHz)
