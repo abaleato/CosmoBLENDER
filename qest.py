@@ -152,8 +152,9 @@ class experiment:
         Get total TT power from CMB, noise and fgs.
         Note that if both self.deproject_tSZ=1 and self.deproject_CIB=1, both are deprojected
         """
+        #TODO: Why can't we get ells below 10 in cltt_tot?
         if len(self.freq_GHz)==1:
-            self.cltt_tot = np.nan_to_num(self.sky.cmb[0, 0].ftotalTT(self.cl_unl.ls))
+            self.cltt_tot = self.sky.cmb[0, 0].ftotalTT(self.cl_unl.ls)
         else:
             nL = 201
             L = np.logspace(np.log10(self.lmin), np.log10(self.lmax), nL)
@@ -167,7 +168,9 @@ class experiment:
             elif self.deproject_CIB:
                 f = lambda l: self.sky.powerIlc(self.sky.weightsDeprojCIB(l), l)
             #TODO: turn zeros into infinities to avoid issues when dividing by this
-            self.cltt_tot = np.interp(self.cl_unl.ls, L, np.nan_to_num(np.array(list(map(f, L)))))
+            self.cltt_tot = np.interp(self.cl_unl.ls, L, np.array(list(map(f, L))))
+        # Avoid infinities when dividing by inverse variance
+        self.cltt_tot[np.where(np.isnan(self.cltt_tot))] = np.inf
 
     def get_qe_norm(self, key='ptt'):
         """
@@ -218,8 +221,8 @@ class experiment:
         if profile_leg2 is None:
             profile_leg2 = profile_leg1
 
-        F_1_of_l = profile_leg1 / self.cltt_tot
-        F_2_of_l = self.cl_len.cltt * profile_leg2/ self.cltt_tot
+        F_1_of_l = np.nan_to_num(profile_leg1 / self.cltt_tot)
+        F_2_of_l = np.nan_to_num(self.cl_len.cltt * profile_leg2/ self.cltt_tot)
 
         al_F_1 = interp1d(self.ls, F_1_of_l, bounds_error=False,  fill_value='extrapolate')
         al_F_2 = interp1d(self.ls, F_2_of_l, bounds_error=False,  fill_value='extrapolate')
