@@ -8,22 +8,25 @@ import matplotlib.pyplot as plt
 from lensing_rec_biases_code import qest
 from lensing_rec_biases_code import biases
 import time
+
 # Press the green button in the gutter to run the script.
 if __name__ == '__main__':
     t0 = time.time() # Time the run
     which_bias = 'tsz' #'tsz' or 'cib'
-    nlev_t = 18.  # uK arcmin
-    beam_size = 1.  # arcmin
     lmax = 3500  # Maximum ell for the reconstruction
     nx = 256
     dx_arcmin = 1.0 * 2
+    freq_GHz = np.array([27.3, 41.7, 93., 143., 225.,278.])  # [Hz]
+    beam_size = np.array([7.4, 5.1, 2.2, 1.4, 1.0, 0.9])  # [arcmin]
+    nlev_t = np.array([52., 27., 5.8, 6.3, 15., 37.])  # [muK*arcmin]
+
+    MV_ILC_bool = True
 
     # Set CIB halo model
     cib_model = 'planck13'  # 'vierro'
     # Initialise an experiment object. Store the list of params so we can later initialise it again within multiple processes
     massCut_Mvir=5e15
-    exp_param_list = [nlev_t, beam_size, lmax, massCut_Mvir, nx, dx_arcmin]
-    SPT_5e15 = qest.experiment(*exp_param_list)
+    experiment = qest.experiment(nlev_t, beam_size, lmax, massCut_Mvir,  nx, dx_arcmin, freq_GHz=freq_GHz, MV_ILC_bool=MV_ILC_bool)
 
     # This should roughly match the cosmology in Nick's tSZ papers
     cosmoParams = {'As': 2.4667392631170437e-09, 'ns': .96, 'omch2': (0.25 - .043) * .7 ** 2, 'ombh2': 0.044 * .7 ** 2,
@@ -32,22 +35,23 @@ if __name__ == '__main__':
     nZs = 3
     nMasses = 3
     bin_width_out_second_bispec_bias = 1000
-    which_bias = 'tsz'#'cib' #'tsz'
+    parallelise_secondbispec = False
 
     # Initialise a halo model object for the calculation, using mostly default parameters
     hm_calc = biases.hm_framework(cosmoParams=cosmoParams, nZs=nZs, nMasses=nMasses, cib_model=cib_model)
 
-    experiment = SPT_5e15
-
     if which_bias=='tsz':
-        hm_calc.get_tsz_auto_biases(SPT_5e15, get_secondary_bispec_bias=True, \
-                             bin_width_out_second_bispec_bias=bin_width_out_second_bispec_bias)
+        hm_calc.get_tsz_auto_biases(experiment, get_secondary_bispec_bias=True, \
+                             bin_width_out_second_bispec_bias=bin_width_out_second_bispec_bias,
+                                    parallelise_secondbispec=parallelise_secondbispec)
     elif which_bias=='cib':
-        hm_calc.get_cib_auto_biases(SPT_5e15, get_secondary_bispec_bias=True, \
-                             bin_width_out_second_bispec_bias=bin_width_out_second_bispec_bias)
+        hm_calc.get_cib_auto_biases(experiment, get_secondary_bispec_bias=True, \
+                             bin_width_out_second_bispec_bias=bin_width_out_second_bispec_bias,
+                                    parallelise_secondbispec=parallelise_secondbispec)
     elif which_bias=='mixed':
-        hm_calc.get_mixed_auto_biases(SPT_5e15, get_secondary_bispec_bias=True, \
-                             bin_width_out_second_bispec_bias=bin_width_out_second_bispec_bias)
+        hm_calc.get_mixed_auto_biases(experiment, get_secondary_bispec_bias=True, \
+                             bin_width_out_second_bispec_bias=bin_width_out_second_bispec_bias,
+                                    parallelise_secondbispec=parallelise_secondbispec)
 
     # Save a dictionary with the bias we calculated to file
     experiment.save_biases()
@@ -73,6 +77,7 @@ if __name__ == '__main__':
     ax = plt.gca()
     ax.tick_params(axis='both', which='major', labelsize=8)
     ax.tick_params(axis='both', which='minor', labelsize=8)
+    plt.show()
     plt.savefig('testing_second_bispec_bias_nZs{}_nMasses{}_which_bias{}_bin_width_out_second_bispec_bias{}.png'.format(nZs, nMasses, which_bias, bin_width_out_second_bispec_bias))
     plt.close()
     t1 = time.time()

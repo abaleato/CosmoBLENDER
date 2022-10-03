@@ -10,7 +10,9 @@ sys.path.insert(0, '/Users/antonbaleatolizancos/Software/BasicILC_py3/')
 import cmb_ilc
 
 class experiment:
-    def __init__(self, nlev_t, beam_size, lmax, massCut_Mvir = np.inf, nx=1024, dx_arcmin=1.0, fname_scalar=None, fname_lensed=None, freq_GHz=np.array([150.]), atm_fg=True, MV_ILC_bool=False, deproject_tSZ=False, deproject_CIB=False):
+    def __init__(self, nlev_t=np.array([5.]), beam_size=np.array([1.]), lmax=3500, massCut_Mvir = np.inf, nx=1024,
+                 dx_arcmin=1.0, fname_scalar=None, fname_lensed=None, freq_GHz=np.array([150.]), atm_fg=True,
+                 MV_ILC_bool=False, deproject_tSZ=False, deproject_CIB=False, bare_bones=False):
         """ Initialise a cosmology and experimental charactierstics
             - Inputs:
                 * nlev_t = np array. temperature noise level, In uK.arcmin. Either a single value or one for each frequency
@@ -27,6 +29,7 @@ class experiment:
                 * (optional) MV_ILC_bool = Bool. If true, form a MV ILC of freqs
                 * (optional) deproject_tSZ = Bool. If true, form an ILC deprojecting tSZ and retaining unit response to CMB
                 * (optional) deproject_CIB = Bool. If true, form an ILC deprojecting CIB and retaining unit response to CMB
+                * (optional) bare_bones= Bool. If True, don't run any of the costly operations at initialisation
         """
         if fname_scalar is None:
             fname_scalar = None#'~/Software/Quicklens-with-fixes/quicklens/data/cl/planck_wp_highL/planck_lensing_wp_highL_bestFit_20130627_scalCls.dat'
@@ -48,34 +51,35 @@ class experiment:
         self.nlev_p = np.sqrt(2) * nlev_t
         self.beam_size = beam_size
 
-        #TODO: Calculate W_E in the multifrequency case
-        #self.nlee = (np.pi / 180. / 60. * self.nlev_p) ** 2 / self.bl ** 2
-        #self.W_E = np.nan_to_num(self.cl_len.clee / (self.cl_len.clee + self.nlee))
-
-        #Initialise sky model
-        self.sky = cmb_ilc.CMBILC(freq_GHz*1e9, beam_size, nlev_t, atm=atm_fg, lMaxT=self.lmax)
-        # In cases where there are several, compute ILC weights for combining different channels
-        self.MV_ILC_bool = MV_ILC_bool
-        self.deproject_tSZ = deproject_tSZ
-        self.deproject_CIB = deproject_CIB
-        if len(self.freq_GHz)>1:
-            assert MV_ILC_bool or deproject_tSZ or deproject_CIB, 'Please indicate how to combine different channels'
-            assert not (MV_ILC_bool and (deproject_tSZ or deproject_CIB)), 'Only one ILC type at a time!'
-            self.get_ilc_weights()
-        # Compute total TT power (incl. noise, fgs, cmb) for use in inverse-variance filtering
-        self.get_total_TT_power()
-
         # Set up grid for Quicklens calculations
         self.nx = nx
         self.dx = dx_arcmin/60./180.*np.pi # pixel width in radians.
         self.pix = ql.maps.cfft(self.nx, self.dx)
 
-        # Calculate inverse-variance filters
-        self.inverse_variance_filters()
-        # Calculate QE norm
-        self.get_qe_norm()
-        self.nlpp = self.get_nlpp()
-        self.W_phi = self.cl_unl.clpp / (self.cl_unl.clpp + self.nlpp)
+        #TODO: Calculate W_E in the multifrequency case
+        #self.nlee = (np.pi / 180. / 60. * self.nlev_p) ** 2 / self.bl ** 2
+        #self.W_E = np.nan_to_num(self.cl_len.clee / (self.cl_len.clee + self.nlee))
+
+        self.MV_ILC_bool = MV_ILC_bool
+        self.deproject_tSZ = deproject_tSZ
+        self.deproject_CIB = deproject_CIB
+        if not bare_bones:
+            #Initialise sky model
+            self.sky = cmb_ilc.CMBILC(freq_GHz*1e9, beam_size, nlev_t, atm=atm_fg, lMaxT=self.lmax)
+            if len(self.freq_GHz)>1:
+                # In cases where there are several, compute ILC weights for combining different channels
+                assert MV_ILC_bool or deproject_tSZ or deproject_CIB, 'Please indicate how to combine different channels'
+                assert not (MV_ILC_bool and (deproject_tSZ or deproject_CIB)), 'Only one ILC type at a time!'
+                self.get_ilc_weights()
+            # Compute total TT power (incl. noise, fgs, cmb) for use in inverse-variance filtering
+            self.get_total_TT_power()
+
+            # Calculate inverse-variance filters
+            self.inverse_variance_filters()
+            # Calculate QE norm
+            self.get_qe_norm()
+            self.nlpp = self.get_nlpp()
+            self.W_phi = self.cl_unl.clpp / (self.cl_unl.clpp + self.nlpp)
 
         # Initialise an empty dictionary to store the biases
         empty_arr = {}

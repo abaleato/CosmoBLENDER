@@ -124,6 +124,8 @@ class hm_framework:
         if get_secondary_bispec_bias:
             lbins_second_bispec_bias = np.arange(10, self.lmax_out + 1, bin_width_out_second_bispec_bias)
             oneHalo_second_bispec = np.zeros([len(lbins_second_bispec_bias),self.nZs])+0j
+            # Get QE normalisation
+            qe_norm_1D = exp.qe_norm.get_ml(np.arange(10, self.lmax_out, 40))
 
         for i,z in enumerate(hcos.zs):
             #Temporary storage
@@ -158,9 +160,12 @@ class hm_framework:
                     # Temporary secondary bispectrum bias stuff
                     # The part with the nested lensing reconstructions
                     # FIXME: if you remove the z-scaling dividing ms_rescaled in kfft, do it here too
-                    exp_param_list = [exp.nlev_t, exp.beam_size, exp.lmax, exp.massCut, exp.nx, exp.dx*60.*180./np.pi]
-                    secondary_bispec_bias_reconstructions = sbbs.get_secondary_bispec_bias(lbins_second_bispec_bias, exp_param_list,\
-                                                                                           y, kap*self.ms_rescaled[j]/(1+hcos.zs[i])**3,\
+                    exp_param_dict = {'lmax': exp.lmax, 'nx': exp.nx, 'dx_arcmin': exp.dx*60.*180./np.pi}
+                    # Get the kappa map, up to lmax rather than lmax_out as was needed in other terms
+                    kap_secbispec = tls.pkToPell(hcos.comoving_radial_distance(hcos.zs[i]), hcos.ks, hcos.uk_profiles['nfw'][i, j] \
+                                       * hcos.lensing_window(hcos.zs[i], 1100.), ellmax=exp.lmax)
+                    secondary_bispec_bias_reconstructions = sbbs.get_secondary_bispec_bias(lbins_second_bispec_bias, qe_norm_1D,
+                                                                                           exp_param_dict, exp.cltt_tot, y, kap_secbispec*self.ms_rescaled[j]/(1+hcos.zs[i])**3,\
                                                                                            parallelise=parallelise_secondbispec)
                     integrand_oneHalo_second_bispec[..., j] = hcos.nzm[i,j] * secondary_bispec_bias_reconstructions
                     # FIXME:add the 2-halo term. Should be easy.
@@ -372,6 +377,8 @@ class hm_framework:
         if get_secondary_bispec_bias:
             lbins_second_bispec_bias = np.arange(10, self.lmax_out + 1, bin_width_out_second_bispec_bias)
             oneHalo_second_bispec = np.zeros([len(lbins_second_bispec_bias),self.nZs])+0j
+            # Get QE normalisation
+            qe_norm_1D = exp.qe_norm.get_ml(np.arange(10, self.lmax_out, 40))
 
         for i,z in enumerate(hcos.zs):
             #Temporary storage
@@ -406,9 +413,12 @@ class hm_framework:
                     # Temporary secondary bispectrum bias stuff
                     # The part with the nested lensing reconstructions
                     # FIXME: if you remove the z-scaling dividing ms_rescaled in kfft, do it here too
-                    exp_param_list = [exp.nlev_t, exp.beam_size, exp.lmax, exp.massCut, exp.nx, exp.dx*60.*180./np.pi]
-                    secondary_bispec_bias_reconstructions = sbbs.get_secondary_bispec_bias(lbins_second_bispec_bias, exp_param_list,\
-                                                                                           u, kap*self.ms_rescaled[j]/(1+hcos.zs[i])**3,\
+                    exp_param_dict = {'lmax': exp.lmax, 'nx': exp.nx, 'dx_arcmin': exp.dx*60.*180./np.pi}
+                    # Get the kappa map, up to lmax rather than lmax_out as was needed in other terms
+                    kap_secbispec = tls.pkToPell(hcos.comoving_radial_distance(hcos.zs[i]), hcos.ks,
+                                                 hcos.uk_profiles['nfw'][i, j] * hcos.lensing_window(hcos.zs[i], 1100.), ellmax=exp.lmax)
+                    secondary_bispec_bias_reconstructions = sbbs.get_secondary_bispec_bias(lbins_second_bispec_bias, qe_norm_1D,
+                                                                                           exp_param_dict, exp.cltt_tot, u, kap_secbispec*self.ms_rescaled[j]/(1+hcos.zs[i])**3,\
                                                                                            parallelise=parallelise_secondbispec)
                     integrand_oneHalo_second_bispec[..., j] = hod_fact_2gal[i, j] * hcos.nzm[i,j] * secondary_bispec_bias_reconstructions
                     # FIXME:add the 2-halo term. Should be easy.
@@ -727,6 +737,8 @@ class hm_framework:
         if get_secondary_bispec_bias:
             lbins_second_bispec_bias = np.arange(10, self.lmax_out + 1, bin_width_out_second_bispec_bias)
             oneHalo_second_bispec = np.zeros([len(lbins_second_bispec_bias),self.nZs])+0j
+            # Get QE normalisation
+            qe_norm_1D = exp.qe_norm.get_ml(np.arange(10, self.lmax_out, 40))
 
         for i,z in enumerate(hcos.zs):
             #Temporary storage
@@ -772,9 +784,12 @@ class hm_framework:
                     # Temporary secondary bispectrum bias stuff
                     # The part with the nested lensing reconstructions
                     # FIXME: if you remove the z-scaling dividing ms_rescaled in kfft, do it here too
-                    exp_param_list = [exp.nlev_t, exp.beam_size, exp.lmax, exp.massCut, exp.nx, exp.dx*60.*180./np.pi]
-                    secondary_bispec_bias_reconstructions = sbbs.get_secondary_bispec_bias(lbins_second_bispec_bias, exp_param_list,\
-                                                                                           u, kap*self.ms_rescaled[j]/(1+hcos.zs[i])**3,\
+                    exp_param_dict = {'lmax': exp.lmax, 'nx': exp.nx, 'dx_arcmin': exp.dx*60.*180./np.pi}
+                    # Get the kappa map, up to lmax rather than lmax_out as was needed in other terms
+                    kap_secbispec = tls.pkToPell(hcos.comoving_radial_distance(hcos.zs[i]), hcos.ks,
+                                                 hcos.uk_profiles['nfw'][i, j] * hcos.lensing_window(hcos.zs[i], 1100.), ellmax=exp.lmax)
+                    secondary_bispec_bias_reconstructions = sbbs.get_secondary_bispec_bias(lbins_second_bispec_bias, qe_norm_1D,
+                                                                                           exp_param_dict, exp.cltt_tot, u, kap_secbispec*self.ms_rescaled[j]/(1+hcos.zs[i])**3,\
                                                                                            y, parallelise=parallelise_secondbispec)
                     integrand_oneHalo_second_bispec[..., j] = hod_fact_1gal[i, j] * hcos.nzm[i,j] * secondary_bispec_bias_reconstructions
 
