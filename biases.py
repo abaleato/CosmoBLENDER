@@ -237,6 +237,9 @@ class hm_framework:
 
         nx = self.lmax_out+1 if fftlog_way else exp.pix.nx
 
+        # Get frequency scaling of tSZ, possibly including harmonic ILC cleaning
+        tsz_filter = exp.get_tsz_filter()
+
         # The one and two halo bias terms -- these store the integrand to be integrated over z.
         # Dimensions depend on method
         oneHalo_cross = np.zeros([nx,self.nZs])+0j if fftlog_way else np.zeros([nx,nx,self.nZs])+0j
@@ -251,7 +254,7 @@ class hm_framework:
             # M integral.
             for j,m in enumerate(hcos.ms):
                 if m> exp.massCut: continue
-                y = tls.pkToPell(hcos.comoving_radial_distance(hcos.zs[i]),hcos.ks,hcos.pk_profiles['y'][i,j]\
+                y = tsz_filter * tls.pkToPell(hcos.comoving_radial_distance(hcos.zs[i]),hcos.ks,hcos.pk_profiles['y'][i,j]\
                                  *(1-np.exp(-(hcos.ks/hcos.p['kstar_damping']))), ellmax=exp.lmax)
                 # Get the galaxy map --- analogous to kappa in the auto-biases. Note that we need a factor of
                 # H dividing the galaxy window function to translate the hmvec convention to e.g. Ferraro & Hill 18 #TODO: why do you say that?
@@ -285,10 +288,10 @@ class hm_framework:
         conversion_factor = 1#np.nan_to_num(1 / (0.5 * ells_out*(ells_out+1) )) if fftlog_way else ql.spec.cl2cfft(np.nan_to_num(1 / (0.5 * np.arange(self.lmax_out+1)*(np.arange(self.lmax_out+1)+1) )),exp.pix).fft
 
         # Integrate over z
-        exp.biases['tsz']['cross_w_gals']['1h'] = conversion_factor * tls.scale_sz(exp.freq_GHz)**2 * self.T_CMB**2 \
+        exp.biases['tsz']['cross_w_gals']['1h'] = conversion_factor * self.T_CMB**2 \
                                                  * np.trapz(oneHalo_cross * hcos.comoving_radial_distance(hcos.zs)**-4\
                                                             * hcos.h_of_z(hcos.zs),hcos.zs,axis=-1)
-        exp.biases['tsz']['cross_w_gals']['2h'] = conversion_factor * tls.scale_sz(exp.freq_GHz)**2 * self.T_CMB**2 \
+        exp.biases['tsz']['cross_w_gals']['2h'] = conversion_factor * self.T_CMB**2 \
                                                  * np.trapz(twoHalo_cross * hcos.comoving_radial_distance(hcos.zs)**-4\
                                                             * hcos.h_of_z(hcos.zs),hcos.zs,axis=-1)
         if fftlog_way:
