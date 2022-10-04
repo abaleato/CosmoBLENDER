@@ -27,14 +27,12 @@ def get_secondary_bispec_bias(lbins, qe_norm_1D, exp_param_dict, cltt_tot, proje
     if projected_fg_profile_2 is None:
         projected_fg_profile_2 = projected_fg_profile_1
 
-    qe_norm_at_L = np.interp(lbins, qe_norm_1D.ls, qe_norm_1D.specs['cl'])
-
     if parallelise:
         # Use multiprocessing to speed up calculation
         pool = multiprocessing.Pool(multiprocessing.cpu_count() - 1) # Start as many processes as machine can handle
         # Helper function (pool.map can only take one, iterable input)
         func = partial(get_secondary_bispec_bias_at_L, projected_fg_profile_1, projected_fg_profile_2, \
-                       projected_kappa_profile, exp_param_dict, cltt_tot, qe_norm_at_L)
+                       projected_kappa_profile, exp_param_dict, cltt_tot)
         second_bispec_bias = np.array(pool.map(func, lbins))
         pool.close()
 
@@ -42,14 +40,15 @@ def get_secondary_bispec_bias(lbins, qe_norm_1D, exp_param_dict, cltt_tot, proje
         second_bispec_bias = np.zeros(lbins.shape)
         for i, L in enumerate(lbins):
             second_bispec_bias[i] = get_secondary_bispec_bias_at_L(projected_fg_profile_1, projected_fg_profile_2, \
-                                                                   projected_kappa_profile, exp_param_dict, cltt_tot,
-                                                                   qe_norm_at_L[i], L)
-    return second_bispec_bias
+                                                                   projected_kappa_profile, exp_param_dict, cltt_tot, L)
+    # Finally, normalise the reconstruction
+    qe_norm_at_L = np.interp(lbins, qe_norm_1D.ls, qe_norm_1D.specs['cl'])
+    return second_bispec_bias / (qe_norm_at_L ** 2)
 
 def get_secondary_bispec_bias_at_L(projected_fg_profile_1, projected_fg_profile_2, projected_kappa_profile,\
-                                   exp_param_dict, cltt_tot, qe_norm_at_L, L):
+                                   exp_param_dict, cltt_tot, L):
     # TODO: Add 2h term
-    """ Calculate the outer QE reconstruction in the secondary bispectrum bias, for given profiles.
+    """ Calculate the (unnormalized) outer QE reconstruction in the secondary bispectrum bias, for given profiles.
         This involves brute-force integration of a shifted tsz profile times another, "inner" reconstruction,
         which we call along the way. We align L with the x-axis.
     - Inputs:
@@ -58,7 +57,6 @@ def get_secondary_bispec_bias_at_L(projected_fg_profile_1, projected_fg_profile_
         * projected_kappa_profile = 1D numpy array. The 1D projected kappa that we will paste to 2D.
         * exp_param_dict = dict of kwargs to initialise a bare-bones 'exp' experiment object with
         * cltt_tot = 1D numpy array. Total TT power including CMB, noise and fgs, possibly after fg cleaning
-        * qe_norm_at_L = float. QE normalization at L
         * L = Float or int. Multipole at which to return the bias
     - Returns:
         * A Float. The value of the secondary bispectrum bias at L.
@@ -89,7 +87,7 @@ def get_secondary_bispec_bias_at_L(projected_fg_profile_1, projected_fg_profile_
     # TODO: implement experiment.ny in addition to experiment.nx
     integral_over_y = np.trapz( integral_over_x, np.roll(ly[:, 0], experiment.nx//2, axis=0), axis=-1)
 
-    return (-2) / np.pi / (2*np.pi)**2 * L**2 * integral_over_y / (qe_norm_at_L ** 2)
+    return (-2) / np.pi / (2*np.pi)**2 * L**2 * integral_over_y
 
 def shift_array(array_to_paste, exp, lx_shift, ly_shift=0):
     """

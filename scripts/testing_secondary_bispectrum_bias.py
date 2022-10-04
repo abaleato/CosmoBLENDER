@@ -13,12 +13,12 @@ import time
 if __name__ == '__main__':
     t0 = time.time() # Time the run
     which_bias = 'tsz' #'tsz' or 'cib'
-    lmax = 3500  # Maximum ell for the reconstruction
+    lmax = 3000  # Maximum ell for the reconstruction
     nx = 256
     dx_arcmin = 1.0 * 2
-    freq_GHz = np.array([27.3, 41.7, 93., 143., 225.,278.])  # [Hz]
-    beam_size = np.array([7.4, 5.1, 2.2, 1.4, 1.0, 0.9])  # [arcmin]
-    nlev_t = np.array([52., 27., 5.8, 6.3, 15., 37.])  # [muK*arcmin]
+    freq_GHz = np.array([150.])#np.array([27.3, 41.7, 93., 143., 225.,278.])  # [Hz]
+    beam_size = np.array([1.])#np.array([7.4, 5.1, 2.2, 1.4, 1.0, 0.9])  # [arcmin]
+    nlev_t = np.array([18.])#np.array([52., 27., 5.8, 6.3, 15., 37.])  # [muK*arcmin]
 
     MV_ILC_bool = True
 
@@ -32,10 +32,10 @@ if __name__ == '__main__':
     cosmoParams = {'As': 2.4667392631170437e-09, 'ns': .96, 'omch2': (0.25 - .043) * .7 ** 2, 'ombh2': 0.044 * .7 ** 2,
                    'H0': 70.}  # Note that for now there is still cosmology dpendence in the cls defined within the experiment class
 
-    nZs = 3
-    nMasses = 3
-    bin_width_out_second_bispec_bias = 1000
-    parallelise_secondbispec = False
+    nZs = 30
+    nMasses = 30
+    bin_width_out_second_bispec_bias = 100
+    parallelise_secondbispec = True
 
     # Initialise a halo model object for the calculation, using mostly default parameters
     hm_calc = biases.hm_framework(cosmoParams=cosmoParams, nZs=nZs, nMasses=nMasses, cib_model=cib_model)
