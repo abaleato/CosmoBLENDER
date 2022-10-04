@@ -5,6 +5,7 @@ from astropy import units as u
 from astropy.cosmology import Planck15
 import quicklens as ql
 from astropy.cosmology import FlatLambdaCDM
+from scipy.interpolate import CubicSpline
 
 def scale_sz(freq=150.):
     """ f_nu in the literature. this is only the non-relativistic formula. note that the formula in alexs paper is wrong. get it from sehgal et al."""
@@ -28,6 +29,25 @@ def from_Jypersr_to_uK(freq_GHz):
     freq = freq_GHz * u.GHz
     equiv = u.thermodynamic_temperature(freq, Planck15.Tcmb0)
     return (1. * u.Jy / u.sr).to(u.uK, equivalencies=equiv).value
+
+def spline_interpolate_weights(orig_weights, orig_ells, lmax):
+    '''
+    Enlarge the array of ILC weights, interpolating inbetween the multipoles sampled
+    Inputs:
+        - orig_weights = (nells,nchannels) np array of ILC weights
+        - orig_ells = (nells,) np array where the weights are defined
+        - lmax = int. lmax of the output arrays
+    Returns:
+        - new_weights = (lmax+1,nchannels) np array. interpolated ILC weights
+        - new_ells = (lmax+1,) np array. Multipoles where new_weights is defined
+    '''
+    new_weights = np.ones((lmax+1, orig_weights.shape[1]))
+    new_ells = np.arange(lmax+1)
+
+    for row in range(new_weights.shape[1]):
+        cs = CubicSpline(orig_ells, orig_weights[:,row], extrapolate=False)
+        new_weights[:,row] = cs(new_ells)
+    return new_weights, new_ells
 
 def split_positive_negative(spectrum):
     """ Separately return the positive and negative parts of an input np.array named spectrum.

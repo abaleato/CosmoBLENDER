@@ -120,7 +120,10 @@ class experiment:
         Get the harmonic ILC weights
         """
         lmin_cutoff = 14
-        W_sILC_Ls = np.arange(lmin_cutoff, self.lmax, 1)
+        ell_spacing = 5 # Valueof 5 gives cubic spline interpolation errors <0.5%
+        # Evaluate only at discrete ells, and interpolate later.
+        # TODO: think about whether interpolating the weights causes any issues. Are they still normalized to sum to 1?
+        W_sILC_Ls = np.arange(lmin_cutoff, self.lmax, ell_spacing)
 
         if self.MV_ILC_bool:
             W_sILC = np.array(
@@ -135,9 +138,7 @@ class experiment:
             W_sILC = np.array(
                 list(map(self.sky.weightsDeprojCIB, W_sILC_Ls)))
 
-        # Extrapolate to low l weights which are usually problematic bc of artifacts in tsz/ksz fit
-        self.ILC_weights = np.pad(W_sILC, ((lmin_cutoff, 0), (0, 0)), mode='edge')
-        self.ILC_weights_ells = np.arange(self.lmax)
+        self.ILC_weights, self.ILC_weights_ells = tls.spline_interpolate_weights(W_sILC, W_sILC_Ls, self.lmax)
         return
 
     def get_tsz_filter(self):
