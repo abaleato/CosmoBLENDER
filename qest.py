@@ -205,9 +205,8 @@ class experiment:
     def __str__(self):
         """ Print out halo model calculator properties """
         massCut = '{:.2e}'.format(self.massCut)
-        beam_size = '{:.2f}'.format(self.beam_size)
-        nlev_t = '{:.2f}'.format(self.nlev_t)
-        return 'Mass Cut: ' + massCut + '  lmax: ' + str(self.lmax) + '  Beam FWHM: '+ beam_size + ' Noise (uK arcmin): ' + nlev_t + '  Freq (GHz): ' + self.freq_GHz
+        return 'Mass Cut: ' + str(massCut) + '  lmax: ' + str(self.lmax) + '  Beam FWHM: '+ str(self.beam_size) + \
+               ' Noise (uK arcmin): ' + str(self.nlev_t) + '  Freq (GHz): ' + str(self.freq_GHz)
 
     def save_biases(self, output_filename='./dict_with_biases'):
         """
