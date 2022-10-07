@@ -122,7 +122,6 @@ class experiment:
         lmin_cutoff = 14
         ell_spacing = 100 # Sum of weights is still 1 to 1 part in 10^14 even with ell_spacing=100
         # Evaluate only at discrete ells, and interpolate later.
-        # TODO: think about whether interpolating the weights causes any issues. Are they still normalized to sum to 1?
         W_sILC_Ls = np.arange(lmin_cutoff, self.lmax, ell_spacing)
 
         if self.MV_ILC_bool:

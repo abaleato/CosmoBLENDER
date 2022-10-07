@@ -1,6 +1,8 @@
 # Script to generate secondary bispectrum bias on a cluster
 
-import sys
+import sys    freq_GHz = np.array([150.])#np.array([27.3, 41.7, 93., 143., 225.,278.])  # [Hz]
+    beam_size = np.array([1.])#np.array([7.4, 5.1, 2.2, 1.4, 1.0, 0.9])  # [arcmin]
+    nlev_t = np.array([18.])#np.array([52., 27., 5.8, 6.3, 15., 37.])  # [muK*arcmin]
 sys.path.insert(0,'/Users/antonbaleatolizancos/Projects/lensing_rec_biases/lensing_rec_biases_code/')
 sys.path.insert(0,'/Users/antonbaleatolizancos/Projects/lensing_rec_biases/')
 import numpy as np
@@ -16,9 +18,7 @@ if __name__ == '__main__':
     lmax = 3000  # Maximum ell for the reconstruction
     nx = 256
     dx_arcmin = 1.0 * 2
-    freq_GHz = np.array([150.])#np.array([27.3, 41.7, 93., 143., 225.,278.])  # [Hz]
-    beam_size = np.array([1.])#np.array([7.4, 5.1, 2.2, 1.4, 1.0, 0.9])  # [arcmin]
-    nlev_t = np.array([18.])#np.array([52., 27., 5.8, 6.3, 15., 37.])  # [muK*arcmin]
+
 
     MV_ILC_bool = True
 
