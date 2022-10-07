@@ -88,7 +88,7 @@ class hm_framework:
         autofreq = np.array([[exp.freq_GHz], [exp.freq_GHz]], dtype=np.double)   *1e9    #Ghz
         f_cen = tls.from_Jypersr_to_uK(exp.freq_GHz) * self.hcos._get_fcen(autofreq[0])[:,:,0]
         f_sat = tls.from_Jypersr_to_uK(exp.freq_GHz) * self.hcos._get_fsat(autofreq[0], cibinteg='trap', satmf='Tinker')[:,:,0]
-        return (f_sat / f_cen)**j * ( (1 + j) * f_cen +  f_sat )
+        return f_sat**j * ( (1 + j) * f_cen +  f_sat )
 
     def get_tsz_auto_biases(self, exp, fftlog_way=True, get_secondary_bispec_bias=False, bin_width_out=30, \
                      bin_width_out_second_bispec_bias=250, parallelise_secondbispec=True):
