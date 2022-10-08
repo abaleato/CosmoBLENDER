@@ -15,7 +15,6 @@ def test_clbb_bias(hm_calc, exp):
     plt.ylabel(r'$C_l^{BB}$ [$\mu$K$^2$]')
     plt.xlabel(r'$l$')
     plt.legend()
-    return
 
 def test_cib_ps(hm_object, exp_object):
     """ Check the CIB power spectrum"""
@@ -41,8 +40,8 @@ def test_cib_ps(hm_object, exp_object):
     plt.ylabel(r'$C_l\,[\mathrm{Jy}^2\,\mathrm{sr}^{-1}]$')
     plt.xlim([10, 1e4])
     plt.ylim([1,3e6])
+
     plt.title('CIB power spectrum')
-    return
 
 def test_tsz_ps(hm_object):
     """ Check the tSZ power spectrum as a function of the pressure profile xmax out to which we integrate
@@ -116,6 +115,7 @@ if __name__ == '__main__':
                                       m_max=m_max, m_min=m_min, nxs=nxs, k_min=k_min, k_max=k_max, nks=nks)
         # Check the tSZ power spectrum
         test_tsz_ps(hm_calc)
+        plt.show()
 
     elif which_test == 'test_CIB':
         # Initialise experiment object
@@ -133,13 +133,14 @@ if __name__ == '__main__':
         hm_calc = biases.hm_framework(cosmoParams=cosmoParams, nZs=nZs, nMasses=nMasses, z_max=z_max)
         # Check CIB power spectrum
         test_cib_ps(hm_calc, SPT_nocut)
+        plt.show()
 
     elif which_test=='test_clbb_bias':
         # Initialise experiment object
         nlev_t = 18.  # uK arcmin
         beam_size = 1.  # arcmin
         lmax = 3000  # Maximum ell for the reconstruction
-        freq_GHz = 545.
+        freq_GHz = 143.
         massCut_Mvir = 5e17
         # Initialise experiments with various different mass cuts
         SPT_nocut = qest.experiment(nlev_t, beam_size, lmax, massCut_Mvir=massCut_Mvir, freq_GHz=freq_GHz)
@@ -150,6 +151,5 @@ if __name__ == '__main__':
         hm_calc = biases.hm_framework(cosmoParams=cosmoParams, nZs=nZs, nMasses=nMasses, z_max=z_max)
         # Check CIB power spectrum
         test_clbb_bias(hm_calc, SPT_nocut)
-
-    plt.show()
+        plt.show()
 
