@@ -75,20 +75,30 @@ class hm_framework:
         # I have removed this for now as i think it is likley subdomiant
         self.consistency =  np.trapz(self.hcos.nzm*self.hcos.bh*self.hcos.ms/self.hcos.rho_matter_z(0)*mMask,self.hcos.ms, axis=-1)
 
-    def get_hod_factorial(self, n, exp):
+    def get_fcen_fsat(self, exp, convert_to_muK=True):
+        """
+        Compute f_cen and f_sat (defined in arxiv:1109.1522)
+        - Input:
+            * exp = a qest.experiment object
+        """
+        autofreq = np.array([[exp.freq_GHz], [exp.freq_GHz]], dtype=np.double)   *1e9    #Ghz
+
+        if convert_to_muK:
+            conversion = tls.from_Jypersr_to_uK(exp.freq_GHz)
+        else:
+            conversion = 1
+        self.f_cen = conversion * self.hcos._get_fcen(autofreq[0])[:,:,0]
+        self.f_sat = conversion * self.hcos._get_fsat(autofreq[0], cibinteg='trap', satmf='Tinker')[:,:,0]
+
+    def get_hod_factorial(self, n):
         """
         Calculate the function of f_cen and f_sat coming from <N_gal(N_gal-1)...(N_gal-j)>, where j=n-1
         - Input:
             * n = int. Number of different galaxies in the halo.
-            * exp = a qest.experiment object
         - Return:
             * a 2D array with size (num of zs, num of ms)
         """
-        j = n-1
-        autofreq = np.array([[exp.freq_GHz], [exp.freq_GHz]], dtype=np.double)   *1e9    #Ghz
-        f_cen = tls.from_Jypersr_to_uK(exp.freq_GHz) * self.hcos._get_fcen(autofreq[0])[:,:,0]
-        f_sat = tls.from_Jypersr_to_uK(exp.freq_GHz) * self.hcos._get_fsat(autofreq[0], cibinteg='trap', satmf='Tinker')[:,:,0]
-        return f_sat**j * ( (1 + j) * f_cen +  f_sat )
+        return self.f_sat**(n-1) * ( n * self.f_cen +  self.f_sat )
 
     def get_tsz_auto_biases(self, exp, fftlog_way=True, get_secondary_bispec_bias=False, bin_width_out=30, \
                      bin_width_out_second_bispec_bias=250, parallelise_secondbispec=True):
@@ -349,9 +359,10 @@ class hm_framework:
         hcos = self.hcos
         self.get_consistency(exp)
 
-        # Get the HOD factorial we will be needing #FIXME: there are much better ways of doing this
-        hod_fact_2gal = self.get_hod_factorial(2, exp)
-        hod_fact_4gal = self.get_hod_factorial(4, exp)
+        # Compute key CIB variables
+        self.get_fcen_fsat(exp)
+        hod_fact_2gal = self.get_hod_factorial(2)
+        hod_fact_4gal = self.get_hod_factorial(4)
 
         # Output ells
         ells_out = np.arange(self.lmax_out+1)
@@ -635,17 +646,20 @@ class hm_framework:
             exp.biases['mixed']['cross_w_gals']['2h'] = ql.maps.cfft(exp.nx,exp.dx,fft=exp.biases['mixed']['cross_w_gals']['2h']).get_ml(lbins).specs['cl']
             return
 
-    def get_cib_ps(self, exp):
+    def get_cib_ps(self, exp, convert_to_muK=False):
         """
         Calculate the CIB power spectrum
         Input:
             * exp = a qest.experiment object
         """
-        autofreq = np.array([[exp.freq_GHz], [exp.freq_GHz]], dtype=np.double)   *1e9    #Ghz
+        # FIXME: update docs of input
         hcos = self.hcos
+        self.get_consistency(exp)
 
-        gal_prof_square = hcos._get_cib_square(autofreq, satflag=True, cibinteg='trap', satmf='Tinker')
-        gal_prof = hcos._get_cib(autofreq[0], satflag=True, cibinteg='trap', satmf='Tinker')
+        # Compute key CIB variables
+        self.get_fcen_fsat(exp, convert_to_muK=convert_to_muK)
+        hod_fact_2gal = self.get_hod_factorial(2)
+        hod_fact_1gal = self.get_hod_factorial(1)
 
         # Output ells
         ells_out = np.arange(self.lmax_out+1)
@@ -664,28 +678,28 @@ class hm_framework:
             for j,m in enumerate(hcos.ms):
                 if m> exp.massCut: continue
                 #project the galaxy profiles
-                g_square = tls.pkToPell(hcos.comoving_radial_distance(hcos.zs[i]), hcos.ks,
-                                    gal_prof_square[i, j] * (1 - np.exp(-(hcos.ks / hcos.p['kstar_damping']))),
-                                    ellmax=self.lmax_out)
-                g = tls.pkToPell(hcos.comoving_radial_distance(hcos.zs[i]), hcos.ks,
-                             gal_prof[i, j] * (1 - np.exp(-(hcos.ks / hcos.p['kstar_damping']))), ellmax=self.lmax_out)
+                # project the galaxy profiles
+                u = tls.pkToPell(hcos.comoving_radial_distance(hcos.zs[i]), hcos.ks, hcos.uk_profiles['nfw'][i, j], ellmax=exp.lmax)
+                u_softened = tls.pkToPell(hcos.comoving_radial_distance(hcos.zs[i]), hcos.ks, hcos.uk_profiles['nfw'][i, j] * \
+                                 (1 - np.exp(-(hcos.ks / hcos.p['kstar_damping']))), ellmax=exp.lmax)
                 # Accumulate the integrands
-                integrand_oneHalo_ps[:, j] = g_square * hcos.nzm[i, j]
-                integrand_twoHalo_2g[:, j] = g * hcos.nzm[i, j] * hcos.bh[i, j]
+                integrand_oneHalo_ps[:, j] = hod_fact_2gal[i, j] * hcos.nzm[i, j] * u_softened * np.conjugate(u_softened)
+                integrand_twoHalo_2g[:, j] = hod_fact_1gal[i, j] * hcos.nzm[i, j] * hcos.bh[i, j] * u
 
                 # Perform the m integrals
             oneHalo_ps[:, i] = np.trapz(integrand_oneHalo_ps, hcos.ms, axis=-1)
             # This is the two halo term. P_k times the M integrals
             pk = tls.pkToPell(hcos.comoving_radial_distance(hcos.zs[i]), hcos.ks, hcos.Pzk[i], ellmax=self.lmax_out)
+            #TODO: implement consistency!
             twoHalo_ps[:, i] = np.trapz(integrand_twoHalo_2g, hcos.ms, axis=-1) ** 2 * pk
 
         # Integrate over z
         clCIBCIB_oneHalo_ps = np.trapz(
-            oneHalo_ps * (1 + hcos.zs) ** -2 * hcos.comoving_radial_distance(hcos.zs) ** -2 * (hcos.h_of_z(hcos.zs) ** -1),
-            hcos.zs, axis=-1)
+            oneHalo_ps * (1 + hcos.zs) ** -2 * hcos.comoving_radial_distance(hcos.zs) ** -2 *
+            (hcos.h_of_z(hcos.zs) ** -1), hcos.zs, axis=-1)
         clCIBCIB_twoHalo_ps = np.trapz(
-            twoHalo_ps * (1 + hcos.zs) ** -2 * hcos.comoving_radial_distance(hcos.zs) ** -2 * (hcos.h_of_z(hcos.zs) ** -1),
-            hcos.zs, axis=-1)
+            twoHalo_ps * (1 + hcos.zs) ** -2 * hcos.comoving_radial_distance(hcos.zs) ** -2 *
+            (hcos.h_of_z(hcos.zs) ** -1), hcos.zs, axis=-1)
         return clCIBCIB_oneHalo_ps, clCIBCIB_twoHalo_ps
 
     def get_mixed_auto_biases(self, exp, fftlog_way=True, get_secondary_bispec_bias=False, bin_width_out=30, \
