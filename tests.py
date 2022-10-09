@@ -15,20 +15,33 @@ def test_clbb_bias(hm_calc, exp):
     plt.ylabel(r'$C_l^{BB}$ [$\mu$K$^2$]')
     plt.xlabel(r'$l$')
     plt.legend()
-    return
 
 def test_cib_ps(hm_object, exp_object):
     """ Check the CIB power spectrum"""
-    clCIBCIB_oneHalo_ps, clCIBCIB_twoHalo_ps = hm_object.get_cib_ps(exp_object)
+    # Our calculation
+    clCIBCIB_oneHalo_ps, clCIBCIB_twoHalo_ps = hm_object.get_cib_ps(exp_object, convert_to_muK=False)
+    # Compare to Yogesh' calculation
+    ells = np.arange(3000)
+    PII_yogesh_1h = hm_calc.hcos.get_power_1halo('cib', nu_obs=np.array([exp_object.freq_GHz * 1e9]))
+    PII_yogesh_2h = hm_calc.hcos.get_power_2halo('cib', nu_obs=np.array([exp_object.freq_GHz * 1e9]))
+
+    clCIBCIB_1h_yogesh = hm_calc.hcos.C_ii(ells, hm_object.hcos.zs, hm_object.hcos.ks, PII_yogesh_1h, dcdzflag=False)
+    clCIBCIB_2h_yogesh = hm_calc.hcos.C_ii(ells, hm_object.hcos.zs, hm_object.hcos.ks, PII_yogesh_2h, dcdzflag=False)
+
     plt.loglog(clCIBCIB_oneHalo_ps + clCIBCIB_twoHalo_ps, label='total', color='r')
     plt.loglog(clCIBCIB_oneHalo_ps, label='1 halo term', color='g')
     plt.loglog(clCIBCIB_twoHalo_ps, label='2 halo term', color='b')
+    plt.loglog(ells, clCIBCIB_1h_yogesh + clCIBCIB_2h_yogesh, label="Yogesh tot", color='k', ls='-')
+    plt.loglog(ells, clCIBCIB_1h_yogesh, label="Yogesh 1h", color='k', ls=':')
+    plt.loglog(ells, clCIBCIB_2h_yogesh, label="Yogesh 2h", color='k', ls='--')
+
     plt.xlabel(r'l')
     plt.legend()
     plt.ylabel(r'$C_l\,[\mathrm{Jy}^2\,\mathrm{sr}^{-1}]$')
     plt.xlim([10, 1e4])
+    plt.ylim([1,3e6])
+
     plt.title('CIB power spectrum')
-    return
 
 def test_tsz_ps(hm_object):
     """ Check the tSZ power spectrum as a function of the pressure profile xmax out to which we integrate
@@ -79,7 +92,7 @@ def test_tsz_ps(hm_object):
     plt.grid(which='both')
 
 if __name__ == '__main__':
-    which_test = 'test_clbb_bias' # 'test_CIB' or 'test_tSZ' or 'test_clbb_bias'
+    which_test = 'test_CIB' # 'test_CIB' or 'test_tSZ' or 'test_clbb_bias'
 
     # Initialise the experiment and halo model object for which to run the tests
     # This should roughly match the cosmology in Nick's tSZ papers
@@ -102,25 +115,9 @@ if __name__ == '__main__':
                                       m_max=m_max, m_min=m_min, nxs=nxs, k_min=k_min, k_max=k_max, nks=nks)
         # Check the tSZ power spectrum
         test_tsz_ps(hm_calc)
+        plt.show()
 
     elif which_test == 'test_CIB':
-        # Initialise experiment object
-        nlev_t = 18.  # uK arcmin
-        beam_size = 1.  # arcmin
-        lmax = 3000  # Maximum ell for the reconstruction
-        freq_GHz = 545.
-        massCut_Mvir = 5e17
-        # Initialise experiments with various different mass cuts
-        SPT_nocut = qest.experiment(nlev_t, beam_size, lmax, massCut_Mvir=massCut_Mvir, freq_GHz=freq_GHz)
-        # Initialise a halo model object for the CIB PS calculation, using mostly default parameters
-        nZs = 60  # 30
-        nMasses = 100  # 30
-        z_max = 7
-        hm_calc = biases.hm_framework(cosmoParams=cosmoParams, nZs=nZs, nMasses=nMasses, z_max=z_max)
-        # Check CIB power spectrum
-        test_cib_ps(hm_calc, SPT_nocut)
-
-    elif which_test=='test_clbb_bias':
         # Initialise experiment object
         nlev_t = 18.  # uK arcmin
         beam_size = 1.  # arcmin
@@ -135,7 +132,24 @@ if __name__ == '__main__':
         z_max = 4
         hm_calc = biases.hm_framework(cosmoParams=cosmoParams, nZs=nZs, nMasses=nMasses, z_max=z_max)
         # Check CIB power spectrum
-        test_clbb_bias(hm_calc, SPT_nocut)
+        test_cib_ps(hm_calc, SPT_nocut)
+        plt.show()
 
-    plt.show()
+    elif which_test=='test_clbb_bias':
+        # Initialise experiment object
+        nlev_t = 18.  # uK arcmin
+        beam_size = 1.  # arcmin
+        lmax = 3000  # Maximum ell for the reconstruction
+        freq_GHz = 143.
+        massCut_Mvir = 5e17
+        # Initialise experiments with various different mass cuts
+        SPT_nocut = qest.experiment(nlev_t, beam_size, lmax, massCut_Mvir=massCut_Mvir, freq_GHz=freq_GHz)
+        # Initialise a halo model object for the CIB PS calculation, using mostly default parameters
+        nZs = 30  # 30
+        nMasses = 30  # 30
+        z_max = 4
+        hm_calc = biases.hm_framework(cosmoParams=cosmoParams, nZs=nZs, nMasses=nMasses, z_max=z_max)
+        # Check CIB power spectrum
+        test_clbb_bias(hm_calc, SPT_nocut)
+        plt.show()
 
