@@ -150,6 +150,7 @@ class experiment:
             # Multiply the ILC weights at each freq by the tSZ scaling at that freq, then sum them together at every multipole
             tsz_filter = np.sum(tls.scale_sz(self.freq_GHz) * self.ILC_weights, axis=1)
             # Return the filter interpolated at every ell where we will perform lensing reconstructions, i.e. [0, self.lmax]
+            #TODO: I don't think this interpolation step is needed anymore
             return np.interp(np.arange(self.lmax+1), self.ILC_weights_ells, tsz_filter, left=0, right=0)
         else:
             # Single-frequency scenario. Return a single number.

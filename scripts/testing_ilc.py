@@ -16,7 +16,7 @@ nlev_t = np.array([18.]) # uK arcmin
 beam_size = np.array([1.]) #arcmin
 '''
 
-freq_GHz = np.array([27.3, 41.7, 93., 143., 225., 278.])   # [Hz]#np.array([27.e9, 39.e9, 93.e9, 145.e9, 225.e9, 280.e9])   # [Hz] #np.array([27.3e9, 41.7e9, 93.e9, 143.e9, 225.e9, 278.e9])   # [Hz]
+freq_GHz = np.array([27.3, 41.7, 93., 143., 225., 278.])   # [Hz]
 beam_size = np.array([7.4, 5.1, 2.2, 1.4, 1.0, 0.9])   # [arcmin]
 nlev_t = np.array([52., 27., 5.8, 6.3, 15., 37.])  # [muK*arcmin]
 
@@ -28,7 +28,7 @@ SO_5e15 = qest.experiment(nlev_t, beam_size, lmax, massCut_Mvir=5e15, freq_GHz=f
 # This should roughly match the cosmology in Nick's tSZ papers
 cosmoParams = {'As':2.4667392631170437e-09,'ns':.96,'omch2':(0.25-.043)*.7**2,'ombh2':0.044*.7**2,'H0':70.} #Note that for now there is still cosmology dpendence in the cls defined within the experiment class
 
-z_max = 3 #3
+z_max = 4 #3
 nZs = 30 #50
 nMasses = 30 #30
 
@@ -38,10 +38,17 @@ cib_model='planck13'#'vierro'
 # Initialise a halo model object for the calculation, using mostly default parameters
 hm_calc = biases.hm_framework(cosmoParams=cosmoParams, nZs=nZs, nMasses=nMasses, cib_model=cib_model, z_max=z_max)
 
-hm_calc.get_tsz_auto_biases(SO_5e15)
-
-which_bias = 'tsz' # 'tsz' or 'cib' or 'mixed'
+which_bias = 'cib' # 'tsz' or 'cib' or 'mixed'
 experiment = SO_5e15
+
+if which_bias=='tsz':
+    hm_calc.get_tsz_auto_biases(experiment)
+elif which_bias=='cib':
+    hm_calc.get_cib_auto_biases(experiment)
+elif which_bias=='mixed':
+    hm_calc.get_mixed_auto_biases(experiment)
+else:
+    print('Please specify which bias to calculate')
 
 # Break down contributions into n-halo terms?
 breakdown = False

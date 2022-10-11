@@ -75,30 +75,6 @@ class hm_framework:
         # I have removed this for now as i think it is likley subdomiant
         self.consistency =  np.trapz(self.hcos.nzm*self.hcos.bh*self.hcos.ms/self.hcos.rho_matter_z(0)*mMask,self.hcos.ms, axis=-1)
 
-    def get_fcen_fsat(self, exp, convert_to_muK=True):
-        """
-        Compute f_cen and f_sat (defined in arxiv:1109.1522)
-        - Input:
-            * exp = a qest.experiment object
-        """
-        autofreq = np.array([[exp.freq_GHz], [exp.freq_GHz]], dtype=np.double)   *1e9    #Ghz
-
-        if convert_to_muK:
-            conversion = tls.from_Jypersr_to_uK(exp.freq_GHz)
-        else:
-            conversion = 1
-        self.f_cen = conversion * self.hcos._get_fcen(autofreq[0])[:,:,0]
-        self.f_sat = conversion * self.hcos._get_fsat(autofreq[0], cibinteg='trap', satmf='Tinker')[:,:,0]
-
-    def get_hod_factorial(self, n):
-        """
-        Calculate the function of f_cen and f_sat coming from <N_gal(N_gal-1)...(N_gal-j)>, where j=n-1
-        - Input:
-            * n = int. Number of different galaxies in the halo.
-        - Return:
-            * a 2D array with size (num of zs, num of ms)
-        """
-        return self.f_sat**(n-1) * ( n * self.f_cen +  self.f_sat )
 
     def get_tsz_auto_biases(self, exp, fftlog_way=True, get_secondary_bispec_bias=False, bin_width_out=30, \
                      bin_width_out_second_bispec_bias=250, parallelise_secondbispec=True):
@@ -354,6 +330,54 @@ class hm_framework:
         ps_twoHalo_tSZ = np.zeros(ps_oneHalo_tSZ.shape)
         return ps_oneHalo_tSZ, ps_twoHalo_tSZ
 
+    def get_fcen_fsat(self, exp, convert_to_muK=True):
+        """
+        Compute f_cen and f_sat (defined in arxiv:1109.1522)
+        - Input:
+            * exp = a qest.experiment object
+        """
+        # TODO: this function should eventually be removed. It's made redundant by get_CIB_filters()
+        autofreq = np.array([[exp.freq_GHz], [exp.freq_GHz]], dtype=np.double)   *1e9    #Ghz
+
+        if convert_to_muK:
+            conversion = tls.from_Jypersr_to_uK(exp.freq_GHz)
+        else:
+            conversion = 1
+        self.f_cen = conversion * self.hcos._get_fcen(autofreq[0])[:,:,0]
+        self.f_sat = conversion * self.hcos._get_fsat(autofreq[0], cibinteg='trap', satmf='Tinker')[:,:,0]
+
+    def get_hod_factorial(self, n):
+        """
+        Calculate the function of f_cen and f_sat coming from <N_gal(N_gal-1)...(N_gal-j)>, where j=n-1
+        - Input:
+            * n = int. Number of different galaxies in the halo.
+        - Return:
+            * a 2D array with size (num of zs, num of ms)
+        """
+        # TODO: this function should eventually be removed. It's made redundant by get_CIB_filters()
+        return self.f_sat**(n-1) * ( n * self.f_cen +  self.f_sat )
+
+    def get_CIB_filters(self, exp):
+        """
+         Compute \Sum_{\nu} f^{\nu}(z,M) w^{\nu, ILC}_l
+        """
+        if len(exp.freq_GHz)>1:
+            f_cen_array = np.zeros((len(exp.freq_GHz), len(self.hcos.zs), len(self.hcos.ms)))
+            f_sat_array = f_cen_array.copy()
+            for i, freq in enumerate(np.array(exp.freq_GHz*1e9)):
+                #TODO: make this cleaner
+                freq = np.array([freq])
+                f_cen_array[i, :, :] = self.hcos._get_fcen(freq)[:,:,0]
+                f_sat_array[i, :, :] = self.hcos._get_fsat(freq, cibinteg='trap', satmf='Tinker')[:,:,0]
+
+            # Compute \Sum_{\nu} f^{\nu}(z,M) w^{\nu, ILC}_l
+            self.CIB_central_filter = np.sum(exp.ILC_weights[:,:,None,None] * f_cen_array, axis=1)
+            self.CIB_satellite_filter = np.sum(exp.ILC_weights[:,:,None,None] * f_sat_array, axis=1)
+        else:
+            # Single-frequency scenario. Return two (nZs, nMs) array containing f_cen(M,z) and f_sat(M,z)
+            self.CIB_central_filter = self.hcos._get_fcen(exp.freq_GHz*1e9)[:,:,0]
+            self.CIB_satellite_filter = self.hcos._get_fsat(exp.freq_GHz*1e9, cibinteg='trap', satmf='Tinker')[:,:,0]
+
     def get_cib_auto_biases(self, exp, fftlog_way=True, get_secondary_bispec_bias=False, bin_width_out=30, \
                      bin_width_out_second_bispec_bias=250, parallelise_secondbispec=True):
         """
@@ -366,10 +390,8 @@ class hm_framework:
         hcos = self.hcos
         self.get_consistency(exp)
 
-        # Compute key CIB variables
-        self.get_fcen_fsat(exp)
-        hod_fact_2gal = self.get_hod_factorial(2)
-        hod_fact_4gal = self.get_hod_factorial(4)
+        # Compute effective CIB weights, including f_cen and f_sat factors as well as possibly fg cleaning
+        self.get_CIB_filters(exp)
 
         # Output ells
         ells_out = np.arange(self.lmax_out+1)
@@ -401,20 +423,26 @@ class hm_framework:
             for j,m in enumerate(hcos.ms):
                 if m> exp.massCut: continue
                 #project the galaxy profiles
-                u = tls.pkToPell(hcos.comoving_radial_distance(hcos.zs[i]), hcos.ks, hcos.uk_profiles['nfw'][i, j], ellmax=exp.lmax)
+                u = tls.pkToPell(hcos.comoving_radial_distance(hcos.zs[i]), hcos.ks,
+                                                          hcos.uk_profiles['nfw'][i, j], ellmax=exp.lmax)
+                u_cen = self.CIB_central_filter[:,i,j] # Centrals come with a factor of u^0 # TODO: is it better to have u here, or not?
+                u_sat = self.CIB_satellite_filter[:,i,j] * u
 
-                phi_estimate_cfft_uu =  exp.get_TT_qe(fftlog_way, ells_out, u, u)
+                phi_estimate_cfft_ucen_usat =  exp.get_TT_qe(fftlog_way, ells_out, u_cen, u_sat)
+                phi_estimate_cfft_usat_usat =  exp.get_TT_qe(fftlog_way, ells_out, u_sat, u_sat)
 
                 # Get the kappa map
                 kap = tls.pkToPell(hcos.comoving_radial_distance(hcos.zs[i]),hcos.ks,hcos.uk_profiles['nfw'][i,j]\
                                    *hcos.lensing_window(hcos.zs[i],1100.), ellmax=self.lmax_out)
                 kfft = kap*self.ms_rescaled[j]/(1+hcos.zs[i])**3 if fftlog_way else ql.spec.cl2cfft(kap,exp.pix).fft*self.ms_rescaled[j]/(1+hcos.zs[i])**3
                 # Accumulate the integrands
-                integrand_oneHalo_cross[...,j] = hod_fact_2gal[i, j] * phi_estimate_cfft_uu * np.conjugate(kfft) * hcos.nzm[i,j]
-                integrand_oneHalo_IIII[...,j] = hod_fact_4gal[i, j] * phi_estimate_cfft_uu * np.conjugate(phi_estimate_cfft_uu) * hcos.nzm[i,j]
+                integrand_oneHalo_cross[...,j] = hcos.nzm[i,j] * np.conjugate(kfft) * (phi_estimate_cfft_usat_usat +
+                                                                                       2 * phi_estimate_cfft_ucen_usat)
+                integrand_oneHalo_IIII[...,j] = hcos.nzm[i,j] * (phi_estimate_cfft_usat_usat * np.conjugate(phi_estimate_cfft_usat_usat)
+                                                                 + 4 * phi_estimate_cfft_ucen_usat * np.conjugate(phi_estimate_cfft_usat_usat))
 
                 integrand_twoHalo_k[...,j] = np.conjugate(kfft) * hcos.nzm[i,j] * hcos.bh[i,j]
-                integrand_twoHalo_II[...,j] = hod_fact_2gal[i, j] * phi_estimate_cfft_uu * hcos.nzm[i,j] * hcos.bh[i,j]
+                integrand_twoHalo_II[...,j] = hcos.nzm[i,j] * hcos.bh[i,j] * (phi_estimate_cfft_usat_usat + 2 * phi_estimate_cfft_ucen_usat)
 
                 if get_secondary_bispec_bias:
                     # Temporary secondary bispectrum bias stuff
@@ -424,10 +452,13 @@ class hm_framework:
                     # Get the kappa map, up to lmax rather than lmax_out as was needed in other terms
                     kap_secbispec = tls.pkToPell(hcos.comoving_radial_distance(hcos.zs[i]), hcos.ks,
                                                  hcos.uk_profiles['nfw'][i, j] * hcos.lensing_window(hcos.zs[i], 1100.), ellmax=exp.lmax)
-                    secondary_bispec_bias_reconstructions = sbbs.get_secondary_bispec_bias(lbins_second_bispec_bias, qe_norm_1D,
-                                                                                           exp_param_dict, exp.cltt_tot, u, kap_secbispec*self.ms_rescaled[j]/(1+hcos.zs[i])**3,\
-                                                                                           parallelise=parallelise_secondbispec)
-                    integrand_oneHalo_second_bispec[..., j] = hod_fact_2gal[i, j] * hcos.nzm[i,j] * secondary_bispec_bias_reconstructions
+                    secondary_bispec_bias_reconstructions = 2 * sbbs.get_secondary_bispec_bias(lbins_second_bispec_bias, qe_norm_1D,
+                                                                                           exp_param_dict, exp.cltt_tot, u_cen, kap_secbispec*self.ms_rescaled[j]/(1+hcos.zs[i])**3,\
+                                                                                           projected_fg_profile_2 = u_sat, parallelise=parallelise_secondbispec) +\
+                                                            sbbs.get_secondary_bispec_bias(lbins_second_bispec_bias, qe_norm_1D,
+                                                                                           exp_param_dict, exp.cltt_tot, u_sat, kap_secbispec*self.ms_rescaled[j]/(1+hcos.zs[i])**3,\
+                                                                                           projected_fg_profile_2 = u_sat, parallelise=parallelise_secondbispec)
+                    integrand_oneHalo_second_bispec[..., j] = hcos.nzm[i,j] * secondary_bispec_bias_reconstructions
                     # FIXME:add the 2-halo term. Should be easy.
 
             # Perform the m integrals
@@ -495,8 +526,8 @@ class hm_framework:
         hcos = self.hcos
         self.get_consistency(exp)
 
-        # Get the HOD factorial we will be needing #FIXME: there are much better ways of doing this
-        hod_fact_2gal = self.get_hod_factorial(2, exp)
+        # Compute effective CIB weights, including f_cen and f_sat factors as well as possibly fg cleaning
+        self.get_CIB_filters(exp)
 
         # Output ells
         ells_out = np.arange(self.lmax_out+1)
@@ -517,7 +548,11 @@ class hm_framework:
             for j,m in enumerate(hcos.ms):
                 if m> exp.massCut: continue
                 #project the galaxy profiles
-                u = tls.pkToPell(hcos.comoving_radial_distance(hcos.zs[i]), hcos.ks, hcos.uk_profiles['nfw'][i, j], ellmax=exp.lmax)
+                u = tls.pkToPell(hcos.comoving_radial_distance(hcos.zs[i]), hcos.ks,
+                                 hcos.uk_profiles['nfw'][i, j], ellmax=exp.lmax)
+                u_cen = self.CIB_central_filter[:, i, j]  # Centrals come with a factor of u^0 # TODO: is it better to have u here, or not?
+                u_sat = self.CIB_satellite_filter[:, i, j] * u
+
                 # Get the galaxy map --- analogous to kappa in the auto-biases. Note that we need a factor of
                 # H dividing the galaxy window function to translate the hmvec convention to e.g. Ferraro & Hill 18 # TODO:Why?
                 gal = tls.pkToPell(hcos.comoving_radial_distance(hcos.zs[i]),hcos.ks,hcos.uk_profiles['nfw'][i,j]\
@@ -526,13 +561,16 @@ class hm_framework:
                 galfft = gal / hcos.hods[survey_name]['ngal'][i] / (1 + hcos.zs[i]) ** 3 if fftlog_way else ql.spec.cl2cfft(gal, exp.pix).fft / \
                                                                     hcos.hods[survey_name]['ngal'][i] / (1 + hcos.zs[i]) ** 3
 
-                phi_estimate_cfft_uu =  exp.get_TT_qe(fftlog_way, ells_out, u, u)
+                phi_estimate_cfft_ucen_usat = exp.get_TT_qe(fftlog_way, ells_out, u_cen, u_sat)
+                phi_estimate_cfft_usat_usat = exp.get_TT_qe(fftlog_way, ells_out, u_sat, u_sat)
 
                 # Accumulate the integrands
                 mean_Ngal = hcos.hods[survey_name]['Nc'][i, j] + hcos.hods[survey_name]['Ns'][i, j]
-                integrand_oneHalo_cross[...,j] = mean_Ngal * hod_fact_2gal[i, j] * phi_estimate_cfft_uu * np.conjugate(galfft) * hcos.nzm[i,j]
+                integrand_oneHalo_cross[...,j] = mean_Ngal * np.conjugate(galfft) * hcos.nzm[i,j] *\
+                                                 (phi_estimate_cfft_usat_usat + 2 * phi_estimate_cfft_ucen_usat)
                 integrand_twoHalo_k[...,j] = mean_Ngal * np.conjugate(galfft) * hcos.nzm[i,j] * hcos.bh[i,j]
-                integrand_twoHalo_II[...,j] = hod_fact_2gal[i, j] * phi_estimate_cfft_uu * hcos.nzm[i,j] * hcos.bh[i,j]
+                integrand_twoHalo_II[...,j] = hcos.nzm[i,j] * hcos.bh[i,j] \
+                                              * ((phi_estimate_cfft_usat_usat + 2 * phi_estimate_cfft_ucen_usat))
 
             oneHalo_cross[...,i]=np.trapz(integrand_oneHalo_cross,hcos.ms,axis=-1)
 
