@@ -846,10 +846,12 @@ class hm_framework:
                     # Get the kappa map, up to lmax rather than lmax_out as was needed in other terms
                     kap_secbispec = tls.pkToPell(hcos.comoving_radial_distance(hcos.zs[i]), hcos.ks,
                                                  hcos.uk_profiles['nfw'][i, j] * hcos.lensing_window(hcos.zs[i], 1100.), ellmax=exp.lmax)
-                    # FIXME: HAVEN'T IMPLEMENTED FG CLEANING HERE YET!
                     secondary_bispec_bias_reconstructions = sbbs.get_secondary_bispec_bias(lbins_second_bispec_bias, qe_norm_1D,
-                                                                                           exp_param_dict, exp.cltt_tot, u, kap_secbispec*self.ms_rescaled[j]/(1+hcos.zs[i])**3,\
-                                                                                           y, parallelise=parallelise_secondbispec)
+                                                                                           exp_param_dict, exp.cltt_tot, u_cen, kap_secbispec*self.ms_rescaled[j]/(1+hcos.zs[i])**3,\
+                                                                                           projected_fg_profile_2 = y, parallelise=parallelise_secondbispec) +\
+                                                            sbbs.get_secondary_bispec_bias(lbins_second_bispec_bias, qe_norm_1D,
+                                                                                           exp_param_dict, exp.cltt_tot, u_sat, kap_secbispec*self.ms_rescaled[j]/(1+hcos.zs[i])**3,\
+                                                                                           projected_fg_profile_2 = y, parallelise=parallelise_secondbispec)
                     integrand_oneHalo_second_bispec[..., j] = hod_fact_1gal[i, j] * hcos.nzm[i,j] * secondary_bispec_bias_reconstructions
 
             # Perform the m integrals
