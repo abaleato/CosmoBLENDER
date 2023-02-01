@@ -3,6 +3,7 @@
 import sys
 sys.path.insert(0,'/Users/antonbaleatolizancos/Projects/lensing_rec_biases/lensing_rec_biases_code/')
 sys.path.insert(0,'/Users/antonbaleatolizancos/Projects/lensing_rec_biases/')
+
 import numpy as np
 import matplotlib.pyplot as plt
 from lensing_rec_biases_code import qest
@@ -14,20 +15,23 @@ import quicklens as ql
 # Press the green button in the gutter to run the script.
 if __name__ == '__main__':
     t0 = time.time() # Time the run
-    which_bias = 'mixed' #'tsz' or 'cib' or 'mixed'
-    nlev_t = 18.  # uK arcmin
-    beam_size = 1.  # arcmin
+    which_bias = 'tsz' #'tsz' or 'cib' or 'mixed'
     lmax = 3500  # Maximum ell for the reconstruction
     nx = 512
     dx_arcmin = 1.0 #* 2
+
+    freq_GHz = np.array([27.3, 41.7, 93., 143., 225.,278.])  # [Hz]#np.array([27.e9, 39.e9, 93.e9, 145.e9, 225.e9, 280.e9])   # [Hz] #np.array([27.3e9, 41.7e9, 93.e9, 143.e9, 225.e9, 278.e9])   # [Hz]
+    beam_size = np.array([7.4, 5.1, 2.2, 1.4, 1.0, 0.9])  # [arcmin]
+    nlev_t = np.array([52., 27., 5.8, 6.3, 15., 37.])  # [muK*arcmin]
+
+    MV_ILC_bool = True
 
     # Set CIB halo model
     cib_model = 'planck13'  # 'vierro'
     survey_name = "built-in"
     # Initialise an experiment object. Store the list of params so we can later initialise it again within multiple processes
     massCut_Mvir=5e15
-    exp_param_list = [nlev_t, beam_size, lmax, massCut_Mvir, nx, dx_arcmin]
-    SPT_5e15 = qest.experiment(*exp_param_list)
+    experiment = qest.experiment(nlev_t, beam_size, lmax, massCut_Mvir, nx, dx_arcmin, freq_GHz=freq_GHz, MV_ILC_bool=MV_ILC_bool)
 
     # This should roughly match the cosmology in Nick's tSZ papers
     cosmoParams = {'As': 2.4667392631170437e-09, 'ns': .96, 'omch2': (0.25 - .043) * .7 ** 2, 'ombh2': 0.044 * .7 ** 2,
@@ -43,14 +47,13 @@ if __name__ == '__main__':
 
     # Add the HOD for the galaxy sample that we will cross-correlating with lensing
     hm_calc.hcos.add_hod(name=survey_name, mthresh=10 ** 10.5 + hm_calc.hcos.zs * 0.)
-    experiment = SPT_5e15
 
     if which_bias=='tsz':
-        hm_calc.get_tsz_cross_biases(SPT_5e15, survey_name=survey_name)
+        hm_calc.get_tsz_cross_biases(experiment, survey_name=survey_name)
     elif which_bias=='cib':
-        hm_calc.get_cib_cross_biases(SPT_5e15, survey_name=survey_name)
+        hm_calc.get_cib_cross_biases(experiment, survey_name=survey_name)
     elif which_bias=='mixed':
-        hm_calc.get_mixed_cross_biases(SPT_5e15, survey_name=survey_name)
+        hm_calc.get_mixed_cross_biases(experiment, survey_name=survey_name)
 
     plt.figure(figsize=(5, 5))
     scaling = 1#experiment.biases['ells'] ** 4 / (2 * np.pi)
