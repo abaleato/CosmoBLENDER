@@ -626,8 +626,10 @@ class hm_framework:
         gIy_integrand  = (1+hcos.zs)**-1 * hcos.comoving_radial_distance(hcos.zs)**-4
 
         # Integrate over z
-        exp.biases['mixed']['cross_w_gals']['1h'] = conversion_factor * np.trapz( 2 * oneHalo_cross*gIy_integrand, hcos.zs, axis=-1)
-        exp.biases['mixed']['cross_w_gals']['2h'] = conversion_factor * np.trapz( twoHalo_cross*gIy_integrand, hcos.zs, axis=-1)
+        exp.biases['mixed']['cross_w_gals']['1h'] = conversion_factor * tls.scale_sz(exp.freq_GHz) * self.T_CMB \
+                                                    * np.trapz( 2 * oneHalo_cross*gIy_integrand, hcos.zs, axis=-1)
+        exp.biases['mixed']['cross_w_gals']['2h'] = conversion_factor * tls.scale_sz(exp.freq_GHz) * self.T_CMB \
+                                                    * np.trapz( twoHalo_cross*gIy_integrand, hcos.zs, axis=-1)
 
         if fftlog_way:
             exp.biases['ells'] = np.arange(self.lmax_out+1)
