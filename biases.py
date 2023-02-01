@@ -770,10 +770,10 @@ class hm_framework:
         hcos = self.hcos
         self.get_consistency(exp)
 
-        # Get the HOD factorial we will be needing #FIXME: there are much better ways of doing this
-        hod_fact_1gal = self.get_hod_factorial(1, exp)
-        hod_fact_2gal = self.get_hod_factorial(2, exp)
-        hod_fact_3gal = self.get_hod_factorial(3, exp)
+        # Get frequency scaling of tSZ, possibly including harmonic ILC cleaning
+        tsz_filter = exp.get_tsz_filter()
+        # Compute effective CIB weights, including f_cen and f_sat factors as well as possibly fg cleaning
+        self.get_CIB_filters(exp)
 
         # Output ells
         ells_out = np.arange(self.lmax_out+1)
@@ -809,11 +809,17 @@ class hm_framework:
             for j,m in enumerate(hcos.ms):
                 if m> exp.massCut: continue
                 #project the galaxy profiles
-                y = tls.pkToPell(hcos.comoving_radial_distance(hcos.zs[i]), hcos.ks, hcos.pk_profiles['y'][i, j], ellmax=exp.lmax)
-                u = tls.pkToPell(hcos.comoving_radial_distance(hcos.zs[i]), hcos.ks, hcos.uk_profiles['nfw'][i, j], ellmax=exp.lmax)
+                y = tsz_filter * tls.pkToPell(hcos.comoving_radial_distance(hcos.zs[i]), hcos.ks,
+                                              hcos.pk_profiles['y'][i, j], ellmax=exp.lmax)
+                u = tls.pkToPell(hcos.comoving_radial_distance(hcos.zs[i]), hcos.ks,
+                                 hcos.uk_profiles['nfw'][i, j], ellmax=exp.lmax)
+                u_cen = self.CIB_central_filter[:, i, j]  # Centrals come with a factor of u^0 # TODO: is it better to have u here, or not?
+                u_sat = self.CIB_satellite_filter[:, i, j] * u
 
-                phi_estimate_cfft_uu =  exp.get_TT_qe(fftlog_way, ells_out, u, u)
-                phi_estimate_cfft_uy =  exp.get_TT_qe(fftlog_way, ells_out, u, y)
+                phi_estimate_cfft_ucen_usat = exp.get_TT_qe(fftlog_way, ells_out, u_cen, u_sat)
+                phi_estimate_cfft_usat_usat = exp.get_TT_qe(fftlog_way, ells_out, u_sat, u_sat)
+                phi_estimate_cfft_ucen_y = exp.get_TT_qe(fftlog_way, ells_out, u_cen, y)
+                phi_estimate_cfft_usat_y = exp.get_TT_qe(fftlog_way, ells_out, u_sat, y)
                 phi_estimate_cfft_yy = exp.get_TT_qe(fftlog_way, ells_out, y, y)
 
                 # Get the kappa map
@@ -821,16 +827,16 @@ class hm_framework:
                                    *hcos.lensing_window(hcos.zs[i],1100.), ellmax=self.lmax_out)
                 kfft = kap*self.ms_rescaled[j]/(1+hcos.zs[i])**3 if fftlog_way else ql.spec.cl2cfft(kap,exp.pix).fft*self.ms_rescaled[j]/(1+hcos.zs[i])**3
                 # Accumulate the integrands
-                integrand_oneHalo_cross[...,j] = hod_fact_1gal[i,j] * phi_estimate_cfft_uy * np.conjugate(kfft) * hcos.nzm[i,j]
-                integrand_oneHalo_Iyyy[...,j] = hod_fact_1gal[i,j] * phi_estimate_cfft_uy * np.conjugate(phi_estimate_cfft_yy) * hcos.nzm[i,j]
-                integrand_oneHalo_IIyy[...,j] = hod_fact_2gal[i,j] * phi_estimate_cfft_uu * np.conjugate(phi_estimate_cfft_yy) * hcos.nzm[i,j]
-                integrand_oneHalo_IyIy[...,j] = hod_fact_2gal[i,j] * phi_estimate_cfft_uy * np.conjugate(phi_estimate_cfft_uy) * hcos.nzm[i,j]
-                integrand_oneHalo_yIII[...,j] = hod_fact_3gal[i,j] * phi_estimate_cfft_uu * np.conjugate(phi_estimate_cfft_uy) * hcos.nzm[i,j]
+                integrand_oneHalo_cross[...,j] = (phi_estimate_cfft_ucen_y + phi_estimate_cfft_usat_y) * np.conjugate(kfft) * hcos.nzm[i,j]
+                integrand_oneHalo_Iyyy[...,j] = (phi_estimate_cfft_ucen_y + phi_estimate_cfft_usat_y) * np.conjugate(phi_estimate_cfft_yy) * hcos.nzm[i,j]
+                integrand_oneHalo_IIyy[...,j] = (phi_estimate_cfft_usat_usat + 2 * phi_estimate_cfft_ucen_usat) * np.conjugate(phi_estimate_cfft_yy) * hcos.nzm[i,j]
+                integrand_oneHalo_IyIy[...,j] = phi_estimate_cfft_usat_y * (2*phi_estimate_cfft_ucen_y + phi_estimate_cfft_usat_y) * hcos.nzm[i,j]
+                integrand_oneHalo_yIII[...,j] = phi_estimate_cfft_usat_y * (phi_estimate_cfft_usat_usat + 3 * phi_estimate_cfft_ucen_usat) * hcos.nzm[i,j]
 
                 integrand_twoHalo_k[...,j] = np.conjugate(kfft) * hcos.nzm[i,j] * hcos.bh[i,j]
                 integrand_twoHalo_yy[...,j] = phi_estimate_cfft_yy * hcos.nzm[i,j] * hcos.bh[i,j]
-                integrand_twoHalo_Iy[...,j] = hod_fact_1gal[i,j] * phi_estimate_cfft_uy * hcos.nzm[i,j] * hcos.bh[i,j]
-                integrand_twoHalo_II[...,j] = hod_fact_2gal[i,j] * phi_estimate_cfft_uu * hcos.nzm[i,j] * hcos.bh[i,j]
+                integrand_twoHalo_Iy[...,j] = (phi_estimate_cfft_ucen_y + phi_estimate_cfft_usat_y) * hcos.nzm[i,j] * hcos.bh[i,j]
+                integrand_twoHalo_II[...,j] = hcos.nzm[i,j] * hcos.bh[i,j] * (phi_estimate_cfft_usat_usat + 2 * phi_estimate_cfft_ucen_usat)
 
                 if get_secondary_bispec_bias:
                     # Temporary secondary bispectrum bias stuff
@@ -840,6 +846,7 @@ class hm_framework:
                     # Get the kappa map, up to lmax rather than lmax_out as was needed in other terms
                     kap_secbispec = tls.pkToPell(hcos.comoving_radial_distance(hcos.zs[i]), hcos.ks,
                                                  hcos.uk_profiles['nfw'][i, j] * hcos.lensing_window(hcos.zs[i], 1100.), ellmax=exp.lmax)
+                    # FIXME: HAVEN'T IMPLEMENTED FG CLEANING HERE YET!
                     secondary_bispec_bias_reconstructions = sbbs.get_secondary_bispec_bias(lbins_second_bispec_bias, qe_norm_1D,
                                                                                            exp_param_dict, exp.cltt_tot, u, kap_secbispec*self.ms_rescaled[j]/(1+hcos.zs[i])**3,\
                                                                                            y, parallelise=parallelise_secondbispec)
@@ -877,30 +884,22 @@ class hm_framework:
         # Integrand factors from Limber projection (adapted to hmvec conventions)
         Iyyy_integrand = 4 * (1+hcos.zs)**-1 * hcos.comoving_radial_distance(hcos.zs)**-6 * hcos.h_of_z(hcos.zs)**2
         IIyy_integrand = 2 * (1+hcos.zs)**-2 * hcos.comoving_radial_distance(hcos.zs)**-6 * hcos.h_of_z(hcos.zs)
-        IyIy_integrand = 2 * IIyy_integrand # FIXME: not sure if this perm factor should be a 2 or a 4
+        IyIy_integrand = 2 * IIyy_integrand
         yIII_integrand = 4 * (1+hcos.zs)**-3 * hcos.comoving_radial_distance(hcos.zs)**-6
-        kIy_integrand  = 2 * (1+hcos.zs)**-1 * hcos.comoving_radial_distance(hcos.zs)**-4 * hcos.h_of_z(hcos.zs)
+        # kIy_integrand contains a perm factor of 2 is for the exchange of I and y relative to the cib or tsz only cases
+        kIy_integrand  = 4 * (1+hcos.zs)**-1 * hcos.comoving_radial_distance(hcos.zs)**-4 * hcos.h_of_z(hcos.zs)
 
         # Integrate over z
-        exp.biases['mixed']['trispec']['1h'] = np.trapz( tls.scale_sz(exp.freq_GHz)**3 * self.T_CMB**3 * Iyyy_integrand*Iyyy_1h
-                                                         + tls.scale_sz(exp.freq_GHz)**2 * self.T_CMB**2 * IIyy_integrand*IIyy_1h
-                                                         + tls.scale_sz(exp.freq_GHz)**2 * self.T_CMB**2 * IyIy_integrand*IyIy_1h
-                                                         + tls.scale_sz(exp.freq_GHz) * self.T_CMB * yIII_integrand*yIII_1h, hcos.zs, axis=-1)
-        exp.biases['mixed']['trispec']['2h'] = np.trapz( tls.scale_sz(exp.freq_GHz)**3 * self.T_CMB**3 * Iyyy_integrand*Iyyy_2h
-                                                         + tls.scale_sz(exp.freq_GHz)**2 * self.T_CMB**2 * IIyy_integrand*IIyy_2h
-                                                         + tls.scale_sz(exp.freq_GHz)**2 * self.T_CMB**2 * IyIy_integrand*IyIy_2h
-                                                         + tls.scale_sz(exp.freq_GHz) * self.T_CMB * yIII_integrand*yIII_2h, hcos.zs, axis=-1)
-        exp.biases['mixed']['prim_bispec']['1h'] = tls.scale_sz(exp.freq_GHz) * self.T_CMB * conversion_factor\
-                                                   * np.trapz( oneHalo_cross*kIy_integrand, hcos.zs, axis=-1)
-        exp.biases['mixed']['prim_bispec']['2h'] = tls.scale_sz(exp.freq_GHz) * self.T_CMB * conversion_factor\
-                                                   * np.trapz( twoHalo_cross*kIy_integrand, hcos.zs, axis=-1)
+        exp.biases['mixed']['trispec']['1h'] = np.trapz( Iyyy_integrand*Iyyy_1h + IIyy_integrand*IIyy_1h
+                                                         + IyIy_integrand*IyIy_1h + yIII_integrand*yIII_1h, hcos.zs, axis=-1)
+        exp.biases['mixed']['trispec']['2h'] = np.trapz( Iyyy_integrand*Iyyy_2h + IIyy_integrand*IIyy_2h
+                                                         + IyIy_integrand*IyIy_2h + yIII_integrand*yIII_2h, hcos.zs, axis=-1)
+        exp.biases['mixed']['prim_bispec']['1h'] = conversion_factor * np.trapz( oneHalo_cross*kIy_integrand, hcos.zs, axis=-1)
+        exp.biases['mixed']['prim_bispec']['2h'] =  conversion_factor * np.trapz( twoHalo_cross*kIy_integrand, hcos.zs, axis=-1)
 
         if get_secondary_bispec_bias:
             # Perm factor of 4 implemented in the get_secondary_bispec_bias_at_L() function
-            # kIy_integrand contains a perm factor of 2 is for the exchange of I and y relative to the cib or tsz only cases
-            # TODO: check that this perm factor of 2 is right
-            exp.biases['mixed']['second_bispec']['1h'] = tls.scale_sz(exp.freq_GHz) * self.T_CMB * \
-                                                         np.trapz( oneHalo_second_bispec * kIy_integrand, hcos.zs, axis=-1)
+            exp.biases['mixed']['second_bispec']['1h'] = np.trapz( oneHalo_second_bispec * kIy_integrand, hcos.zs, axis=-1)
             exp.biases['second_bispec_bias_ells'] = lbins_second_bispec_bias
 
         if fftlog_way:
