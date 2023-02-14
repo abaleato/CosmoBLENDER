@@ -130,8 +130,7 @@ class hm_framework:
                 # Get the kappa map
                 kap = tls.pkToPell(hcos.comoving_radial_distance(hcos.zs[i]),hcos.ks,hcos.uk_profiles['nfw'][i,j]\
                                    *hcos.lensing_window(hcos.zs[i],1100.), ellmax=self.lmax_out)
-                # FIXME: if you remove the z-scaling dividing ms_rescaled, do it in the input to sbbs.get_secondary_bispec_bias as well
-                kfft = kap*self.ms_rescaled[j]/(1+hcos.zs[i])**3 if fftlog_way else ql.spec.cl2cfft(kap,exp.pix).fft*self.ms_rescaled[j]/(1+hcos.zs[i])**3
+                kfft = kap*self.ms_rescaled[j] if fftlog_way else ql.spec.cl2cfft(kap,exp.pix).fft*self.ms_rescaled[j]
 
                 phi_estimate_cfft = exp.get_TT_qe(fftlog_way, ells_out, y,y)
 
@@ -144,13 +143,12 @@ class hm_framework:
                 if get_secondary_bispec_bias:
                     # Temporary secondary bispectrum bias stuff
                     # The part with the nested lensing reconstructions
-                    # FIXME: if you remove the z-scaling dividing ms_rescaled in kfft, do it here too
                     exp_param_dict = {'lmax': exp.lmax, 'nx': exp.nx, 'dx_arcmin': exp.dx*60.*180./np.pi}
                     # Get the kappa map, up to lmax rather than lmax_out as was needed in other terms
                     kap_secbispec = tls.pkToPell(hcos.comoving_radial_distance(hcos.zs[i]), hcos.ks, hcos.uk_profiles['nfw'][i, j] \
                                        * hcos.lensing_window(hcos.zs[i], 1100.), ellmax=exp.lmax)
                     secondary_bispec_bias_reconstructions = sbbs.get_secondary_bispec_bias(lbins_second_bispec_bias, qe_norm_1D,
-                                                                                           exp_param_dict, exp.cltt_tot, y, kap_secbispec*self.ms_rescaled[j]/(1+hcos.zs[i])**3,\
+                                                                                           exp_param_dict, exp.cltt_tot, y, kap_secbispec*self.ms_rescaled[j],\
                                                                                            parallelise=parallelise_secondbispec)
                     integrand_oneHalo_second_bispec[..., j] = hcos.nzm[i,j] * secondary_bispec_bias_reconstructions
                     # FIXME:add the 2-halo term. Should be easy.
@@ -250,7 +248,7 @@ class hm_framework:
                 gal = tls.pkToPell(hcos.comoving_radial_distance(hcos.zs[i]),hcos.ks,hcos.uk_profiles['nfw'][i,j]\
                                    * tls.gal_window(hcos.zs[i]), ellmax=self.lmax_out)
                 # FIXME: if you remove the z-scaling dividing ms_rescaled, do it in the input to sbbs.get_secondary_bispec_bias as well
-                galfft = gal / hcos.hods[survey_name]['ngal'][i] / (1 + hcos.zs[i]) ** 3 if fftlog_way else ql.spec.cl2cfft(gal, exp.pix).fft / hcos.hods[survey_name]['ngal'][i] / (1 + hcos.zs[i]) ** 3
+                galfft = gal / hcos.hods[survey_name]['ngal'][i] if fftlog_way else ql.spec.cl2cfft(gal, exp.pix).fft / hcos.hods[survey_name]['ngal'][i]
                 phi_estimate_cfft = exp.get_TT_qe(fftlog_way, ells_out, y, y)
 
                 # Accumulate the integrands
@@ -434,7 +432,7 @@ class hm_framework:
                 # Get the kappa map
                 kap = tls.pkToPell(hcos.comoving_radial_distance(hcos.zs[i]),hcos.ks,hcos.uk_profiles['nfw'][i,j]\
                                    *hcos.lensing_window(hcos.zs[i],1100.), ellmax=self.lmax_out)
-                kfft = kap*self.ms_rescaled[j]/(1+hcos.zs[i])**3 if fftlog_way else ql.spec.cl2cfft(kap,exp.pix).fft*self.ms_rescaled[j]/(1+hcos.zs[i])**3
+                kfft = kap*self.ms_rescaled[j] if fftlog_way else ql.spec.cl2cfft(kap,exp.pix).fft*self.ms_rescaled[j]
                 # Accumulate the integrands
                 integrand_oneHalo_cross[...,j] = hcos.nzm[i,j] * np.conjugate(kfft) * (phi_estimate_cfft_usat_usat +
                                                                                        2 * phi_estimate_cfft_ucen_usat)
@@ -453,10 +451,10 @@ class hm_framework:
                     kap_secbispec = tls.pkToPell(hcos.comoving_radial_distance(hcos.zs[i]), hcos.ks,
                                                  hcos.uk_profiles['nfw'][i, j] * hcos.lensing_window(hcos.zs[i], 1100.), ellmax=exp.lmax)
                     secondary_bispec_bias_reconstructions = 2 * sbbs.get_secondary_bispec_bias(lbins_second_bispec_bias, qe_norm_1D,
-                                                                                           exp_param_dict, exp.cltt_tot, u_cen, kap_secbispec*self.ms_rescaled[j]/(1+hcos.zs[i])**3,\
+                                                                                           exp_param_dict, exp.cltt_tot, u_cen, kap_secbispec*self.ms_rescaled[j],\
                                                                                            projected_fg_profile_2 = u_sat, parallelise=parallelise_secondbispec) +\
                                                             sbbs.get_secondary_bispec_bias(lbins_second_bispec_bias, qe_norm_1D,
-                                                                                           exp_param_dict, exp.cltt_tot, u_sat, kap_secbispec*self.ms_rescaled[j]/(1+hcos.zs[i])**3,\
+                                                                                           exp_param_dict, exp.cltt_tot, u_sat, kap_secbispec*self.ms_rescaled[j],\
                                                                                            projected_fg_profile_2 = u_sat, parallelise=parallelise_secondbispec)
                     integrand_oneHalo_second_bispec[..., j] = hcos.nzm[i,j] * secondary_bispec_bias_reconstructions
                     # FIXME:add the 2-halo term. Should be easy.
@@ -558,8 +556,8 @@ class hm_framework:
                 gal = tls.pkToPell(hcos.comoving_radial_distance(hcos.zs[i]),hcos.ks,hcos.uk_profiles['nfw'][i,j]\
                                    * tls.gal_window(hcos.zs[i]), ellmax=self.lmax_out)
                 # FIXME: if you remove the z-scaling dividing ms_rescaled, do it in the input to sbbs.get_secondary_bispec_bias as well
-                galfft = gal / hcos.hods[survey_name]['ngal'][i] / (1 + hcos.zs[i]) ** 3 if fftlog_way else ql.spec.cl2cfft(gal, exp.pix).fft / \
-                                                                    hcos.hods[survey_name]['ngal'][i] / (1 + hcos.zs[i]) ** 3
+                galfft = gal / hcos.hods[survey_name]['ngal'][i]  if fftlog_way else ql.spec.cl2cfft(gal, exp.pix).fft / \
+                                                                    hcos.hods[survey_name]['ngal'][i]
 
                 phi_estimate_cfft_ucen_usat = exp.get_TT_qe(fftlog_way, ells_out, u_cen, u_sat)
                 phi_estimate_cfft_usat_usat = exp.get_TT_qe(fftlog_way, ells_out, u_sat, u_sat)
@@ -654,8 +652,8 @@ class hm_framework:
                 gal = tls.pkToPell(hcos.comoving_radial_distance(hcos.zs[i]),hcos.ks,hcos.uk_profiles['nfw'][i,j]\
                                    * tls.gal_window(hcos.zs[i]), ellmax=self.lmax_out)
                 # FIXME: if you remove the z-scaling dividing ms_rescaled, do it in the input to sbbs.get_secondary_bispec_bias as well
-                galfft = gal / hcos.hods[survey_name]['ngal'][i] / (1 + hcos.zs[i]) ** 3 if fftlog_way else ql.spec.cl2cfft(gal, exp.pix).fft / \
-                                                                    hcos.hods[survey_name]['ngal'][i] / (1 + hcos.zs[i]) ** 3
+                galfft = gal / hcos.hods[survey_name]['ngal'][i] if fftlog_way else ql.spec.cl2cfft(gal, exp.pix).fft / \
+                                                                    hcos.hods[survey_name]['ngal'][i]
 
                 phi_estimate_cfft_ucen_y = exp.get_TT_qe(fftlog_way, ells_out, u_cen, y)
                 phi_estimate_cfft_usat_y = exp.get_TT_qe(fftlog_way, ells_out, u_sat, y)
@@ -827,7 +825,7 @@ class hm_framework:
                 # Get the kappa map
                 kap = tls.pkToPell(hcos.comoving_radial_distance(hcos.zs[i]),hcos.ks,hcos.uk_profiles['nfw'][i,j]\
                                    *hcos.lensing_window(hcos.zs[i],1100.), ellmax=self.lmax_out)
-                kfft = kap*self.ms_rescaled[j]/(1+hcos.zs[i])**3 if fftlog_way else ql.spec.cl2cfft(kap,exp.pix).fft*self.ms_rescaled[j]/(1+hcos.zs[i])**3
+                kfft = kap*self.ms_rescaled[j] if fftlog_way else ql.spec.cl2cfft(kap,exp.pix).fft*self.ms_rescaled[j]
                 # Accumulate the integrands
                 integrand_oneHalo_cross[...,j] = (phi_estimate_cfft_ucen_y + phi_estimate_cfft_usat_y) * np.conjugate(kfft) * hcos.nzm[i,j]
                 integrand_oneHalo_Iyyy[...,j] = (phi_estimate_cfft_ucen_y + phi_estimate_cfft_usat_y) * np.conjugate(phi_estimate_cfft_yy) * hcos.nzm[i,j]
@@ -849,10 +847,10 @@ class hm_framework:
                     kap_secbispec = tls.pkToPell(hcos.comoving_radial_distance(hcos.zs[i]), hcos.ks,
                                                  hcos.uk_profiles['nfw'][i, j] * hcos.lensing_window(hcos.zs[i], 1100.), ellmax=exp.lmax)
                     secondary_bispec_bias_reconstructions = sbbs.get_secondary_bispec_bias(lbins_second_bispec_bias, qe_norm_1D,
-                                                                                           exp_param_dict, exp.cltt_tot, u_cen, kap_secbispec*self.ms_rescaled[j]/(1+hcos.zs[i])**3,\
+                                                                                           exp_param_dict, exp.cltt_tot, u_cen, kap_secbispec*self.ms_rescaled[j],\
                                                                                            projected_fg_profile_2 = y, parallelise=parallelise_secondbispec) +\
                                                             sbbs.get_secondary_bispec_bias(lbins_second_bispec_bias, qe_norm_1D,
-                                                                                           exp_param_dict, exp.cltt_tot, u_sat, kap_secbispec*self.ms_rescaled[j]/(1+hcos.zs[i])**3,\
+                                                                                           exp_param_dict, exp.cltt_tot, u_sat, kap_secbispec*self.ms_rescaled[j],\
                                                                                            projected_fg_profile_2 = y, parallelise=parallelise_secondbispec)
                     integrand_oneHalo_second_bispec[..., j] = hod_fact_1gal[i, j] * hcos.nzm[i,j] * secondary_bispec_bias_reconstructions
 
