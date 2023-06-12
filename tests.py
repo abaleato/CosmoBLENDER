@@ -91,13 +91,48 @@ def test_tsz_ps(hm_object):
     plt.legend()
     plt.grid(which='both')
 
+def test_tsz_bias(hm_object, experiment):
+    hm_object.get_tsz_auto_biases(experiment, get_secondary_bispec_bias=False)
+    plt.loglog(experiment.biases['ells'], experiment.biases['tsz']['trispec']['2h'])
+    plt.loglog(experiment.biases['ells'], -experiment.biases['tsz']['trispec']['2h'], ls='--')
+
 if __name__ == '__main__':
-    which_test = 'test_CIB' # 'test_CIB' or 'test_tSZ' or 'test_clbb_bias'
+    which_test = 'test_tsz_bias' # 'test_CIB' or 'test_tSZ' or 'test_clbb_bias'
 
     # Initialise the experiment and halo model object for which to run the tests
     # This should roughly match the cosmology in Nick's tSZ papers
     cosmoParams = {'As': 2.4667392631170437e-09, 'ns': .96, 'omch2': (0.25 - .043) * .7 ** 2, 'ombh2': 0.044 * .7 ** 2,
                    'H0': 70.}
+
+    if which_test == 'test_tsz_bias':
+        # These give good results for the tSZ
+        nMasses = 30
+        nZs = 30
+        z_min = 0.14  # 0.07
+        z_max = 5
+        m_min = 4.2e13  # 2e10
+        m_max = 1e17
+        k_min = 1e-3
+        k_max = 10
+        nks = 1001
+        nxs = 30000
+        hm_calc = biases.hm_framework(cosmoParams=cosmoParams, nZs=nZs, nMasses=nMasses, z_min=z_min, z_max=z_max,
+                                      m_max=m_max, m_min=m_min, nxs=nxs, k_min=k_min, k_max=k_max, nks=nks)
+
+        # Foreground cleaning? Only relevant if many frequencies are provided
+        MV_ILC_bool = False
+        deproject_CIB = False
+        deproject_tSZ = False
+        fg_cleaning_dict = {'MV_ILC_bool': MV_ILC_bool, 'deproject_CIB': deproject_CIB, 'deproject_tSZ': deproject_tSZ}
+        SPT_properties = {'nlev_t': np.array([18.]),
+                          'beam_size': np.array([1.]),
+                          'freq_GHz': np.array([150.])}
+        # Initialise experiments with various different mass cuts
+        SPT_nocut = qest.experiment(lmax=3000, massCut_Mvir=5e15, **SPT_properties, **fg_cleaning_dict)
+
+        # Check the tSZ power spectrum
+        test_tsz_bias(hm_calc, SPT_nocut)
+        plt.show()
 
     if which_test == 'test_tSZ':
         # These give good results for the tSZ
