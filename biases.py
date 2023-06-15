@@ -79,7 +79,6 @@ class hm_framework:
         # Essentially the one halo terms are flat on large scales, this means the as k->0 you are dominated by these
         # terms rather than the two halo term, which tends to P_lin (for the matter halo model)
         # The consistency term should just subtract this off.
-        # I have removed this for now as i think it is likley subdomiant
         self.consistency =  np.trapz(self.hcos.nzm*self.hcos.bh*self.hcos.ms/self.hcos.rho_matter_z(0)*mMask,self.hcos.ms, axis=-1)
 
 
@@ -152,8 +151,8 @@ class hm_framework:
                 y = tsz_filter * tls.pkToPell(hcos.comoving_radial_distance(hcos.zs[i]), hcos.ks, hcos.pk_profiles['y'][i,j]\
                                  *(1-np.exp(-(hcos.ks/hcos.p['kstar_damping']))), ellmax=exp.lmax)
                 # Get the kappa map
-                kap = tls.pkToPell(hcos.comoving_radial_distance(hcos.zs[i]),hcos.ks,hcos.uk_profiles['nfw'][i,j]\
-                                   *hcos.lensing_window(hcos.zs[i],1100.), ellmax=self.lmax_out)
+                kap = tls.pkToPell(hcos.comoving_radial_distance(hcos.zs[i]),
+                                   hcos.ks, hcos.uk_profiles['nfw'][i,j], ellmax=self.lmax_out)
                 kfft = kap*self.ms_rescaled[j] if fftlog_way else ql.spec.cl2cfft(kap,exp.pix).fft*self.ms_rescaled[j]
 
                 phicfft = exp.get_TT_qe(fftlog_way, ells_out, y,y)
@@ -171,8 +170,8 @@ class hm_framework:
                     # The part with the nested lensing reconstructions
                     exp_param_dict = {'lmax': exp.lmax, 'nx': exp.nx, 'dx_arcmin': exp.dx*60.*180./np.pi}
                     # Get the kappa map, up to lmax rather than lmax_out as was needed in other terms
-                    kap_secbispec = tls.pkToPell(hcos.comoving_radial_distance(hcos.zs[i]), hcos.ks, hcos.uk_profiles['nfw'][i, j] \
-                                       * hcos.lensing_window(hcos.zs[i], 1100.), ellmax=exp.lmax)
+                    kap_secbispec = tls.pkToPell(hcos.comoving_radial_distance(hcos.zs[i]), hcos.ks,
+                                                 hcos.uk_profiles['nfw'][i, j], ellmax=exp.lmax)
                     secondary_bispec_bias_reconstructions = sbbs.get_secondary_bispec_bias(lbins_second_bispec_bias, qe_norm_1D,
                                                                                            exp_param_dict, exp.cltt_tot,
                                                                                            y, kap_secbispec*self.ms_rescaled[j],\
@@ -189,9 +188,7 @@ class hm_framework:
             twoH_4pt[...,i]= 4 * np.trapz(itgnd_2h_trispec,hcos.ms,axis=-1)
             tmpCorr =np.trapz(itgnd_2h_1g,hcos.ms,axis=-1)
             #FIXME: do we need to apply consistency condition to integral over fg profiles too? So far only kappa part
-            twoH_cross[...,i]=np.trapz(itgnd_2h_2g,hcos.ms,axis=-1)\
-                                 *(tmpCorr + hcos.lensing_window(hcos.zs,1100.)[i]\
-                                   - hcos.lensing_window(hcos.zs[i],1100.)*self.consistency[i])*pk
+            twoH_cross[...,i]= np.trapz(itgnd_2h_2g,hcos.ms,axis=-1) * (tmpCorr + 1 - self.consistency[i]) * pk
 
         # Convert the NFW profile in the cross bias from kappa to phi
         conversion_factor = np.nan_to_num(1 / (0.5 * ells_out*(ells_out+1) )) if fftlog_way else ql.spec.cl2cfft(np.nan_to_num(1 / (0.5 * np.arange(self.lmax_out+1)*(np.arange(self.lmax_out+1)+1) )),exp.pix).fft
@@ -204,16 +201,19 @@ class hm_framework:
                                              * np.trapz(twoH_4pt*hcos.comoving_radial_distance(hcos.zs)**-6\
                                                         *(hcos.h_of_z(hcos.zs)**3),hcos.zs,axis=-1)
         exp.biases['tsz']['prim_bispec']['1h'] = 2 * conversion_factor * self.T_CMB**2 \
-                                                 * np.trapz(oneH_cross*1./hcos.comoving_radial_distance(hcos.zs)**4\
+                                                 * np.trapz(oneH_cross*hcos.lensing_window(hcos.zs,1100.)
+                                                            /hcos.comoving_radial_distance(hcos.zs)**4\
                                                             *(hcos.h_of_z(hcos.zs)**2),hcos.zs,axis=-1)
         exp.biases['tsz']['prim_bispec']['2h'] = 2 * conversion_factor * self.T_CMB**2 \
-                                                 * np.trapz(twoH_cross*1./hcos.comoving_radial_distance(hcos.zs)**4\
+                                                 * np.trapz(twoH_cross*hcos.lensing_window(hcos.zs,1100.)
+                                                            /hcos.comoving_radial_distance(hcos.zs)**4\
                                                             *(hcos.h_of_z(hcos.zs)**2),hcos.zs,axis=-1)
         if get_secondary_bispec_bias:
             # Perm factors implemented in the get_secondary_bispec_bias_at_L() function
-            exp.biases['tsz']['second_bispec']['1h'] = self.T_CMB ** 2 * np.trapz( oneH_second_bispec * 1.\
-                                                                 / hcos.comoving_radial_distance(hcos.zs) ** 4\
-                                                                 * (hcos.h_of_z(hcos.zs) ** 2), hcos.zs, axis=-1)
+            exp.biases['tsz']['second_bispec']['1h'] = self.T_CMB ** 2 * np.trapz( oneH_second_bispec *
+                                                                                   hcos.lensing_window(hcos.zs,1100.)
+                                                                                   / hcos.comoving_radial_distance(hcos.zs) ** 4
+                                                                                   * (hcos.h_of_z(hcos.zs) ** 2), hcos.zs, axis=-1)
             exp.biases['second_bispec_bias_ells'] = lbins_second_bispec_bias
 
         if fftlog_way:
@@ -474,8 +474,8 @@ class hm_framework:
                 phicfft_Iint_usat = exp.get_TT_qe(fftlog_way, ells_out, Iint, u_sat)
 
                 # Get the kappa map
-                kap = tls.pkToPell(hcos.comoving_radial_distance(hcos.zs[i]),hcos.ks,hcos.uk_profiles['nfw'][i,j]\
-                                   *hcos.lensing_window(hcos.zs[i],1100.), ellmax=self.lmax_out)
+                kap = tls.pkToPell(hcos.comoving_radial_distance(hcos.zs[i]),
+                                   hcos.ks,hcos.uk_profiles['nfw'][i,j], ellmax=self.lmax_out)
                 kfft = kap*self.ms_rescaled[j] if fftlog_way else ql.spec.cl2cfft(kap,exp.pix).fft*self.ms_rescaled[j]
                 # Accumulate the itgnds
                 itgnd_1h_cross[...,j] = hcos.nzm[i,j] * np.conjugate(kfft) * (phicfft_usat_usat +
@@ -497,7 +497,7 @@ class hm_framework:
                     exp_param_dict = {'lmax': exp.lmax, 'nx': exp.nx, 'dx_arcmin': exp.dx*60.*180./np.pi}
                     # Get the kappa map, up to lmax rather than lmax_out as was needed in other terms
                     kap_secbispec = tls.pkToPell(hcos.comoving_radial_distance(hcos.zs[i]), hcos.ks,
-                                                 hcos.uk_profiles['nfw'][i, j] * hcos.lensing_window(hcos.zs[i], 1100.), ellmax=exp.lmax)
+                                                 hcos.uk_profiles['nfw'][i, j], ellmax=exp.lmax)
                     secondary_bispec_bias_reconstructions = 2 * sbbs.get_secondary_bispec_bias(lbins_second_bispec_bias, qe_norm_1D,
                                                                                            exp_param_dict, exp.cltt_tot, u_cen, kap_secbispec*self.ms_rescaled[j],\
                                                                                            projected_fg_profile_2 = u_sat, parallelise=parallelise_secondbispec) +\
@@ -519,8 +519,7 @@ class hm_framework:
 
             tmpCorr =np.trapz(itgnd_2h_k,hcos.ms,axis=-1)
             twoH_cross[...,i]=np.trapz(itgnd_2h_II,hcos.ms,axis=-1)\
-                                 *(tmpCorr + hcos.lensing_window(hcos.zs,1100.)[i] - hcos.lensing_window(hcos.zs[i],1100.)\
-                                   *self.consistency[i])*pk#
+                                 *(tmpCorr + 1 - self.consistency[i])*pk
 
         # Convert the NFW profile in the cross bias from kappa to phi
         conversion_factor = np.nan_to_num(1 / (0.5 * ells_out*(ells_out+1) )) if fftlog_way else ql.spec.cl2cfft(np.nan_to_num(1 / (0.5 * np.arange(self.lmax_out+1)*(np.arange(self.lmax_out+1)+1) )),exp.pix).fft
@@ -528,7 +527,8 @@ class hm_framework:
         # itgnd factors from Limber projection (adapted to hmvec conventions)
         # kII_itgnd has a perm factor of 2
         IIII_itgnd = (1+hcos.zs)**-4 * hcos.comoving_radial_distance(hcos.zs)**-6 * hcos.h_of_z(hcos.zs)**-1
-        kII_itgnd  = 2 * (1+hcos.zs)**-2 * hcos.comoving_radial_distance(hcos.zs)**-4
+        kII_itgnd  = 2 * (1+hcos.zs)**-2 * hcos.comoving_radial_distance(hcos.zs)**-4 \
+                     * hcos.lensing_window(hcos.zs,1100.)
 
         # Integrate over z
         exp.biases['cib']['trispec']['1h'] = np.trapz( IIII_itgnd*IIII_1h, hcos.zs, axis=-1)
@@ -898,8 +898,8 @@ class hm_framework:
                 phicfft_yint_y = exp.get_TT_qe(fftlog_way, ells_out, yint, y)
 
                 # Get the kappa map
-                kap = tls.pkToPell(hcos.comoving_radial_distance(hcos.zs[i]),hcos.ks,hcos.uk_profiles['nfw'][i,j]\
-                                   *hcos.lensing_window(hcos.zs[i],1100.), ellmax=self.lmax_out)
+                kap = tls.pkToPell(hcos.comoving_radial_distance(hcos.zs[i]),hcos.ks,
+                                   hcos.uk_profiles['nfw'][i,j], ellmax=self.lmax_out)
                 kfft = kap*self.ms_rescaled[j] if fftlog_way else ql.spec.cl2cfft(kap,exp.pix).fft*self.ms_rescaled[j]
                 # Accumulate the itgnds
                 itgnd_1h_cross[...,j] = hcos.nzm[i,j] * (phicfft_ucen_y + phicfft_usat_y) * np.conjugate(kfft)
@@ -938,7 +938,7 @@ class hm_framework:
                     exp_param_dict = {'lmax': exp.lmax, 'nx': exp.nx, 'dx_arcmin': exp.dx*60.*180./np.pi}
                     # Get the kappa map, up to lmax rather than lmax_out as was needed in other terms
                     kap_secbispec = tls.pkToPell(hcos.comoving_radial_distance(hcos.zs[i]), hcos.ks,
-                                                 hcos.uk_profiles['nfw'][i, j] * hcos.lensing_window(hcos.zs[i], 1100.), ellmax=exp.lmax)
+                                                 hcos.uk_profiles['nfw'][i, j], ellmax=exp.lmax)
                     secondary_bispec_bias_reconstructions = sbbs.get_secondary_bispec_bias(lbins_second_bispec_bias, qe_norm_1D,
                                                                                            exp_param_dict, exp.cltt_tot, u_cen, kap_secbispec*self.ms_rescaled[j],\
                                                                                            projected_fg_profile_2 = y, parallelise=parallelise_secondbispec) +\
@@ -965,8 +965,7 @@ class hm_framework:
 
             tmpCorr =np.trapz(itgnd_2h_k,hcos.ms,axis=-1)
             twoH_cross[...,i]=np.trapz(itgnd_2h_Iy,hcos.ms,axis=-1)\
-                                 *(tmpCorr + hcos.lensing_window(hcos.zs,1100.)[i] - hcos.lensing_window(hcos.zs[i],1100.)\
-                                   *self.consistency[i])*pk
+                                 *(tmpCorr + 1 - self.consistency[i])*pk
 
         # Convert the NFW profile in the cross bias from kappa to phi
         conversion_factor = np.nan_to_num(1 / (0.5 * ells_out*(ells_out+1) )) if fftlog_way else ql.spec.cl2cfft(np.nan_to_num(1 / (0.5 * np.arange(self.lmax_out+1)*(np.arange(self.lmax_out+1)+1) )),exp.pix).fft
@@ -977,7 +976,8 @@ class hm_framework:
         IyIy_itgnd = 2 * IIyy_itgnd
         yIII_itgnd = 4 * (1+hcos.zs)**-3 * hcos.comoving_radial_distance(hcos.zs)**-6
         # kIy_itgnd contains a perm factor of 2 is for the exchange of I and y relative to the cib or tsz only cases
-        kIy_itgnd  = 4 * (1+hcos.zs)**-1 * hcos.comoving_radial_distance(hcos.zs)**-4 * hcos.h_of_z(hcos.zs)
+        kIy_itgnd  = 4 * (1+hcos.zs)**-1 * hcos.comoving_radial_distance(hcos.zs)**-4 \
+                     * hcos.h_of_z(hcos.zs) * hcos.lensing_window(hcos.zs,1100.)
 
         # Integrate over z
         exp.biases['mixed']['trispec']['1h'] = np.trapz( Iyyy_itgnd*Iyyy_1h + IIyy_itgnd*IIyy_1h
