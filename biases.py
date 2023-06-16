@@ -66,21 +66,44 @@ class hm_framework:
 
         return 'M_min: ' + m_min + '  M_max: ' + m_max + '  n_Masses: '+ str(self.nMasses) + '\n' + '  z_min: ' + z_min + '  z_max: ' + z_max + '  n_zs: ' + str(self.nZs) +  '\n' +'  Mass function: ' + self.mass_function + '  Mass definition: ' + self.mdef
 
-    def get_consistency(self, exp):
+    def get_matter_consistency(self, exp):
         """
-        Calculate consistency relation for 2-halo term given some mass cut
+        Calculate consistency relation for 2-halo term given some mass cut for an integral over dark matter
         Input:
             * exp = a qest.experiment object
         """
         mMask = np.ones(self.nMasses)
         mMask[exp.massCut<self.hcos.ms]=0
+        I = np.trapz(self.hcos.nzm*self.hcos.bh*self.hcos.ms/self.hcos.rho_matter_z(0)*mMask,self.hcos.ms, axis=-1)
+        self.m_consistency = 1 - I
 
-        # This is an adhoc fix for the large scales. Perhaps not needed here.
-        # Essentially the one halo terms are flat on large scales, this means the as k->0 you are dominated by these
-        # terms rather than the two halo term, which tends to P_lin (for the matter halo model)
-        # The consistency term should just subtract this off.
-        self.consistency =  np.trapz(self.hcos.nzm*self.hcos.bh*self.hcos.ms/self.hcos.rho_matter_z(0)*mMask,self.hcos.ms, axis=-1)
+    def get_galaxy_consistency(self, exp, survey_name):
+        """
+        Calculate consistency relation for 2-halo term given some mass cut for an integral over galaxy number density
+        Input:
+            * exp = a qest.experiment object
+        """
+        ugal_of_Mlow = tls.pkToPell(hcos.comoving_radial_distance(hcos.zs[?]),
+                           hcos.ks, hcos.uk_profiles['nfw'][?, 0], ellmax=self.lmax_out) # TODO: What redshift is this to be evaluated at?
+        mMask = np.ones(self.nMasses)
+        mMask[exp.massCut<self.hcos.ms]=0
+        I = np.trapz(self.hcos.nzm*self.hcos.bh
+                     *(hcos.hods[survey_name]['Nc'][:, 0] + hcos.hods[survey_name]['Ns'][:, 0])
+                     / hcos.hods[survey_name]['ngal']*mMask,self.hcos.ms, axis=-1)
+        W_of_Mlow = (hcos.hods[survey_name]['Nc'][?, 0] + hcos.hods[survey_name]['Ns'][?, 0])\
+                    / hcos.hods[survey_name]['ngal'] * ugal_of_Mlow
+        self.g_consistency = (1 - I)/(self.hcos.ms[0]/self.hcos.rho_matter_z(0))*W_of_Mlow
 
+    def get_cib_consistency(self, exp):
+        """
+        Calculate consistency relation for 2-halo term given some mass cut for an integral over CIB emission
+        Input:
+            * exp = a qest.experiment object
+        """
+        mMask = np.ones(self.nMasses)
+        mMask[exp.massCut<self.hcos.ms]=0
+        A =
+        self.I_consistency =  # TODO: implement I_consistency
 
     def get_tsz_auto_biases(self, exp, fftlog_way=True, get_secondary_bispec_bias=False, bin_width_out=30, \
                      bin_width_out_second_bispec_bias=250, parallelise_secondbispec=True):
@@ -94,7 +117,7 @@ class hm_framework:
             * (optional) bin_width_out_second_bispec_bias = int. Bin width of the output secondary bispectrum bias
         """
         hcos = self.hcos
-        self.get_consistency(exp)
+        self.get_matter_consistency(exp)
 
         # Output ells
         ells_out = np.arange(self.lmax_out+1)
@@ -188,7 +211,7 @@ class hm_framework:
             twoH_4pt[...,i]= 4 * np.trapz(itgnd_2h_trispec,hcos.ms,axis=-1)
             tmpCorr =np.trapz(itgnd_2h_1g,hcos.ms,axis=-1)
             #FIXME: do we need to apply consistency condition to integral over fg profiles too? So far only kappa part
-            twoH_cross[...,i]= np.trapz(itgnd_2h_2g,hcos.ms,axis=-1) * (tmpCorr + 1 - self.consistency[i]) * pk
+            twoH_cross[...,i]= np.trapz(itgnd_2h_2g,hcos.ms,axis=-1) * (tmpCorr + self.m_consistency[i]) * pk
 
         # Convert the NFW profile in the cross bias from kappa to phi
         conversion_factor = np.nan_to_num(1 / (0.5 * ells_out*(ells_out+1) )) if fftlog_way else ql.spec.cl2cfft(np.nan_to_num(1 / (0.5 * np.arange(self.lmax_out+1)*(np.arange(self.lmax_out+1)+1) )),exp.pix).fft
@@ -238,7 +261,7 @@ class hm_framework:
             * (optional) survey_name = str. Name labelling the HOD characterizing the survey we are x-ing lensing with
         """
         hcos = self.hcos
-        self.get_consistency(exp)
+        self.get_galaxy_consistency(exp, survey_name)
 
         # Output ells
         ells_out = np.arange(self.lmax_out+1)
@@ -268,8 +291,8 @@ class hm_framework:
                                  *(1-np.exp(-(hcos.ks/hcos.p['kstar_damping']))), ellmax=exp.lmax)
                 # Get the galaxy map --- analogous to kappa in the auto-biases. Note that we need a factor of
                 # H dividing the galaxy window function to translate the hmvec convention to e.g. Ferraro & Hill 18 #TODO: why do you say that?
-                gal = tls.pkToPell(hcos.comoving_radial_distance(hcos.zs[i]),hcos.ks,hcos.uk_profiles['nfw'][i,j]\
-                                   * tls.gal_window(hcos.zs[i]), ellmax=self.lmax_out)
+                gal = tls.pkToPell(hcos.comoving_radial_distance(hcos.zs[i]),
+                                   hcos.ks,hcos.uk_profiles['nfw'][i,j], ellmax=self.lmax_out)
                 # FIXME: if you remove the z-scaling dividing ms_rescaled, do it in the input to sbbs.get_secondary_bispec_bias as well
                 galfft = gal / hcos.hods[survey_name]['ngal'][i] if fftlog_way else ql.spec.cl2cfft(gal, exp.pix).fft / hcos.hods[survey_name]['ngal'][i]
                 phicfft = exp.get_TT_qe(fftlog_way, ells_out, y, y)
@@ -290,20 +313,18 @@ class hm_framework:
 
             tmpCorr =np.trapz(itgnd_2h_1g,hcos.ms,axis=-1)
             #FIXME: do we need to apply consistency condition to integral over fg profiles too? So far only kappa part
-            twoH_cross[...,i]=np.trapz(itgnd_2h_2g,hcos.ms,axis=-1)\
-                                 *(tmpCorr + tls.gal_window(hcos.zs)[i]\
-                                   - tls.gal_window(hcos.zs[i])*self.consistency[i])*pk
+            twoH_cross[...,i] = np.trapz(itgnd_2h_2g,hcos.ms,axis=-1) * (tmpCorr + self.g_consistency[i]) * pk
 
         # Convert the NFW profile in the cross bias from kappa to phi
         conversion_factor = 1#np.nan_to_num(1 / (0.5 * ells_out*(ells_out+1) )) if fftlog_way else ql.spec.cl2cfft(np.nan_to_num(1 / (0.5 * np.arange(self.lmax_out+1)*(np.arange(self.lmax_out+1)+1) )),exp.pix).fft
 
         # Integrate over z
         exp.biases['tsz']['cross_w_gals']['1h'] = conversion_factor * self.T_CMB**2 \
-                                                 * np.trapz(oneH_cross * hcos.comoving_radial_distance(hcos.zs)**-4\
-                                                            * hcos.h_of_z(hcos.zs),hcos.zs,axis=-1)
+                                                 * np.trapz(oneH_cross * hcos.comoving_radial_distance(hcos.zs)**-4
+                                                            * hcos.h_of_z(hcos.zs)*tls.gal_window(hcos.zs),hcos.zs,axis=-1)
         exp.biases['tsz']['cross_w_gals']['2h'] = conversion_factor * self.T_CMB**2 \
                                                  * np.trapz(twoH_cross * hcos.comoving_radial_distance(hcos.zs)**-4\
-                                                            * hcos.h_of_z(hcos.zs),hcos.zs,axis=-1)
+                                                            * hcos.h_of_z(hcos.zs)*tls.gal_window(hcos.zs),hcos.zs,axis=-1)
         if fftlog_way:
             exp.biases['ells'] = np.arange(self.lmax_out+1)
             return
@@ -409,7 +430,7 @@ class hm_framework:
         """
         # FIXME: update docs of input
         hcos = self.hcos
-        self.get_consistency(exp)
+        self.get_matter_consistency(exp)
 
         # Compute effective CIB weights, including f_cen and f_sat factors as well as possibly fg cleaning
         self.get_CIB_filters(exp)
@@ -519,7 +540,7 @@ class hm_framework:
 
             tmpCorr =np.trapz(itgnd_2h_k,hcos.ms,axis=-1)
             twoH_cross[...,i]=np.trapz(itgnd_2h_II,hcos.ms,axis=-1)\
-                                 *(tmpCorr + 1 - self.consistency[i])*pk
+                                 *(tmpCorr + self.m_consistency[i])*pk
 
         # Convert the NFW profile in the cross bias from kappa to phi
         conversion_factor = np.nan_to_num(1 / (0.5 * ells_out*(ells_out+1) )) if fftlog_way else ql.spec.cl2cfft(np.nan_to_num(1 / (0.5 * np.arange(self.lmax_out+1)*(np.arange(self.lmax_out+1)+1) )),exp.pix).fft
@@ -565,7 +586,7 @@ class hm_framework:
         """
         # FIXME: update docs of input
         hcos = self.hcos
-        self.get_consistency(exp)
+        self.get_galaxy_consistency(exp, survey_name)
 
         # Compute effective CIB weights, including f_cen and f_sat factors as well as possibly fg cleaning
         self.get_CIB_filters(exp)
@@ -596,8 +617,8 @@ class hm_framework:
 
                 # Get the galaxy map --- analogous to kappa in the auto-biases. Note that we need a factor of
                 # H dividing the galaxy window function to translate the hmvec convention to e.g. Ferraro & Hill 18 # TODO:Why?
-                gal = tls.pkToPell(hcos.comoving_radial_distance(hcos.zs[i]),hcos.ks,hcos.uk_profiles['nfw'][i,j]\
-                                   * tls.gal_window(hcos.zs[i]), ellmax=self.lmax_out)
+                gal = tls.pkToPell(hcos.comoving_radial_distance(hcos.zs[i]),
+                                   hcos.ks,hcos.uk_profiles['nfw'][i,j], ellmax=self.lmax_out)
                 # FIXME: if you remove the z-scaling dividing ms_rescaled, do it in the input to sbbs.get_secondary_bispec_bias as well
                 galfft = gal / hcos.hods[survey_name]['ngal'][i]  if fftlog_way else ql.spec.cl2cfft(gal, exp.pix).fft / \
                                                                     hcos.hods[survey_name]['ngal'][i]
@@ -622,16 +643,15 @@ class hm_framework:
 
             tmpCorr =np.trapz(itgnd_2h_k,hcos.ms,axis=-1)
             # FIXME: do we need to apply consistency condition to integral over fg profiles too? So far only kappa part
-            twoH_cross[...,i]=np.trapz(itgnd_2h_II,hcos.ms,axis=-1)\
-                                 *(tmpCorr + tls.gal_window(hcos.zs)[i] - tls.gal_window(hcos.zs[i])*self.consistency[i])\
-                                 *pk
+            twoH_cross[...,i] = np.trapz(itgnd_2h_II,hcos.ms,axis=-1) * (tmpCorr + self.g_consistency[i]) * pk
 
         # Convert the NFW profile in the cross bias from kappa to phi
         conversion_factor = 1#np.nan_to_num(1 / (0.5 * ells_out*(ells_out+1) )) if fftlog_way else ql.spec.cl2cfft(np.nan_to_num(1 / (0.5 * np.arange(self.lmax_out+1)*(np.arange(self.lmax_out+1)+1) )),exp.pix).fft
 
         # itgnd factors from Limber projection (adapted to hmvec conventions)
         # Note there's only a (1+z)**-2 dependence. This is because there's another factor of (1+z)**-1 in the gal_window
-        kII_itgnd  = hcos.h_of_z(hcos.zs)**-1 * (1+hcos.zs)**-2 * hcos.comoving_radial_distance(hcos.zs)**-4
+        kII_itgnd  = hcos.h_of_z(hcos.zs)**-1 * (1+hcos.zs)**-2 * hcos.comoving_radial_distance(hcos.zs)**-4 \
+                     * tls.gal_window(hcos.zs)
 
         # Integrate over z
         exp.biases['cib']['cross_w_gals']['1h'] = conversion_factor * np.trapz( oneH_cross*kII_itgnd, hcos.zs, axis=-1)
@@ -657,7 +677,7 @@ class hm_framework:
         """
         # FIXME: update docs of input
         hcos = self.hcos
-        self.get_consistency(exp)
+        self.get_galaxy_consistency(exp, survey_name)
 
         # Compute effective CIB weights, including f_cen and f_sat factors as well as possibly fg cleaning
         self.get_CIB_filters(exp)
@@ -692,8 +712,8 @@ class hm_framework:
                 u_sat = self.CIB_satellite_filter[:, i, j] * u
                 # Get the galaxy map --- analogous to kappa in the auto-biases. Note that we need a factor of
                 # H dividing the galaxy window function to translate the hmvec convention to e.g. Ferraro & Hill 18 # TODO:Why?
-                gal = tls.pkToPell(hcos.comoving_radial_distance(hcos.zs[i]),hcos.ks,hcos.uk_profiles['nfw'][i,j]\
-                                   * tls.gal_window(hcos.zs[i]), ellmax=self.lmax_out)
+                gal = tls.pkToPell(hcos.comoving_radial_distance(hcos.zs[i]),
+                                   hcos.ks,hcos.uk_profiles['nfw'][i,j], ellmax=self.lmax_out)
                 # FIXME: if you remove the z-scaling dividing ms_rescaled, do it in the input to sbbs.get_secondary_bispec_bias as well
                 galfft = gal / hcos.hods[survey_name]['ngal'][i] if fftlog_way else ql.spec.cl2cfft(gal, exp.pix).fft / \
                                                                     hcos.hods[survey_name]['ngal'][i]
@@ -718,9 +738,7 @@ class hm_framework:
 
             tmpCorr =np.trapz(itgnd_2h_k,hcos.ms,axis=-1)
             # FIXME: do we need to apply consistency condition to integral over fg profiles too? So far only kappa part
-            twoH_cross[...,i]=np.trapz(itgnd_2h_II,hcos.ms,axis=-1)\
-                                 *(tmpCorr + tls.gal_window(hcos.zs)[i] - tls.gal_window(hcos.zs[i])*self.consistency[i])\
-                                 *pk
+            twoH_cross[...,i] = np.trapz(itgnd_2h_II,hcos.ms,axis=-1) * (tmpCorr + self.g_consistency[i]) * pk
 
         # Convert the NFW profile in the cross bias from kappa to phi
         conversion_factor = 1#np.nan_to_num(1 / (0.5 * ells_out*(ells_out+1) )) if fftlog_way else ql.spec.cl2cfft(np.nan_to_num(1 / (0.5 * np.arange(self.lmax_out+1)*(np.arange(self.lmax_out+1)+1) )),exp.pix).fft
@@ -731,9 +749,11 @@ class hm_framework:
 
         # Integrate over z
         exp.biases['mixed']['cross_w_gals']['1h'] = conversion_factor * tls.scale_sz(exp.freq_GHz) * self.T_CMB \
-                                                    * np.trapz( 2 * oneH_cross*gIy_itgnd, hcos.zs, axis=-1)
+                                                    * np.trapz( 2 * oneH_cross*gIy_itgnd*tls.gal_window(hcos.zs),
+                                                                hcos.zs, axis=-1)
         exp.biases['mixed']['cross_w_gals']['2h'] = conversion_factor * tls.scale_sz(exp.freq_GHz) * self.T_CMB \
-                                                    * np.trapz( twoH_cross*gIy_itgnd, hcos.zs, axis=-1)
+                                                    * np.trapz(twoH_cross*gIy_itgnd*tls.gal_window(hcos.zs),
+                                                               hcos.zs, axis=-1)
 
         if fftlog_way:
             exp.biases['ells'] = np.arange(self.lmax_out+1)
@@ -752,7 +772,7 @@ class hm_framework:
         """
         # FIXME: update docs of input
         hcos = self.hcos
-        self.get_consistency(exp)
+        self.get_cib_consistency(exp)
 
         # Compute key CIB variables
         self.get_fcen_fsat(exp, convert_to_muK=convert_to_muK)
@@ -811,7 +831,7 @@ class hm_framework:
         """
         # TODO: document better
         hcos = self.hcos
-        self.get_consistency(exp)
+        self.get_matter_consistency(exp)
 
         # Get frequency scaling of tSZ, possibly including harmonic ILC cleaning
         tsz_filter = exp.get_tsz_filter()
@@ -964,8 +984,7 @@ class hm_framework:
             yIII_2h[...,i] = np.trapz(itgnd_2h_yIII,hcos.ms,axis=-1)
 
             tmpCorr =np.trapz(itgnd_2h_k,hcos.ms,axis=-1)
-            twoH_cross[...,i]=np.trapz(itgnd_2h_Iy,hcos.ms,axis=-1)\
-                                 *(tmpCorr + 1 - self.consistency[i])*pk
+            twoH_cross[...,i]=np.trapz(itgnd_2h_Iy,hcos.ms,axis=-1) * (tmpCorr + self.m_consistency[i]) *p k
 
         # Convert the NFW profile in the cross bias from kappa to phi
         conversion_factor = np.nan_to_num(1 / (0.5 * ells_out*(ells_out+1) )) if fftlog_way else ql.spec.cl2cfft(np.nan_to_num(1 / (0.5 * np.arange(self.lmax_out+1)*(np.arange(self.lmax_out+1)+1) )),exp.pix).fft
