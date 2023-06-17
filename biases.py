@@ -204,8 +204,7 @@ class hm_framework:
             # Integral over M for 2halo trispectrum. This will later go into a QE
             for j,m in enumerate(hcos.ms):
                 if m> exp.massCut: continue
-                y = tsz_filter * tls.pkToPell(hcos.comoving_radial_distance(hcos.zs[i]), hcos.ks, hcos.pk_profiles['y'][i,j]\
-                                 *(1-np.exp(-(hcos.ks/hcos.p['kstar_damping']))), ellmax=exp.lmax)
+                y = tsz_filter * tls.pkToPell(hcos.comoving_radial_distance(hcos.zs[i]), hcos.ks, hcos.pk_profiles['y'][i,j], ellmax=exp.lmax)
                 integ_1h_for_2htrispec[..., j] = y * hcos.nzm[i, j] * hcos.bh[i, j]
 
             # Do the 1- integral in the 1-3 trispectrum and impose consistency condition
@@ -214,8 +213,7 @@ class hm_framework:
             # M integral.
             for j,m in enumerate(hcos.ms):
                 if m> exp.massCut: continue
-                y = tsz_filter * tls.pkToPell(hcos.comoving_radial_distance(hcos.zs[i]), hcos.ks, hcos.pk_profiles['y'][i,j]\
-                                 *(1-np.exp(-(hcos.ks/hcos.p['kstar_damping']))), ellmax=exp.lmax)
+                y = tsz_filter * tls.pkToPell(hcos.comoving_radial_distance(hcos.zs[i]), hcos.ks, hcos.pk_profiles['y'][i,j], ellmax=exp.lmax)
                 # Get the kappa map
                 kap = tls.pkToPell(hcos.comoving_radial_distance(hcos.zs[i]),
                                    hcos.ks, hcos.uk_profiles['nfw'][i,j], ellmax=self.lmax_out)
@@ -328,8 +326,7 @@ class hm_framework:
             # M integral.
             for j,m in enumerate(hcos.ms):
                 if m> exp.massCut: continue
-                y = tsz_filter * tls.pkToPell(hcos.comoving_radial_distance(hcos.zs[i]),hcos.ks,hcos.pk_profiles['y'][i,j]\
-                                 *(1-np.exp(-(hcos.ks/hcos.p['kstar_damping']))), ellmax=exp.lmax)
+                y = tsz_filter * tls.pkToPell(hcos.comoving_radial_distance(hcos.zs[i]),hcos.ks,hcos.pk_profiles['y'][i,j], ellmax=exp.lmax)
                 # Get the galaxy map --- analogous to kappa in the auto-biases. Note that we need a factor of
                 # H dividing the galaxy window function to translate the hmvec convention to e.g. Ferraro & Hill 18 #TODO: why do you say that?
                 gal = tls.pkToPell(hcos.comoving_radial_distance(hcos.zs[i]),
@@ -834,8 +831,7 @@ class hm_framework:
                 if m> exp.massCut: continue
                 # project the galaxy profiles
                 u = tls.pkToPell(hcos.comoving_radial_distance(hcos.zs[i]), hcos.ks, hcos.uk_profiles['nfw'][i, j], ellmax=exp.lmax)
-                u_softened = tls.pkToPell(hcos.comoving_radial_distance(hcos.zs[i]), hcos.ks, hcos.uk_profiles['nfw'][i, j]* \
-                                 (1 - np.exp(-(hcos.ks / hcos.p['kstar_damping']))), ellmax=exp.lmax)
+                #u_softened = tls.pkToPell(hcos.comoving_radial_distance(hcos.zs[i]), hcos.ks, hcos.uk_profiles['nfw'][i, j]* (1 - np.exp(-(hcos.ks / hcos.p['kstar_damping']))), ellmax=exp.lmax)
 
                 u_cen = self.CIB_central_filter[:,i,j] # Centrals come with a factor of u^0 # TODO: is it better to have u here, or not?
                 u_sat = self.CIB_satellite_filter[:,i,j] * u
@@ -924,8 +920,7 @@ class hm_framework:
                 u = tls.pkToPell(hcos.comoving_radial_distance(hcos.zs[i]), hcos.ks,
                                                           hcos.uk_profiles['nfw'][i, j], ellmax=exp.lmax)
                 y = tsz_filter * tls.pkToPell(hcos.comoving_radial_distance(hcos.zs[i]), hcos.ks,
-                                              hcos.pk_profiles['y'][i, j] \
-                                              * (1 - np.exp(-(hcos.ks / hcos.p['kstar_damping']))), ellmax=exp.lmax)
+                                              hcos.pk_profiles['y'][i, j], ellmax=exp.lmax)
                 u_cen = self.CIB_central_filter[:,i,j] # Centrals come with a factor of u^0 # TODO: is it better to have u here, or not?
                 u_sat = self.CIB_satellite_filter[:,i,j] * u
 
