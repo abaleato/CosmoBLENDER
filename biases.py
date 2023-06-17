@@ -78,18 +78,20 @@ class hm_framework:
         I = np.trapz(self.hcos.nzm*self.hcos.bh*self.hcos.ms/self.hcos.rho_matter_z(0)*mMask,self.hcos.ms, axis=-1)
         self.m_consistency = 1 - I # A function of z
 
-    def get_galaxy_consistency(self, exp, survey_name):
+    def get_galaxy_consistency(self, exp, survey_name, lmax_proj=None):
         """
         Calculate consistency relation for 2-halo term given some mass cut for an integral over galaxy number density
         Variable names are roughly inspired by Appendix A of Mead et al 2020
         Input:
             * exp = a qest.experiment object
         """
-        ugal_proj_of_Mlow = np.zeros((len(self.hcos.zs), self.lmax_out+1))
+        if lmax_proj is None:
+            lmax_proj = self.lmax_out
+        ugal_proj_of_Mlow = np.zeros((len(self.hcos.zs), lmax_proj+1))
         for i, z in enumerate(self.hcos.zs):
             ugal_proj_of_Mlow[i, :] = tls.pkToPell(self.hcos.comoving_radial_distance(self.hcos.zs[i]),
                                         self.hcos.ks, self.hcos.uk_profiles['nfw'][i, 0],
-                                        ellmax=self.lmax_out) # A function of z and k
+                                        ellmax=lmax_proj) # A function of z and k
         mMask = np.ones(self.nMasses)
         mMask[exp.massCut<self.hcos.ms]=0
         I = np.trapz(self.hcos.nzm*self.hcos.bh*self.hcos.ms/self.hcos.rho_matter_z(0)*mMask,self.hcos.ms, axis=-1)
@@ -97,18 +99,44 @@ class hm_framework:
                     / self.hcos.hods[survey_name]['ngal'][:,None] * ugal_proj_of_Mlow # A function of z and k
         self.g_consistency = ((1 - I)/(self.hcos.ms[0]/self.hcos.rho_matter_z(0)))[:,None]*W_of_Mlow # A function of z and k
 
-    def get_cib_consistency(self, exp):
+    def get_tsz_consistency(self, exp, lmax_proj=None):
+        """
+        Calculate consistency relation for 2-halo term given some mass cut for an integral over tsz emission.
+        Variable names are roughly inspired by Appendix A of Mead et al 2020
+        Input:
+            * exp = a qest.experiment object
+        """
+        if lmax_proj is None:
+            lmax_proj = self.lmax_out
+
+        # Get frequency scaling of tSZ, possibly including harmonic ILC cleaning
+        tsz_filter = exp.get_tsz_filter()
+
+        W_of_Mlow = np.zeros((len(self.hcos.zs), lmax_proj + 1))
+        for i, z in enumerate(self.hcos.zs):
+            W_of_Mlow[i, :] = tsz_filter * tls.pkToPell(self.hcos.comoving_radial_distance(self.hcos.zs[i]),
+                                                   self.hcos.ks, self.hcos.pk_profiles['y'][i, 0],
+                                                   ellmax=lmax_proj)  # A function of z and k
+        mMask = np.ones(self.nMasses)
+        mMask[exp.massCut < self.hcos.ms] = 0
+        I = np.trapz(self.hcos.nzm * self.hcos.bh * self.hcos.ms / self.hcos.rho_matter_z(0) * mMask, self.hcos.ms,
+                     axis=-1)
+        self.y_consistency = ((1 - I) / (self.hcos.ms[0] / self.hcos.rho_matter_z(0)))[:,None] * W_of_Mlow
+
+    def get_cib_consistency(self, exp, lmax_proj=None):
         """
         Calculate consistency relation for 2-halo term given some mass cut for an integral over CIB emission.
         Variable names are roughly inspired by Appendix A of Mead et al 2020
         Input:
             * exp = a qest.experiment object
         """
+        if lmax_proj is None:
+            lmax_proj = self.lmax_out
         self.get_CIB_filters(exp)
-        ucen_plus_usat_of_Mlow = np.zeros((len(self.hcos.zs), self.lmax_out+1))
+        ucen_plus_usat_of_Mlow = np.zeros((len(self.hcos.zs), lmax_proj+1))
         for i, z in enumerate(self.hcos.zs):
             u_of_Mlow_proj = tls.pkToPell(self.hcos.comoving_radial_distance(self.hcos.zs[i]),
-                                        self.hcos.ks, self.hcos.uk_profiles['nfw'][i, 0, :], ellmax=self.lmax_out)
+                                        self.hcos.ks, self.hcos.uk_profiles['nfw'][i, 0, :], ellmax=lmax_proj)
             u_cen = self.CIB_central_filter[:, i, 0]
             u_sat = self.CIB_satellite_filter[:, i, 0] * u_of_Mlow_proj
             ucen_plus_usat_of_Mlow[i, :] = u_cen + u_sat # A function of z and k
@@ -131,6 +159,7 @@ class hm_framework:
         """
         hcos = self.hcos
         self.get_matter_consistency(exp)
+        self.get_tsz_consistency(exp, lmax_proj=exp.lmax)
 
         # Output ells
         ells_out = np.arange(self.lmax_out+1)
@@ -177,9 +206,10 @@ class hm_framework:
                 if m> exp.massCut: continue
                 y = tsz_filter * tls.pkToPell(hcos.comoving_radial_distance(hcos.zs[i]), hcos.ks, hcos.pk_profiles['y'][i,j]\
                                  *(1-np.exp(-(hcos.ks/hcos.p['kstar_damping']))), ellmax=exp.lmax)
-                integ_1h_for_2htrispec[..., j] = pk * y * hcos.nzm[i, j] * hcos.bh[i, j]
+                integ_1h_for_2htrispec[..., j] = y * hcos.nzm[i, j] * hcos.bh[i, j]
 
-            int_over_M_of_profile = np.trapz(integ_1h_for_2htrispec,hcos.ms,axis=-1)
+            # Do the 1- integral in the 1-3 trispectrum and impose consistency condition
+            int_over_M_of_profile = pk * (np.trapz(integ_1h_for_2htrispec,hcos.ms,axis=-1) + self.y_consistency[i])
 
             # M integral.
             for j,m in enumerate(hcos.ms):
@@ -220,10 +250,8 @@ class hm_framework:
             if get_secondary_bispec_bias:
                 oneH_second_bispec[...,i]=np.trapz(itgnd_1h_second_bispec,hcos.ms,axis=-1)
 
-            # FIXME: impose consistency for 2h trispectra
             twoH_4pt[...,i]= 4 * np.trapz(itgnd_2h_trispec,hcos.ms,axis=-1)
             tmpCorr =np.trapz(itgnd_2h_1g,hcos.ms,axis=-1)
-            #FIXME: do we need to apply consistency condition to integral over fg profiles too? So far only kappa part
             twoH_cross[...,i]= np.trapz(itgnd_2h_2g,hcos.ms,axis=-1) * (tmpCorr + self.m_consistency[i]) * pk
 
         # Convert the NFW profile in the cross bias from kappa to phi
@@ -444,6 +472,7 @@ class hm_framework:
         # FIXME: update docs of input
         hcos = self.hcos
         self.get_matter_consistency(exp)
+        self.get_cib_consistency(exp, lmax_proj=exp.lmax)
 
         # Compute effective CIB weights, including f_cen and f_sat factors as well as possibly fg cleaning
         self.get_CIB_filters(exp)
@@ -489,9 +518,10 @@ class hm_framework:
                 u_cen = self.CIB_central_filter[:,i,j] # Centrals come with a factor of u^0 # TODO: is it better to have u here, or not?
                 u_sat = self.CIB_satellite_filter[:,i,j] * u
 
-                integ_1h_for_2htrispec[..., j] = pk * hcos.nzm[i, j] * hcos.bh[i, j] * (u_cen + u_sat)
+                integ_1h_for_2htrispec[..., j] = hcos.nzm[i, j] * hcos.bh[i, j] * (u_cen + u_sat)
 
-            Iint = np.trapz(integ_1h_for_2htrispec,hcos.ms,axis=-1)
+            # Do the 1- integral in the 1-3 trispectrum and impose consistency condition
+            Iint = pk * (np.trapz(integ_1h_for_2htrispec,hcos.ms,axis=-1) + self.I_consistency[i])
 
             # M integral.
             for j,m in enumerate(hcos.ms):
@@ -841,6 +871,8 @@ class hm_framework:
         # TODO: document better
         hcos = self.hcos
         self.get_matter_consistency(exp)
+        self.get_cib_consistency(exp, lmax_proj=exp.lmax)
+        self.get_tsz_consistency(exp, lmax_proj=exp.lmax)
 
         # Get frequency scaling of tSZ, possibly including harmonic ILC cleaning
         tsz_filter = exp.get_tsz_filter()
@@ -897,10 +929,12 @@ class hm_framework:
                 u_cen = self.CIB_central_filter[:,i,j] # Centrals come with a factor of u^0 # TODO: is it better to have u here, or not?
                 u_sat = self.CIB_satellite_filter[:,i,j] * u
 
-                integ_1h_I_for_2htrispec[..., j] = pk * hcos.nzm[i, j] * hcos.bh[i, j] * (u_cen + u_sat)
-                integ_1h_y_for_2htrispec[..., j] = pk * hcos.nzm[i, j] * hcos.bh[i, j] * y
-            Iint = np.trapz(integ_1h_I_for_2htrispec, hcos.ms, axis=-1)
-            yint = np.trapz(integ_1h_y_for_2htrispec, hcos.ms, axis=-1)
+                integ_1h_I_for_2htrispec[..., j] = hcos.nzm[i, j] * hcos.bh[i, j] * (u_cen + u_sat)
+                integ_1h_y_for_2htrispec[..., j] = hcos.nzm[i, j] * hcos.bh[i, j] * y
+
+            # Do the 1- integrals in the 1-3 trispectrum and impose consistency conditions
+            Iint = pk * (np.trapz(integ_1h_I_for_2htrispec, hcos.ms, axis=-1) + self.I_consistency[i])
+            yint = pk * (np.trapz(integ_1h_y_for_2htrispec, hcos.ms, axis=-1) + self.y_consistency[i])
 
             # M integral.
             for j,m in enumerate(hcos.ms):
@@ -993,7 +1027,7 @@ class hm_framework:
             yIII_2h[...,i] = np.trapz(itgnd_2h_yIII,hcos.ms,axis=-1)
 
             tmpCorr =np.trapz(itgnd_2h_k,hcos.ms,axis=-1)
-            twoH_cross[...,i]=np.trapz(itgnd_2h_Iy,hcos.ms,axis=-1) * (tmpCorr + self.m_consistency[i]) *p_k
+            twoH_cross[...,i]=np.trapz(itgnd_2h_Iy,hcos.ms,axis=-1) * (tmpCorr + self.m_consistency[i]) *pk
 
         # Convert the NFW profile in the cross bias from kappa to phi
         conversion_factor = np.nan_to_num(1 / (0.5 * ells_out*(ells_out+1) )) if fftlog_way else ql.spec.cl2cfft(np.nan_to_num(1 / (0.5 * np.arange(self.lmax_out+1)*(np.arange(self.lmax_out+1)+1) )),exp.pix).fft
