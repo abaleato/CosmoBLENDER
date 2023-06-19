@@ -75,7 +75,7 @@ class hm_framework:
         """
         mMask = np.ones(self.nMasses)
         mMask[exp.massCut<self.hcos.ms]=0
-        I = np.trapz(self.hcos.nzm*self.hcos.bh*self.hcos.ms/self.hcos.rho_matter_z(0)*mMask,self.hcos.ms, axis=-1)
+        I = np.trapz(self.hcos.nzm*self.hcos.bh_ofM*self.hcos.ms/self.hcos.rho_matter_z(0)*mMask,self.hcos.ms, axis=-1)
         self.m_consistency = 1 - I # A function of z
 
     def get_galaxy_consistency(self, exp, survey_name, lmax_proj=None):
@@ -94,7 +94,7 @@ class hm_framework:
                                         ellmax=lmax_proj) # A function of z and k
         mMask = np.ones(self.nMasses)
         mMask[exp.massCut<self.hcos.ms]=0
-        I = np.trapz(self.hcos.nzm*self.hcos.bh*self.hcos.ms/self.hcos.rho_matter_z(0)*mMask,self.hcos.ms, axis=-1)
+        I = np.trapz(self.hcos.nzm*self.hcos.bh_ofM*self.hcos.ms/self.hcos.rho_matter_z(0)*mMask,self.hcos.ms, axis=-1)
         W_of_Mlow = (self.hcos.hods[survey_name]['Nc'][:, 0] + self.hcos.hods[survey_name]['Ns'][:, 0])[:,None]\
                     / self.hcos.hods[survey_name]['ngal'][:,None] * ugal_proj_of_Mlow # A function of z and k
         self.g_consistency = ((1 - I)/(self.hcos.ms[0]/self.hcos.rho_matter_z(0)))[:,None]*W_of_Mlow # A function of z and k
@@ -119,7 +119,7 @@ class hm_framework:
                                                    ellmax=lmax_proj)  # A function of z and k
         mMask = np.ones(self.nMasses)
         mMask[exp.massCut < self.hcos.ms] = 0
-        I = np.trapz(self.hcos.nzm * self.hcos.bh * self.hcos.ms / self.hcos.rho_matter_z(0) * mMask, self.hcos.ms,
+        I = np.trapz(self.hcos.nzm * self.hcos.bh_ofM * self.hcos.ms / self.hcos.rho_matter_z(0) * mMask, self.hcos.ms,
                      axis=-1)
         self.y_consistency = ((1 - I) / (self.hcos.ms[0] / self.hcos.rho_matter_z(0)))[:,None] * W_of_Mlow
 
@@ -142,7 +142,7 @@ class hm_framework:
             ucen_plus_usat_of_Mlow[i, :] = u_cen + u_sat # A function of z and k
         mMask = np.ones(self.nMasses)
         mMask[exp.massCut<self.hcos.ms]=0
-        I = np.trapz(self.hcos.nzm*self.hcos.bh*self.hcos.ms/self.hcos.rho_matter_z(0)*mMask,self.hcos.ms, axis=-1)
+        I = np.trapz(self.hcos.nzm*self.hcos.bh_ofM*self.hcos.ms/self.hcos.rho_matter_z(0)*mMask,self.hcos.ms, axis=-1)
         W_of_Mlow =  ucen_plus_usat_of_Mlow # A function of z and k
         self.I_consistency = ((1 - I)/(self.hcos.ms[0]/self.hcos.rho_matter_z(0)))[:,None]*W_of_Mlow # A function of z and k
 
@@ -206,7 +206,7 @@ class hm_framework:
             for j,m in enumerate(hcos.ms):
                 if m> exp.massCut: continue
                 y = tsz_filter * tls.pkToPell(hcos.comoving_radial_distance(hcos.zs[i]), hcos.ks, hcos.pk_profiles['y'][i,j], ellmax=exp.lmax)
-                integ_1h_for_2htrispec[..., j] = y * hcos.nzm[i, j] * hcos.bh[i, j]
+                integ_1h_for_2htrispec[..., j] = y * hcos.nzm[i, j] * hcos.bh_ofM[i, j]
 
             # Do the 1- integral in the 1-3 trispectrum and impose consistency condition
             int_over_M_of_profile = pk * (np.trapz(integ_1h_for_2htrispec,hcos.ms,axis=-1) + self.y_consistency[i])
@@ -240,9 +240,9 @@ class hm_framework:
                 # Accumulate the itgnds
                 itgnd_1h_cross[...,j] = phicfft_damp*np.conjugate(kfft_damp)*hcos.nzm[i,j]
                 itgnd_1h_4pt[...,j] = phicfft_damp*np.conjugate(phicfft_damp) * hcos.nzm[i,j]
-                itgnd_2h_1g[...,j] = np.conjugate(kfft)*hcos.nzm[i,j]*hcos.bh[i,j]
-                itgnd_2h_2g[..., j] = phicfft * hcos.nzm[i, j] * hcos.bh[i, j]
-                itgnd_2h_trispec[...,j] = phicfft*np.conjugate(phicfft_mixed)*hcos.nzm[i,j]*hcos.bh[i,j]
+                itgnd_2h_1g[...,j] = np.conjugate(kfft)*hcos.nzm[i,j]*hcos.bh_ofM[i,j]
+                itgnd_2h_2g[..., j] = phicfft * hcos.nzm[i, j] * hcos.bh_ofM[i, j]
+                itgnd_2h_trispec[...,j] = phicfft*np.conjugate(phicfft_mixed)*hcos.nzm[i,j]*hcos.bh_ofM[i,j]
 
                 if get_secondary_bispec_bias:
                     # Temporary secondary bispectrum bias stuff
@@ -371,8 +371,8 @@ class hm_framework:
                 # Accumulate the itgnds
                 mean_Ngal = hcos.hods[survey_name]['Nc'][i, j] + hcos.hods[survey_name]['Ns'][i, j]
                 itgnd_1h_cross[..., j] = mean_Ngal * phicfft_damp * np.conjugate(galfft_damp) * hcos.nzm[i, j]
-                itgnd_2h_1g[..., j] = mean_Ngal * np.conjugate(galfft) * hcos.nzm[i, j] * hcos.bh[i, j]
-                itgnd_2h_2g[..., j] = phicfft * hcos.nzm[i, j] * hcos.bh[i, j]
+                itgnd_2h_1g[..., j] = mean_Ngal * np.conjugate(galfft) * hcos.nzm[i, j] * hcos.bh_ofM[i, j]
+                itgnd_2h_2g[..., j] = phicfft * hcos.nzm[i, j] * hcos.bh_ofM[i, j]
 
             # Perform the m integrals
             oneH_cross[...,i]=np.trapz(itgnd_1h_cross,hcos.ms,axis=-1)
@@ -383,7 +383,7 @@ class hm_framework:
                 pk = ql.spec.cl2cfft(pk, exp.pix).fft
 
             tmpCorr =np.trapz(itgnd_2h_1g,hcos.ms,axis=-1)
-            #FIXME: do we need to apply consistency condition to integral over fg profiles too? So far only kappa part
+            twoH_cross[...,i] = np.trapz(itgnd_2h_2g,hcos.ms,axis=-1) * (tmpCorr + self.g_consistency[i]) * pk
             twoH_cross[...,i] = np.trapz(itgnd_2h_2g,hcos.ms,axis=-1) * (tmpCorr + self.g_consistency[i]) * pk
 
         # Convert the NFW profile in the cross bias from kappa to phi
@@ -463,8 +463,8 @@ class hm_framework:
             conversion = tls.from_Jypersr_to_uK(exp.freq_GHz)
         else:
             conversion = 1
-        self.f_cen = conversion * self.hcos._get_fcen(autofreq[0])[:,:,0]
-        self.f_sat = conversion * self.hcos._get_fsat(autofreq[0], cibinteg='trap', satmf='Tinker')[:,:,0]
+        self.f_cen = conversion * self.hcos.get_fcen(autofreq[0])[:,:,0]
+        self.f_sat = conversion * self.hcos.get_fsat(autofreq[0], cibinteg='trap', satmf='Tinker')[:,:,0]
 
     def get_hod_factorial(self, n):
         """
@@ -487,16 +487,16 @@ class hm_framework:
             for i, freq in enumerate(np.array(exp.freq_GHz*1e9)):
                 #TODO: make this cleaner
                 freq = np.array([freq])
-                f_cen_array[i, :, :] = self.hcos._get_fcen(freq)[:,:,0]
-                f_sat_array[i, :, :] = self.hcos._get_fsat(freq, cibinteg='trap', satmf='Tinker')[:,:,0]
+                f_cen_array[i, :, :] = self.hcos.get_fcen(freq)[:,:,0]
+                f_sat_array[i, :, :] = self.hcos.get_fsat(freq, cibinteg='trap', satmf='Tinker')[:,:,0]
 
             # Compute \Sum_{\nu} f^{\nu}(z,M) w^{\nu, ILC}_l
             self.CIB_central_filter = np.sum(exp.ILC_weights[:,:,None,None] * f_cen_array, axis=1)
             self.CIB_satellite_filter = np.sum(exp.ILC_weights[:,:,None,None] * f_sat_array, axis=1)
         else:
             # Single-frequency scenario. Return two (nZs, nMs) array containing f_cen(M,z) and f_sat(M,z)
-            self.CIB_central_filter = self.hcos._get_fcen(exp.freq_GHz*1e9)[:,:,0][np.newaxis,:,:]
-            self.CIB_satellite_filter = self.hcos._get_fsat(exp.freq_GHz*1e9, cibinteg='trap', satmf='Tinker')[:,:,0][np.newaxis,:,:]
+            self.CIB_central_filter = self.hcos.get_fcen(exp.freq_GHz*1e9)[:,:,0][np.newaxis,:,:]
+            self.CIB_satellite_filter = self.hcos.get_fsat(exp.freq_GHz*1e9, cibinteg='trap', satmf='Tinker')[:,:,0][np.newaxis,:,:]
 
     def get_cib_auto_biases(self, exp, fftlog_way=True, get_secondary_bispec_bias=False, bin_width_out=30, \
                      bin_width_out_second_bispec_bias=250, parallelise_secondbispec=True, damp_1h_prof=False):
@@ -556,7 +556,7 @@ class hm_framework:
                 u_cen = self.CIB_central_filter[:,i,j] # Centrals come with a factor of u^0 # TODO: is it better to have u here, or not?
                 u_sat = self.CIB_satellite_filter[:,i,j] * u
 
-                integ_1h_for_2htrispec[..., j] = hcos.nzm[i, j] * hcos.bh[i, j] * (u_cen + u_sat)
+                integ_1h_for_2htrispec[..., j] = hcos.nzm[i, j] * hcos.bh_ofM[i, j] * (u_cen + u_sat)
 
             # Do the 1- integral in the 1-3 trispectrum and impose consistency condition
             Iint = pk * (np.trapz(integ_1h_for_2htrispec,hcos.ms,axis=-1) + self.I_consistency[i])
@@ -606,9 +606,9 @@ class hm_framework:
                 itgnd_1h_IIII[...,j] = hcos.nzm[i,j] * (phicfft_usat_usat_damp * np.conjugate(phicfft_usat_usat_damp)
                                                                  + 4 * phicfft_ucen_usat_damp * np.conjugate(phicfft_usat_usat_damp))
 
-                itgnd_2h_k[...,j] = np.conjugate(kfft) * hcos.nzm[i,j] * hcos.bh[i,j]
-                itgnd_2h_II[...,j] = hcos.nzm[i,j] * hcos.bh[i,j] * (phicfft_usat_usat + 2 * phicfft_ucen_usat)
-                itgnd_2h_IintIII[...,j] = hcos.nzm[i,j] * hcos.bh[i,j]\
+                itgnd_2h_k[...,j] = np.conjugate(kfft) * hcos.nzm[i,j] * hcos.bh_ofM[i,j]
+                itgnd_2h_II[...,j] = hcos.nzm[i,j] * hcos.bh_ofM[i,j] * (phicfft_usat_usat + 2 * phicfft_ucen_usat)
+                itgnd_2h_IintIII[...,j] = hcos.nzm[i,j] * hcos.bh_ofM[i,j]\
                                                    * (phicfft_Iint_ucen * np.conjugate(phicfft_usat_usat)
                                                       + phicfft_Iint_usat * np.conjugate(2*phicfft_ucen_usat
                                                                                                      + phicfft_usat_usat) )
@@ -760,8 +760,8 @@ class hm_framework:
                 mean_Ngal = hcos.hods[survey_name]['Nc'][i, j] + hcos.hods[survey_name]['Ns'][i, j]
                 itgnd_1h_cross[...,j] = mean_Ngal * np.conjugate(galfft_damp) * hcos.nzm[i,j] *\
                                                  (phicfft_usat_usat_damp + 2 * phicfft_ucen_usat_damp)
-                itgnd_2h_k[...,j] = mean_Ngal * np.conjugate(galfft) * hcos.nzm[i,j] * hcos.bh[i,j]
-                itgnd_2h_II[...,j] = hcos.nzm[i,j] * hcos.bh[i,j] \
+                itgnd_2h_k[...,j] = mean_Ngal * np.conjugate(galfft) * hcos.nzm[i,j] * hcos.bh_ofM[i,j]
+                itgnd_2h_II[...,j] = hcos.nzm[i,j] * hcos.bh_ofM[i,j] \
                                               * ((phicfft_usat_usat + 2 * phicfft_ucen_usat))
 
             oneH_cross[...,i]=np.trapz(itgnd_1h_cross,hcos.ms,axis=-1)
@@ -877,8 +877,8 @@ class hm_framework:
                 mean_Ngal = hcos.hods[survey_name]['Nc'][i, j] + hcos.hods[survey_name]['Ns'][i, j]
                 itgnd_1h_cross[...,j] =  mean_Ngal * np.conjugate(galfft_damp) * hcos.nzm[i,j] \
                                                   * (phicfft_ucen_y_damp + phicfft_usat_y_damp)
-                itgnd_2h_k[...,j] = mean_Ngal * np.conjugate(galfft) * hcos.nzm[i,j] * hcos.bh[i,j]
-                itgnd_2h_II[...,j] = hcos.nzm[i,j] * hcos.bh[i,j] \
+                itgnd_2h_k[...,j] = mean_Ngal * np.conjugate(galfft) * hcos.nzm[i,j] * hcos.bh_ofM[i,j]
+                itgnd_2h_II[...,j] = hcos.nzm[i,j] * hcos.bh_ofM[i,j] \
                                               * (phicfft_ucen_y + phicfft_usat_y)
 
             oneH_cross[...,i]=np.trapz(itgnd_1h_cross,hcos.ms,axis=-1)
@@ -889,7 +889,6 @@ class hm_framework:
                 pk = ql.spec.cl2cfft(pk, exp.pix).fft
 
             tmpCorr =np.trapz(itgnd_2h_k,hcos.ms,axis=-1)
-            # FIXME: do we need to apply consistency condition to integral over fg profiles too? So far only kappa part
             twoH_cross[...,i] = np.trapz(itgnd_2h_II,hcos.ms,axis=-1) * (tmpCorr + self.g_consistency[i]) * pk
 
         # Convert the NFW profile in the cross bias from kappa to phi
@@ -958,7 +957,7 @@ class hm_framework:
 
                 # Accumulate the itgnds
                 itgnd_1h_ps[:, j] = hcos.nzm[i, j] * (2*u_cen*u_sat_damp + u_sat_damp*u_sat_damp) #hod_fact_2gal[i, j] * hcos.nzm[i, j] * u_softened * np.conjugate(u_softened)
-                itgnd_2h_1g[:, j] = hcos.nzm[i, j] * hcos.bh[i, j] * (u_cen + u_sat)#hod_fact_1gal[i, j] * hcos.nzm[i, j] * hcos.bh[i, j] * u
+                itgnd_2h_1g[:, j] = hcos.nzm[i, j] * hcos.bh_ofM[i, j] * (u_cen + u_sat)#hod_fact_1gal[i, j] * hcos.nzm[i, j] * hcos.bh_ofM[i, j] * u
 
                 # Perform the m integrals
             oneH_ps[:, i] = np.trapz(itgnd_1h_ps, hcos.ms, axis=-1)
@@ -1045,8 +1044,8 @@ class hm_framework:
                 u_cen = self.CIB_central_filter[:,i,j] # Centrals come with a factor of u^0 # TODO: is it better to have u here, or not?
                 u_sat = self.CIB_satellite_filter[:,i,j] * u
 
-                integ_1h_I_for_2htrispec[..., j] = hcos.nzm[i, j] * hcos.bh[i, j] * (u_cen + u_sat)
-                integ_1h_y_for_2htrispec[..., j] = hcos.nzm[i, j] * hcos.bh[i, j] * y
+                integ_1h_I_for_2htrispec[..., j] = hcos.nzm[i, j] * hcos.bh_ofM[i, j] * (u_cen + u_sat)
+                integ_1h_y_for_2htrispec[..., j] = hcos.nzm[i, j] * hcos.bh_ofM[i, j] * y
 
             # Do the 1- integrals in the 1-3 trispectrum and impose consistency conditions
             Iint = pk * (np.trapz(integ_1h_I_for_2htrispec, hcos.ms, axis=-1) + self.I_consistency[i])
@@ -1116,21 +1115,21 @@ class hm_framework:
                 itgnd_1h_yIII[...,j] = hcos.nzm[i,j] * (phicfft_ucen_y_damp*phicfft_usat_usat_damp
                                                         + phicfft_usat_y_damp*(2*phicfft_ucen_usat_damp + phicfft_usat_usat_damp) )
 
-                itgnd_2h_k[...,j] = np.conjugate(kfft) * hcos.nzm[i,j] * hcos.bh[i,j]
-                itgnd_2h_Iy[...,j] = (phicfft_ucen_y + phicfft_usat_y) * hcos.nzm[i,j] * hcos.bh[i,j]
+                itgnd_2h_k[...,j] = np.conjugate(kfft) * hcos.nzm[i,j] * hcos.bh_ofM[i,j]
+                itgnd_2h_Iy[...,j] = (phicfft_ucen_y + phicfft_usat_y) * hcos.nzm[i,j] * hcos.bh_ofM[i,j]
 
-                itgnd_2h_Iyyy[...,j] = hcos.nzm[i,j] * hcos.bh[i,j] * (phicfft_Iint_y*phicfft_yy
+                itgnd_2h_Iyyy[...,j] = hcos.nzm[i,j] * hcos.bh_ofM[i,j] * (phicfft_Iint_y*phicfft_yy
                                                                        + 3*phicfft_yint_y*(phicfft_ucen_y
                                                                                            +phicfft_usat_y))
-                itgnd_2h_IIyy[...,j] = hcos.nzm[i,j] * hcos.bh[i,j] * (2*phicfft_yy*(phicfft_Iint_ucen
+                itgnd_2h_IIyy[...,j] = hcos.nzm[i,j] * hcos.bh_ofM[i,j] * (2*phicfft_yy*(phicfft_Iint_ucen
                                                                                      +phicfft_Iint_usat)
                                                                        +2*phicfft_yint_y*(2*phicfft_ucen_usat
                                                                                           +phicfft_usat_usat))
-                itgnd_2h_IyIy[...,j] = hcos.nzm[i,j] * hcos.bh[i,j] * (2*phicfft_Iint_y*(phicfft_ucen_y
+                itgnd_2h_IyIy[...,j] = hcos.nzm[i,j] * hcos.bh_ofM[i,j] * (2*phicfft_Iint_y*(phicfft_ucen_y
                                                                                          +phicfft_usat_y)
                                                                        +2*phicfft_usat_y*(2*phicfft_Iint_ucen
                                                                                           +phicfft_Iint_usat))
-                itgnd_2h_yIII[...,j] = hcos.nzm[i,j] * hcos.bh[i,j] * (phicfft_yint_ucen*phicfft_usat_usat
+                itgnd_2h_yIII[...,j] = hcos.nzm[i,j] * hcos.bh_ofM[i,j] * (phicfft_yint_ucen*phicfft_usat_usat
                                                                        +(phicfft_yint_usat+phicfft_Iint_y)
                                                                        *(2*phicfft_ucen_usat +phicfft_usat_usat)
                                                                        +2*phicfft_Iint_ucen*phicfft_usat_y

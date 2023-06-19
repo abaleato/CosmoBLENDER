@@ -1,10 +1,9 @@
 import matplotlib.pyplot as plt
-
-import qest
 import numpy as np
 import hmvec as hm
-import tools as tls
-import biases
+from cosmoblender import qest
+from cosmoblender import tools as tls
+from cosmoblender import biases
 
 def test_clbb_bias(hm_calc, exp):
     """ Check the biases to the power spectrum of delensed B-modes"""
@@ -16,10 +15,10 @@ def test_clbb_bias(hm_calc, exp):
     plt.xlabel(r'$l$')
     plt.legend()
 
-def test_cib_ps(hm_object, exp_object):
+def test_cib_ps(hm_object, exp_object, damp_1h_prof=False):
     """ Check the CIB power spectrum"""
     # Our calculation
-    clCIBCIB_oneHalo_ps, clCIBCIB_twoHalo_ps = hm_object.get_cib_ps(exp_object, convert_to_muK=False)
+    clCIBCIB_oneHalo_ps, clCIBCIB_twoHalo_ps = hm_object.get_cib_ps(exp_object, convert_to_muK=False, damp_1h_prof=damp_1h_prof)
     # Compare to Yogesh' calculation
     ells = np.arange(3000)
     PII_yogesh_1h = hm_calc.hcos.get_power_1halo('cib', nu_obs=np.array([exp_object.freq_GHz * 1e9]))
@@ -97,7 +96,7 @@ def test_tsz_bias(hm_object, experiment):
     plt.loglog(experiment.biases['ells'], -experiment.biases['tsz']['trispec']['2h'], ls='--')
 
 if __name__ == '__main__':
-    which_test = 'test_tsz_bias' # 'test_CIB' or 'test_tSZ' or 'test_clbb_bias'
+    which_test = 'test_CIB' # 'test_CIB' or 'test_tSZ' or 'test_clbb_bias'
 
     # Initialise the experiment and halo model object for which to run the tests
     # This should roughly match the cosmology in Nick's tSZ papers
@@ -153,21 +152,26 @@ if __name__ == '__main__':
         plt.show()
 
     elif which_test == 'test_CIB':
-        # Initialise experiment object
-        nlev_t = 18.  # uK arcmin
-        beam_size = 1.  # arcmin
-        lmax = 3000  # Maximum ell for the reconstruction
-        freq_GHz = 545.
-        massCut_Mvir = 5e17
+        # Foreground cleaning? Only relevant if many frequencies are provided
+        MV_ILC_bool = True
+        deproject_CIB = False
+        deproject_tSZ = False
+        fg_cleaning_dict = {'MV_ILC_bool': MV_ILC_bool, 'deproject_CIB': deproject_CIB, 'deproject_tSZ': deproject_tSZ}
+
+        SPT_properties = {'nlev_t': np.array([18.]),
+                          'beam_size': np.array([1.]),
+                          'freq_GHz': np.array([545.])}
+
         # Initialise experiments with various different mass cuts
-        SPT_nocut = qest.experiment(nlev_t, beam_size, lmax, massCut_Mvir=massCut_Mvir, freq_GHz=freq_GHz)
+        SPT_5e15 = qest.experiment(lmax=3000, massCut_Mvir=5e15, **SPT_properties, **fg_cleaning_dict)
+
         # Initialise a halo model object for the CIB PS calculation, using mostly default parameters
         nZs = 30  # 30
         nMasses = 30  # 30
         z_max = 4
-        hm_calc = biases.hm_framework(cosmoParams=cosmoParams, nZs=nZs, nMasses=nMasses, z_max=z_max)
+        hm_calc = biases.hm_framework(m_min=1e12/0.7, cosmoParams=cosmoParams, nZs=nZs, nMasses=nMasses, z_max=z_max)
         # Check CIB power spectrum
-        test_cib_ps(hm_calc, SPT_nocut)
+        test_cib_ps(hm_calc, SPT_5e15, damp_1h_prof=False)
         plt.show()
 
     elif which_test=='test_clbb_bias':
