@@ -9,3 +9,7 @@ __pycache__/
 *.tar
 *.log
 *.ipynb
+*.pyc
+
+ilc_weights/
+saved_biases_and_plots/
