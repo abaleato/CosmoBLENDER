@@ -3,7 +3,7 @@
 
 import numpy as np
 import quicklens as ql
-import qest
+from . import qest
 import multiprocessing
 from functools import partial
 

@@ -1,12 +1,29 @@
-## CosmoBLENDER: Cosmological Biases to LENsing Due to Extragalactic Radiation
-Code for calculating biases to CMB lensing auto- and cross- correlations due to extragalactic foregrounds
+# CosmoBLENDER
 
-### Requirements:
-* Python 3
-* [hmvec](https://github.com/simonsobs/hmvec) (including galaxy branch for CIB calculations)
-* Quicklens ([Python 3 version](https://github.com/abaleato/Quicklens-with-fixes/tree/Python3) )
-* [pyccl](https://github.com/LSSTDESC/CCL)
-* astropy
+**C**osmological **B**iases to **LEN**sing and **D**elensing **D**ue to **E**xtragalactic **R**adiation
 
-### Usage:
-See example_pipeline.ipynb
+CosmoBLENDER is a python code that computes biases to CMB lensing auto- and cross-correlations, as well as internal
+delensing. It follows [Baleato Lizancos et al. 2023]().
+
+## Installation
+###### Dependencies:
+- `numpy`, `scipy`, `matplotlib`
+- [hmvec](https://github.com/simonsobs/hmvec) (including galaxy branch for CIB calculations)
+- Quicklens ([Python 3 version](https://github.com/abaleato/Quicklens-with-fixes/tree/Python3) )
+- [pyccl](https://github.com/LSSTDESC/CCL)
+- astropy
+
+###### Editable installation in-place:
+First, clone the repository
+
+    git clone https://github.com/abaleato/CosmoBLENDER.git
+
+and from within it run
+
+    python -m pip install -e .
+
+## Usage
+See the notebooks under the `examples/` directory -- `examples/example_pipeline.ipynb` is a great place to start.
+
+## Attribution
+If you use the code, please cite [Baleato Lizancos et al. 2023]().

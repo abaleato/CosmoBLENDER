@@ -2,7 +2,7 @@ import numpy as np
 from scipy.interpolate import interp1d
 import functools
 from astropy import units as u
-from astropy.cosmology import Planck15
+from astropy.cosmology import Planck18
 import quicklens as ql
 from astropy.cosmology import FlatLambdaCDM
 from scipy.interpolate import CubicSpline
@@ -27,7 +27,7 @@ def from_Jypersr_to_uK(freq_GHz):
         Multiplicative conversion factor in units of microKelvin/(Jy sr^-1)
     """
     freq = freq_GHz * u.GHz
-    equiv = u.thermodynamic_temperature(freq, Planck15.Tcmb0)
+    equiv = u.thermodynamic_temperature(freq, Planck18.Tcmb0)
     return (1. * u.Jy / u.sr).to(u.uK, equivalencies=equiv).value
 
 def spline_interpolate_weights(orig_weights, orig_ells, lmax):

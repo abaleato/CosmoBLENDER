@@ -7,8 +7,8 @@ twoH = two halo
 
 import numpy as np
 import hmvec as hm
-import tools as tls
-import second_bispec_bias_stuff as sbbs #FIXME:remove this when the secondary bispectrum bias is properly incorporated
+from . import tools as tls
+from . import second_bispec_bias_stuff as sbbs #TODO:remove this when the secondary bispectrum bias is properly incorporated
 import quicklens as ql
 
 class hm_framework:

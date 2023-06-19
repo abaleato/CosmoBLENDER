@@ -4,8 +4,9 @@ from pyccl.pyutils import _fftlog_transform
 from scipy.integrate import quad
 import quicklens as ql
 import pickle
-import tools as tls
+from . import tools as tls
 import sys
+# TODO: install BasicILC
 sys.path.insert(0, '/Users/antonbaleatolizancos/Software/BasicILC_py3/')
 import cmb_ilc
 
