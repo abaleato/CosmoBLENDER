@@ -156,6 +156,7 @@ class hm_framework:
             * (optional) get_secondary_bispec_bias = False. Compute and return the secondary bispectrum bias (slow)
             * (optional) bin_width_out = int. Bin width of the output lensing reconstruction
             * (optional) bin_width_out_second_bispec_bias = int. Bin width of the output secondary bispectrum bias
+            * (optional) parallelise_secondbispec = bool.
             * (optional) damp_1h_prof = Bool. Default is False. Whether to damp the profiles at low k in 1h terms
         """
         hcos = self.hcos
@@ -262,7 +263,7 @@ class hm_framework:
                                                                                            y_damp, kap_secbispec*self.ms_rescaled[j],\
                                                                                            parallelise=parallelise_secondbispec)
                     itgnd_1h_second_bispec[..., j] = hcos.nzm[i,j] * secondary_bispec_bias_reconstructions
-                    # FIXME:add the 2-halo term. Should be easy.
+                    # TODO:add the 2-halo term. Should be easy.
             # Perform the m integrals
             oneH_4pt[...,i]=np.trapz(itgnd_1h_4pt,hcos.ms,axis=-1)
             oneH_cross[...,i]=np.trapz(itgnd_1h_cross,hcos.ms,axis=-1)
@@ -353,7 +354,7 @@ class hm_framework:
                 # H dividing the galaxy window function to translate the hmvec convention to e.g. Ferraro & Hill 18 #TODO: why do you say that?
                 gal = tls.pkToPell(hcos.comoving_radial_distance(hcos.zs[i]),
                                    hcos.ks,hcos.uk_profiles['nfw'][i,j], ellmax=self.lmax_out)
-                # FIXME: if you remove the z-scaling dividing ms_rescaled, do it in the input to sbbs.get_secondary_bispec_bias as well
+                # TODO: if you remove the z-scaling dividing ms_rescaled, do it in the input to sbbs.get_secondary_bispec_bias as well
                 galfft = gal / hcos.hods[survey_name]['ngal'][i] if fftlog_way else ql.spec.cl2cfft(gal, exp.pix).fft / hcos.hods[survey_name]['ngal'][i]
                 phicfft = exp.get_TT_qe(fftlog_way, ells_out, y, y)
 
@@ -450,36 +451,12 @@ class hm_framework:
         ps_twoH_tSZ = np.zeros(ps_oneH_tSZ.shape)
         return ps_oneH_tSZ, ps_twoH_tSZ
 
-    def get_fcen_fsat(self, exp, convert_to_muK=True):
-        """
-        Compute f_cen and f_sat (defined in arxiv:1109.1522)
-        - Input:
-            * exp = a qest.experiment object
-        """
-        # TODO: this function should eventually be removed. It's made redundant by get_CIB_filters()
-        autofreq = np.array([[exp.freq_GHz], [exp.freq_GHz]], dtype=np.double)   *1e9    #Ghz
-
-        if convert_to_muK:
-            conversion = tls.from_Jypersr_to_uK(exp.freq_GHz)
-        else:
-            conversion = 1
-        self.f_cen = conversion * self.hcos.get_fcen(autofreq[0])[:,:,0]
-        self.f_sat = conversion * self.hcos.get_fsat(autofreq[0], cibinteg='trap', satmf='Tinker')[:,:,0]
-
-    def get_hod_factorial(self, n):
-        """
-        Calculate the function of f_cen and f_sat coming from <N_gal(N_gal-1)...(N_gal-j)>, where j=n-1
-        - Input:
-            * n = int. Number of different galaxies in the halo.
-        - Return:
-            * a 2D array with size (num of zs, num of ms)
-        """
-        # TODO: this function should eventually be removed. It's made redundant by get_CIB_filters()
-        return self.f_sat**(n-1) * ( n * self.f_cen +  self.f_sat )
-
     def get_CIB_filters(self, exp):
         """
-         Compute \Sum_{\nu} f^{\nu}(z,M) w^{\nu, ILC}_l
+        Get f_cen and f_sat factors for CIB halo model scaled by foreground cleaning weights. That is,
+        compute \Sum_{\nu} f^{\nu}(z,M) w^{\nu, ILC}_l
+        Input:
+            * exp = a qest.experiment object
         """
         if len(exp.freq_GHz)>1:
             f_cen_array = np.zeros((len(exp.freq_GHz), len(self.hcos.zs), len(self.hcos.ms)))
@@ -495,20 +472,26 @@ class hm_framework:
             self.CIB_satellite_filter = np.sum(exp.ILC_weights[:,:,None,None] * f_sat_array, axis=1)
         else:
             # Single-frequency scenario. Return two (nZs, nMs) array containing f_cen(M,z) and f_sat(M,z)
+            # Compute \Sum_{\nu} f^{\nu}(z,M) w^{\nu, ILC}_l
             self.CIB_central_filter = self.hcos.get_fcen(exp.freq_GHz*1e9)[:,:,0][np.newaxis,:,:]
             self.CIB_satellite_filter = self.hcos.get_fsat(exp.freq_GHz*1e9, cibinteg='trap', satmf='Tinker')[:,:,0][np.newaxis,:,:]
 
     def get_cib_auto_biases(self, exp, fftlog_way=True, get_secondary_bispec_bias=False, bin_width_out=30, \
                      bin_width_out_second_bispec_bias=250, parallelise_secondbispec=True, damp_1h_prof=False):
         """
+        Calculate the CIB biases to the lensing auto-spectrum given an "experiment" object (defined in qest.py)
         Input:
             * exp = a qest.experiment object
             * (optional) fftlog_way = Boolean. If true, use 1D fftlog reconstructions, otherwise use 2D qiucklens
+            * (optional) get_secondary_bispec_bias = False. Compute and return the secondary bispectrum bias (slow)
             * (optional) bin_width_out = int. Bin width of the output lensing reconstruction
+            * (optional) bin_width_out_second_bispec_bias = int. Bin width of the output secondary bispectrum bias
+            * (optional) parallelise_secondbispec = bool.
             * (optional) damp_1h_prof = Bool. Default is False. Whether to damp the profiles at low k in 1h terms
         """
-        # FIXME: update docs of input
         hcos = self.hcos
+
+        # Pre-calculate consistency for 2h integrals
         self.get_matter_consistency(exp)
         self.get_cib_consistency(exp, lmax_proj=exp.lmax)
 
@@ -519,7 +502,6 @@ class hm_framework:
         ells_out = np.arange(self.lmax_out+1)
         if not fftlog_way:
             lbins = np.arange(1,self.lmax_out+1,bin_width_out)
-
         nx = self.lmax_out+1 if fftlog_way else exp.nx
 
         # The one and two halo bias terms -- these store the itgnd to be integrated over z
@@ -542,7 +524,7 @@ class hm_framework:
             if get_secondary_bispec_bias:
                 itgnd_1h_second_bispec = np.zeros([len(lbins_second_bispec_bias),self.nMasses])+0j
 
-            # This is the two halo term. P_k times the M integrals
+            # Get Pk for 2h terms
             pk = tls.pkToPell(hcos.comoving_radial_distance(hcos.zs[i]), hcos.ks, hcos.Pzk[i], ellmax=self.lmax_out)
             if not fftlog_way:
                 pk = ql.spec.cl2cfft(pk, exp.pix).fft
@@ -553,7 +535,7 @@ class hm_framework:
                 #project the galaxy profiles
                 u = tls.pkToPell(hcos.comoving_radial_distance(hcos.zs[i]), hcos.ks,
                                                           hcos.uk_profiles['nfw'][i, j], ellmax=exp.lmax)
-                u_cen = self.CIB_central_filter[:,i,j] # Centrals come with a factor of u^0 # TODO: is it better to have u here, or not?
+                u_cen = self.CIB_central_filter[:,i,j] # Centrals come with a factor of u^0
                 u_sat = self.CIB_satellite_filter[:,i,j] * u
 
                 integ_1h_for_2htrispec[..., j] = hcos.nzm[i, j] * hcos.bh_ofM[i, j] * (u_cen + u_sat)
@@ -567,7 +549,7 @@ class hm_framework:
                 #project the galaxy profiles
                 u = tls.pkToPell(hcos.comoving_radial_distance(hcos.zs[i]), hcos.ks,
                                                           hcos.uk_profiles['nfw'][i, j], ellmax=exp.lmax)
-                u_cen = self.CIB_central_filter[:,i,j] # Centrals come with a factor of u^0 # TODO: is it better to have u here, or not?
+                u_cen = self.CIB_central_filter[:,i,j] # Centrals come with a factor of u^0
                 u_sat = self.CIB_satellite_filter[:,i,j] * u
 
                 phicfft_ucen_usat = exp.get_TT_qe(fftlog_way, ells_out, u_cen, u_sat)
@@ -581,6 +563,8 @@ class hm_framework:
                 kfft = kap*self.ms_rescaled[j] if fftlog_way else ql.spec.cl2cfft(kap,exp.pix).fft*self.ms_rescaled[j]
 
                 if damp_1h_prof:
+                    # Damp the profiles on large scales when calculating 1h terms
+                    # Note that we are damping u_sat, but leaving u_cen as is, because it's always at the center
                     u_damp = tls.pkToPell(hcos.comoving_radial_distance(hcos.zs[i]), hcos.ks,
                                      hcos.uk_profiles['nfw'][i, j]*(1 - np.exp(-(hcos.ks / hcos.p['kstar_damping']))),
                                           ellmax=exp.lmax)
@@ -616,7 +600,7 @@ class hm_framework:
                 if get_secondary_bispec_bias:
                     # Temporary secondary bispectrum bias stuff
                     # The part with the nested lensing reconstructions
-                    # FIXME: if you remove the z-scaling dividing ms_rescaled in kfft, do it here too
+                    # TODO: if you remove the z-scaling dividing ms_rescaled in kfft, do it here too
                     exp_param_dict = {'lmax': exp.lmax, 'nx': exp.nx, 'dx_arcmin': exp.dx*60.*180./np.pi}
                     # Get the kappa map, up to lmax rather than lmax_out as was needed in other terms
                     if damp_1h_prof:
@@ -635,7 +619,7 @@ class hm_framework:
                                                                                            exp_param_dict, exp.cltt_tot, u_sat_damp, kap_secbispec*self.ms_rescaled[j],\
                                                                                            projected_fg_profile_2 = u_sat_damp, parallelise=parallelise_secondbispec)
                     itgnd_1h_second_bispec[..., j] = hcos.nzm[i,j] * secondary_bispec_bias_reconstructions
-                    # FIXME:add the 2-halo term. Should be easy.
+                    # TODO:add the 2-halo term. Should be easy.
 
             # Perform the m integrals
             IIII_1h[...,i]=np.trapz(itgnd_1h_IIII,hcos.ms,axis=-1)
@@ -651,7 +635,7 @@ class hm_framework:
             twoH_cross[...,i]=np.trapz(itgnd_2h_II,hcos.ms,axis=-1)\
                                  *(tmpCorr + self.m_consistency[i])*pk
 
-        # Convert the NFW profile in the cross bias from kappa to phi
+        # Convert the NFW profile in the cross bias from kappa to phi (bc the QEs give phi)
         conversion_factor = np.nan_to_num(1 / (0.5 * ells_out*(ells_out+1) )) if fftlog_way else ql.spec.cl2cfft(np.nan_to_num(1 / (0.5 * np.arange(self.lmax_out+1)*(np.arange(self.lmax_out+1)+1) )),exp.pix).fft
 
         # itgnd factors from Limber projection (adapted to hmvec conventions)
@@ -686,15 +670,15 @@ class hm_framework:
 
     def get_cib_cross_biases(self, exp, fftlog_way=True, bin_width_out=30, survey_name='LSST', damp_1h_prof=False):
         """
-        Calculate the tsz biases to the cross-correlation of CMB lensing with a galaxy survey,
+        Calculate the CIB biases to the cross-correlation of CMB lensing with a galaxy survey,
         given an "experiment" object (defined in qest.py)
         Input:
             * exp = a qest.experiment object
-            * (optional) fftlog_way = Boolean. If true, use 1D fftlog reconstructions, otherwise use 2D quicklens
+            * (optional) fftlog_way = Boolean. If true, use 1D fftlog reconstructions, otherwise use 2D qiucklens
             * (optional) bin_width_out = int. Bin width of the output lensing reconstruction
+            * (optional) survey_name = str. Name labelling the HOD characterizing the survey we are x-ing lensing with
             * (optional) damp_1h_prof = Bool. Default is False. Whether to damp the profiles at low k in 1h terms
         """
-        # FIXME: update docs of input
         hcos = self.hcos
         self.get_galaxy_consistency(exp, survey_name)
 
@@ -722,14 +706,14 @@ class hm_framework:
                 #project the galaxy profiles
                 u = tls.pkToPell(hcos.comoving_radial_distance(hcos.zs[i]), hcos.ks,
                                  hcos.uk_profiles['nfw'][i, j], ellmax=exp.lmax)
-                u_cen = self.CIB_central_filter[:, i, j]  # Centrals come with a factor of u^0 # TODO: is it better to have u here, or not?
+                u_cen = self.CIB_central_filter[:, i, j]  # Centrals come with a factor of u^0
                 u_sat = self.CIB_satellite_filter[:, i, j] * u
 
                 # Get the galaxy map --- analogous to kappa in the auto-biases. Note that we need a factor of
                 # H dividing the galaxy window function to translate the hmvec convention to e.g. Ferraro & Hill 18 # TODO:Why?
                 gal = tls.pkToPell(hcos.comoving_radial_distance(hcos.zs[i]),
                                    hcos.ks,hcos.uk_profiles['nfw'][i,j], ellmax=self.lmax_out)
-                # FIXME: if you remove the z-scaling dividing ms_rescaled, do it in the input to sbbs.get_secondary_bispec_bias as well
+                # TODO: if you remove the z-scaling dividing ms_rescaled, do it in the input to sbbs.get_secondary_bispec_bias as well
                 galfft = gal / hcos.hods[survey_name]['ngal'][i]  if fftlog_way else ql.spec.cl2cfft(gal, exp.pix).fft / \
                                                                     hcos.hods[survey_name]['ngal'][i]
 
@@ -744,7 +728,7 @@ class hm_framework:
                     gal_damp = tls.pkToPell(hcos.comoving_radial_distance(hcos.zs[i]),
                                        hcos.ks, hcos.uk_profiles['nfw'][i, j]
                                             *(1 - np.exp(-(hcos.ks / hcos.p['kstar_damping']))), ellmax=self.lmax_out)
-                    # FIXME: if you remove the z-scaling dividing ms_rescaled, do it in the input to sbbs.get_secondary_bispec_bias as well
+                    # TODO: if you remove the z-scaling dividing ms_rescaled, do it in the input to sbbs.get_secondary_bispec_bias as well
                     galfft_damp = gal_damp / hcos.hods[survey_name]['ngal'][i] if fftlog_way else ql.spec.cl2cfft(gal_damp,
                                                                                                         exp.pix).fft / \
                                                                                         hcos.hods[survey_name]['ngal'][
@@ -801,11 +785,11 @@ class hm_framework:
         given an "experiment" object (defined in qest.py)
         Input:
             * exp = a qest.experiment object
-            * (optional) fftlog_way = Boolean. If true, use 1D fftlog reconstructions, otherwise use 2D quicklens
+            * (optional) fftlog_way = Boolean. If true, use 1D fftlog reconstructions, otherwise use 2D qiucklens
             * (optional) bin_width_out = int. Bin width of the output lensing reconstruction
+            * (optional) survey_name = str. Name labelling the HOD characterizing the survey we are x-ing lensing with
             * (optional) damp_1h_prof = Bool. Default is False. Whether to damp the profiles at low k in 1h terms
         """
-        # FIXME: update docs of input
         hcos = self.hcos
         self.get_galaxy_consistency(exp, survey_name)
 
@@ -837,14 +821,13 @@ class hm_framework:
                 #project the galaxy profiles
                 u = tls.pkToPell(hcos.comoving_radial_distance(hcos.zs[i]), hcos.ks,
                                  hcos.uk_profiles['nfw'][i, j], ellmax=exp.lmax)
-                u_cen = self.CIB_central_filter[:, i,
-                        j]  # Centrals come with a factor of u^0 # TODO: is it better to have u here, or not?
+                u_cen = self.CIB_central_filter[:, i, j]  # Centrals come with a factor of u^0
                 u_sat = self.CIB_satellite_filter[:, i, j] * u
                 # Get the galaxy map --- analogous to kappa in the auto-biases. Note that we need a factor of
                 # H dividing the galaxy window function to translate the hmvec convention to e.g. Ferraro & Hill 18 # TODO:Why?
                 gal = tls.pkToPell(hcos.comoving_radial_distance(hcos.zs[i]),
                                    hcos.ks,hcos.uk_profiles['nfw'][i,j], ellmax=self.lmax_out)
-                # FIXME: if you remove the z-scaling dividing ms_rescaled, do it in the input to sbbs.get_secondary_bispec_bias as well
+                # TODO: if you remove the z-scaling dividing ms_rescaled, do it in the input to sbbs.get_secondary_bispec_bias as well
                 galfft = gal / hcos.hods[survey_name]['ngal'][i] if fftlog_way else ql.spec.cl2cfft(gal, exp.pix).fft / \
                                                                     hcos.hods[survey_name]['ngal'][i]
 
@@ -863,7 +846,7 @@ class hm_framework:
                     gal_damp = tls.pkToPell(hcos.comoving_radial_distance(hcos.zs[i]),
                                        hcos.ks, hcos.uk_profiles['nfw'][i, j]
                                        *(1 - np.exp(-(hcos.ks / hcos.p['kstar_damping']))), ellmax=self.lmax_out)
-                    # FIXME: if you remove the z-scaling dividing ms_rescaled, do it in the input to sbbs.get_secondary_bispec_bias as well
+                    # TODO: if you remove the z-scaling dividing ms_rescaled, do it in the input to sbbs.get_secondary_bispec_bias as well
                     galfft_damp = gal_damp / hcos.hods[survey_name]['ngal'][i] if fftlog_way else ql.spec.cl2cfft(gal_damp,
                                                                                                         exp.pix).fft / \
                                                                                         hcos.hods[survey_name]['ngal'][
@@ -915,17 +898,22 @@ class hm_framework:
             exp.biases['mixed']['cross_w_gals']['2h'] = ql.maps.cfft(exp.nx,exp.dx,fft=exp.biases['mixed']['cross_w_gals']['2h']).get_ml(lbins).specs['cl']
             return
 
-    def get_cib_ps(self, exp, convert_to_muK=False, damp_1h_prof=False):
+    def get_cib_ps(self, exp, damp_1h_prof=False):
         """
-        Calculate the CIB power spectrum
+        Calculate the CIB power spectrum.
+
+        Note that this uses a consistency relation for the 2h term, while typical
+        implementations do not. We must therefore use halo model parameters obtained after fitting to the data a
+        model that does include the consistency term
+
         Input:
             * exp = a qest.experiment object
             * (optional) damp_1h_prof = Bool. Default is False. Whether to damp the profiles at low k in 1h terms
         """
-        # FIXME: update docs of input
         hcos = self.hcos
         # Compute effective CIB weights, including f_cen and f_sat factors as well as possibly fg cleaning
         self.get_CIB_filters(exp)
+        # Compute consistency relation for 2h term
         self.get_cib_consistency(exp)
 
         nx = self.lmax_out+1
@@ -977,15 +965,19 @@ class hm_framework:
     def get_mixed_auto_biases(self, exp, fftlog_way=True, get_secondary_bispec_bias=False, bin_width_out=30, \
                          bin_width_out_second_bispec_bias=250, parallelise_secondbispec=True, damp_1h_prof=False):
         """
-        Calculate the biases to the lensing auto-spectrum involving both CIB and tSZ given an "experiment" object (defined in qest.py)
+        Calculate biases to CMB lensing auto-spectra from both CIB and tSZ
+        given an "experiment" object (defined in qest.py)
         Input:
             * exp = a qest.experiment object
             * (optional) fftlog_way = Boolean. If true, use 1D fftlog reconstructions, otherwise use 2D qiucklens
+            * (optional) get_secondary_bispec_bias = False. Compute and return the secondary bispectrum bias (slow)
             * (optional) bin_width_out = int. Bin width of the output lensing reconstruction
+            * (optional) bin_width_out_second_bispec_bias = int. Bin width of the output secondary bispectrum bias
+            * (optional) parallelise_secondbispec = bool.
             * (optional) damp_1h_prof = Bool. Default is False. Whether to damp the profiles at low k in 1h terms
         """
-        # TODO: document better
         hcos = self.hcos
+        # Get consistency conditions for 2h terms
         self.get_matter_consistency(exp)
         self.get_cib_consistency(exp, lmax_proj=exp.lmax)
         self.get_tsz_consistency(exp, lmax_proj=exp.lmax)
@@ -1041,7 +1033,7 @@ class hm_framework:
                                                           hcos.uk_profiles['nfw'][i, j], ellmax=exp.lmax)
                 y = tsz_filter * tls.pkToPell(hcos.comoving_radial_distance(hcos.zs[i]), hcos.ks,
                                               hcos.pk_profiles['y'][i, j], ellmax=exp.lmax)
-                u_cen = self.CIB_central_filter[:,i,j] # Centrals come with a factor of u^0 # TODO: is it better to have u here, or not?
+                u_cen = self.CIB_central_filter[:,i,j] # Centrals come with a factor of u^0
                 u_sat = self.CIB_satellite_filter[:,i,j] * u
 
                 integ_1h_I_for_2htrispec[..., j] = hcos.nzm[i, j] * hcos.bh_ofM[i, j] * (u_cen + u_sat)
@@ -1059,7 +1051,7 @@ class hm_framework:
                                               hcos.pk_profiles['y'][i, j], ellmax=exp.lmax)
                 u = tls.pkToPell(hcos.comoving_radial_distance(hcos.zs[i]), hcos.ks,
                                  hcos.uk_profiles['nfw'][i, j], ellmax=exp.lmax)
-                u_cen = self.CIB_central_filter[:, i, j]  # Centrals come with a factor of u^0 # TODO: is it better to have u here, or not?
+                u_cen = self.CIB_central_filter[:, i, j]  # Centrals come with a factor of u^0
                 u_sat = self.CIB_satellite_filter[:, i, j] * u
 
                 phicfft_ucen_usat = exp.get_TT_qe(fftlog_way, ells_out, u_cen, u_sat)
@@ -1139,7 +1131,7 @@ class hm_framework:
                 if get_secondary_bispec_bias:
                     # Temporary secondary bispectrum bias stuff
                     # The part with the nested lensing reconstructions
-                    # FIXME: if you remove the z-scaling dividing ms_rescaled in kfft, do it here too
+                    # TODO: if you remove the z-scaling dividing ms_rescaled in kfft, do it here too
                     exp_param_dict = {'lmax': exp.lmax, 'nx': exp.nx, 'dx_arcmin': exp.dx*60.*180./np.pi}
                     # Get the kappa map, up to lmax rather than lmax_out as was needed in other terms
                     if damp_1h_prof:
