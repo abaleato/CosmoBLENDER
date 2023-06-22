@@ -16,8 +16,8 @@ class experiment:
                  MV_ILC_bool=False, deproject_tSZ=False, deproject_CIB=False, bare_bones=False):
         """ Initialise a cosmology and experimental charactierstics
             - Inputs:
-                * nlev_t = np array. temperature noise level, In uK.arcmin. Either a single value or one for each frequency
-                * beam_size = np array. beam fwhm (symmetric). In arcmin. Either a single value or one for each frequency
+                * nlev_t = np array. Temperature noise level, in uK.arcmin. Either single value or one for each freq
+                * beam_size = np array. beam fwhm (symmetric). In arcmin. Either single value or one for each freq
                 * lmax = reconstruction lmax.
                 * (optional) massCut_Mvir = Maximum halo virial masss, in solar masses. Default is no cut (infinite)
                 * (optional) fname_scalar = CAMB files for unlensed CMB
@@ -28,12 +28,12 @@ class experiment:
                                         frequencies that get combined as ILC using ILC_weights as weights
                 * (optional) atm_fg = Whether or not to include atmospheric fg power in inverse-variance filter
                 * (optional) MV_ILC_bool = Bool. If true, form a MV ILC of freqs
-                * (optional) deproject_tSZ = Bool. If true, form an ILC deprojecting tSZ and retaining unit response to CMB
-                * (optional) deproject_CIB = Bool. If true, form an ILC deprojecting CIB and retaining unit response to CMB
+                * (optional) deproject_tSZ = Bool. If true, form ILC deprojecting tSZ and retaining unit response to CMB
+                * (optional) deproject_CIB = Bool. If true, form ILC deprojecting CIB and retaining unit response to CMB
                 * (optional) bare_bones= Bool. If True, don't run any of the costly operations at initialisation
         """
         if fname_scalar is None:
-            fname_scalar = None#'~/Software/Quicklens-with-fixes/quicklens/data/cl/planck_wp_highL/planck_lensing_wp_highL_bestFit_20130627_scalCls.dat'
+            fname_scalar = None#'~/Software/Quicklens-with-fixes/quicklens/data\/cl/planck_wp_highL/planck_lensing_wp_highL_bestFit_20130627_scalCls.dat'
         if fname_lensed is None:
             fname_lensed = None#'~/Software/Quicklens-with-fixes/quicklens/data/cl/planck_wp_highL/planck_lensing_wp_highL_bestFit_20130627_lensedCls.dat'
 
@@ -109,12 +109,15 @@ class experiment:
         tmap = qmap = umap = np.random.randn(self.nx, self.nx)
         tqumap = ql.maps.tqumap(self.nx, self.dx, maps=[tmap, qmap, umap])
         transf = ql.spec.cl2tebfft(ql.util.dictobj( {'lmax' : self.lmax, 'cltt' : np.ones(self.lmax+1),
-                                                     'clee' : np.ones(self.lmax+1), 'clbb' : np.ones(self.lmax+1)} ), self.pix)
+                                                     'clee' : np.ones(self.lmax+1),
+                                                     'clbb' : np.ones(self.lmax+1)} ), self.pix)
         cl_tot_theory  = ql.spec.clmat_teb( ql.util.dictobj( {'lmax' : self.lmax, 'cltt' : self.cltt_tot,
-                                                          'clee' : np.zeros(self.lmax+1), 'clbb' :np.zeros(self.lmax+1)} ) )
+                                                          'clee' : np.zeros(self.lmax+1),
+                                                              'clbb' :np.zeros(self.lmax+1)} ) )
         # TODO: find a neater way of doing this using ivf.library_diag()
-        self.ivf_lib = ql.sims.ivf.library_l_mask( ql.sims.ivf.library_diag_emp(tqumap, cl_tot_theory, transf=transf,
-                                                                            nlev_t=0, nlev_p=0), lmin=lmin, lmax=self.lmax)
+        self.ivf_lib = ql.sims.ivf.library_l_mask(ql.sims.ivf.library_diag_emp(tqumap, cl_tot_theory, transf=transf,
+                                                                               nlev_t=0, nlev_p=0),
+                                                  lmin=lmin, lmax=self.lmax)
 
     def get_ilc_weights(self):
         """
@@ -148,9 +151,9 @@ class experiment:
         dependence and the effect of the frequency-and-ell-dependent weights
         """
         if len(self.freq_GHz)>1:
-            # Multiply the ILC weights at each freq by the tSZ scaling at that freq, then sum them together at every multipole
+            # Multiply ILC weights at each freq by tSZ scaling at that freq, then sum them together at every multipole
             tsz_filter = np.sum(tls.scale_sz(self.freq_GHz) * self.ILC_weights, axis=1)
-            # Return the filter interpolated at every ell where we will perform lensing reconstructions, i.e. [0, self.lmax]
+            # Return the filter interpolated at every ell where we will perform lensing recs, i.e. [0, self.lmax]
             #TODO: I don't think this interpolation step is needed anymore
             return np.interp(np.arange(self.lmax+1), self.ILC_weights_ells, tsz_filter, left=0, right=0)
         else:
@@ -241,10 +244,13 @@ class experiment:
         """
         Compute the unnormalised TT QE reconstruction for spherically symmetric profiles using FFTlog.
         Inputs:
-            * al_F_1 = Interpolatable object from which to get F_1 (e.g., in eq. (7.9) of Lewis & Challinor 06) at every multipole.
-            * al_F_2 = Interpolatable object from which to get F_2 (e.g., in eq. (7.9) of Lewis & Challinor 06) at every multipole.
-            * (optional) N_l = Integer (preferrably power of 2). Number of logarithmically-spaced samples FFTlog will use.
-            * (optional) lmin = Float. lmin of the reconstruction. Recommend choosing (unphysical) small values (e.g., lmin=1e-4) to avoid ringing
+            * al_F_1 = Interpolatable object from which to get F_1 (e.g., in eq. (7.9) of Lewis & Challinor 06)
+                       at every multipole.
+            * al_F_2 = Interpolatable object from which to get F_2 (e.g., in eq. (7.9) of Lewis & Challinor 06)
+                       at every multipole.
+            * (optional) N_l = Int (preferrably power of 2). Number of logarithmically-spaced samples FFTlog will use.
+            * (optional) lmin = Float. lmin of the reconstruction. Recommend choosing (unphysical) small values
+                                (e.g., lmin=1e-4) to avoid ringing
             * (optional) alpha = Float. FFTlog bias exponent. alpha=-1.35 seems to work fine for most applications.
         Returns:
             * An interp1d object into which you can plug in an array of ells to get the QE at those ells.
@@ -258,12 +264,14 @@ class experiment:
         r_arr_3, f_022 = _fftlog_transform(ell, ell**2 * al_F_2(ell), 2, 0, alpha)
         r_arr_4, f_222 = _fftlog_transform(ell, ell**2 * al_F_2(ell), 2, 2, alpha)
 
-        ell_out_arr, fl_total = _fftlog_transform(r_arr_4, f_121 * (-f_010/r_arr_0 + f_111) + 0.5 * f_010*(-f_022 + f_222) , 2, 0, alpha)
+        ell_out_arr, fl_total = _fftlog_transform(r_arr_4, f_121 * (-f_010/r_arr_0 + f_111)
+                                                  + 0.5 * f_010*(-f_022 + f_222) , 2, 0, alpha)
         # Interpolate and correct factors of 2pi from fftlog conventions
         unnormalised_phi = interp1d(ell_out_arr, - (2*np.pi)**3 * fl_total, bounds_error=False, fill_value=0.0)
         return unnormalised_phi
 
-    def get_TT_qe(self, fftlog_way, ell_out, profile_leg1, profile_leg2=None, N_l=2*4096, lmin=0.000135, alpha=-1.35, norm_bin_width=40, key='ptt'):
+    def get_TT_qe(self, fftlog_way, ell_out, profile_leg1, profile_leg2=None, N_l=2*4096, lmin=0.000135, alpha=-1.35,
+                  norm_bin_width=40, key='ptt'):
         """
         Helper function to get the TT QE reconstruction for spherically-symmetric profiles using FFTlog
         Inputs:
@@ -272,9 +280,11 @@ class experiment:
             * profile_leg1 = 1D numpy array. Projected, spherically-symmetric emission profile. Truncated at lmax.
             * (optional) profile_leg2 = 1D numpy array. As profile_leg1, but for the other QE leg.
             * (optional) N_l = Integer (preferrably power of 2). Number of logarithmically-spaced samples FFTlog will use.
-            * (optional) lmin = Float. lmin of the reconstruction. Recommend choosing (unphysical) small values (e.g., lmin=1e-4) to avoid ringing.
+            * (optional) lmin = Float. lmin of the reconstruction. Recommend choosing (unphysical) small values
+                                (e.g., lmin=1e-4) to avoid ringing.
             * (optional) alpha = Float. FFTlog bias exponent. alpha=-1.35 seems to work fine for most applications.
-            * (optional) norm_bin_width = int. Bin width to use when taking spectra of the semi-analytic QE normalisation (for fftlog only)
+            * (optional) norm_bin_width = int. Bin width to use when taking spectra of the semi-analytic QE
+                                          normalisation (for fftlog only)
         Returns:
             * If fftlog_way=True, a 1D array containing the unnormalised reconstruction at the multipoles specified in ell_out
             * (optional) key = String. The quadratic estimator key for quicklens. Default is 'ptt' for TT
@@ -304,7 +314,8 @@ class experiment:
             else:
                 tft2 = ql.spec.cl2cfft(profile_leg2, self.pix)
                 tft2.fft *= t_filter.fft
-            unnormalized_phi = self.qest_lib.get_qft(key, tft1, 0*tft1.copy(), 0*tft1.copy(), tft2, 0*tft1.copy(), 0*tft1.copy())
+            unnormalized_phi = self.qest_lib.get_qft(key, tft1, 0*tft1.copy(), 0*tft1.copy(),
+                                                     tft2, 0*tft1.copy(), 0*tft1.copy())
             # In QL, the unnormalised reconstruction (obtained via eval_flatsky()) comes with a factor of sqrt(skyarea)
             A_sky = (self.dx*self.nx)**2
             #Normalize the reconstruction
@@ -312,7 +323,8 @@ class experiment:
 
     def get_brute_force_unnorm_TT_qe(self, ell_out, profile_leg1, profile_leg2=None):
         """
-        Slow but sure method to calculate the 1D TT QE reconstruction. Scales as O(N^3), but useful as a cross-check of get_unnorm_TT_qe(fftlog_way=True)
+        Slow but sure method to calculate the 1D TT QE reconstruction.
+        Scales as O(N^3), but useful as a cross-check of get_unnorm_TT_qe(fftlog_way=True)
         Inputs:
             * ell_out = 1D numpy array with the multipoles at which the reconstruction is wanted.
             * profile_leg1 = 1D numpy array. Projected, spherically-symmetric emission profile. Truncated at lmax.

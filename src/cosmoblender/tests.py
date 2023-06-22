@@ -18,7 +18,7 @@ def test_clbb_bias(hm_calc, exp):
 def test_cib_ps(hm_object, exp_object, damp_1h_prof=False):
     """ Check the CIB power spectrum"""
     # Our calculation
-    clCIBCIB_oneHalo_ps, clCIBCIB_twoHalo_ps = hm_object.get_cib_ps(exp_object, convert_to_muK=False, damp_1h_prof=damp_1h_prof)
+    clCIBCIB_oneHalo_ps, clCIBCIB_twoHalo_ps = hm_object.get_cib_ps(exp_object, damp_1h_prof=damp_1h_prof)
     # Compare to Yogesh' calculation
     ells = np.arange(3000)
     PII_yogesh_1h = hm_calc.hcos.get_power_1halo('cib', nu_obs=np.array([exp_object.freq_GHz * 1e9]))
@@ -171,7 +171,7 @@ if __name__ == '__main__':
         z_max = 4
         hm_calc = biases.hm_framework(m_min=1e12/0.7, cosmoParams=cosmoParams, nZs=nZs, nMasses=nMasses, z_max=z_max)
         # Check CIB power spectrum
-        test_cib_ps(hm_calc, SPT_5e15, damp_1h_prof=False)
+        test_cib_ps(hm_calc, SPT_5e15, damp_1h_prof=True)
         plt.show()
 
     elif which_test=='test_clbb_bias':

@@ -14,7 +14,8 @@ import quicklens as ql
 class hm_framework:
     """ Set the halo model parameters """
     def __init__(self, lmax_out=3000, m_min=1e12, m_max=5e16, nMasses=30, z_min=0.07, z_max=3, nZs=30, k_min = 1e-4,\
-                 k_max=10, nks=1001, mass_function='sheth-torman', mdef='vir', cib_model='planck13', cosmoParams=None, xmax=5, nxs=40000):
+                 k_max=10, nks=1001, mass_function='sheth-torman', mdef='vir', cib_model='planck13', cosmoParams=None
+                 , xmax=5, nxs=40000):
         """ Inputs:
                 * lmax_out = int. Maximum multipole at which to return the lensing reconstruction
                 * m_min = Minimum virial mass for the halo model calculation
@@ -28,7 +29,7 @@ class hm_framework:
                 * nks = Integer. Number of steps in k for the integrals
                 * mass_function = String. Halo mass function to use. Must be coded into hmvec
                 * mdef = String. Mass definition. Must be defined in hmvec for the chosen mass_function
-                * cib_model = CIB halo model and fit params. Either 'planck13' or 'vierro' (the latter after Viero et al 13.)
+                * cib_model = CIB halo model and fit params. Either 'planck13' or 'viero' (after Viero et al 13.)
                 * cosmoParams = Dictionary of cosmological parameters to initialised HaloModel hmvec object
                 * xmax = Float. Electron pressure profile integral xmax (see further docs at hmvec.add_nfw_profile() )
                 * nxs = Integer. Electron pressure profile integral number of x's
@@ -64,7 +65,9 @@ class hm_framework:
         z_min = '{:.2f}'.format(self.z_min)
         z_max = '{:.2f}'.format(self.z_max)
 
-        return 'M_min: ' + m_min + '  M_max: ' + m_max + '  n_Masses: '+ str(self.nMasses) + '\n' + '  z_min: ' + z_min + '  z_max: ' + z_max + '  n_zs: ' + str(self.nZs) +  '\n' +'  Mass function: ' + self.mass_function + '  Mass definition: ' + self.mdef
+        return 'M_min: ' + m_min + '  M_max: ' + m_max + '  n_Masses: '+ str(self.nMasses) + '\n'\
+               + '  z_min: ' + z_min + '  z_max: ' + z_max + '  n_zs: ' + str(self.nZs) +  '\n'\
+               +'  Mass function: ' + self.mass_function + '  Mass definition: ' + self.mdef
 
     def get_matter_consistency(self, exp):
         """
@@ -97,7 +100,7 @@ class hm_framework:
         I = np.trapz(self.hcos.nzm*self.hcos.bh_ofM*self.hcos.ms/self.hcos.rho_matter_z(0)*mMask,self.hcos.ms, axis=-1)
         W_of_Mlow = (self.hcos.hods[survey_name]['Nc'][:, 0] + self.hcos.hods[survey_name]['Ns'][:, 0])[:,None]\
                     / self.hcos.hods[survey_name]['ngal'][:,None] * ugal_proj_of_Mlow # A function of z and k
-        self.g_consistency = ((1 - I)/(self.hcos.ms[0]/self.hcos.rho_matter_z(0)))[:,None]*W_of_Mlow # A function of z and k
+        self.g_consistency = ((1 - I)/(self.hcos.ms[0]/self.hcos.rho_matter_z(0)))[:,None]*W_of_Mlow #Function of z & k
 
     def get_tsz_consistency(self, exp, lmax_proj=None):
         """
@@ -144,7 +147,7 @@ class hm_framework:
         mMask[exp.massCut<self.hcos.ms]=0
         I = np.trapz(self.hcos.nzm*self.hcos.bh_ofM*self.hcos.ms/self.hcos.rho_matter_z(0)*mMask,self.hcos.ms, axis=-1)
         W_of_Mlow =  ucen_plus_usat_of_Mlow # A function of z and k
-        self.I_consistency = ((1 - I)/(self.hcos.ms[0]/self.hcos.rho_matter_z(0)))[:,None]*W_of_Mlow # A function of z and k
+        self.I_consistency = ((1 - I)/(self.hcos.ms[0]/self.hcos.rho_matter_z(0)))[:,None]*W_of_Mlow # Function of z & k
 
     def get_tsz_auto_biases(self, exp, fftlog_way=True, get_secondary_bispec_bias=False, bin_width_out=30, \
                      bin_width_out_second_bispec_bias=250, parallelise_secondbispec=True, damp_1h_prof=False):
@@ -181,8 +184,8 @@ class hm_framework:
         twoH_cross = np.zeros([nx,self.nZs])+0j if fftlog_way else np.zeros([nx,nx,self.nZs])+0j
 
         if get_secondary_bispec_bias:
-            lbins_second_bispec_bias = np.arange(10, self.lmax_out + 1, bin_width_out_second_bispec_bias)
-            oneH_second_bispec = np.zeros([len(lbins_second_bispec_bias),self.nZs])+0j
+            lbins_sec_bispec_bias = np.arange(10, self.lmax_out + 1, bin_width_out_second_bispec_bias)
+            oneH_second_bispec = np.zeros([len(lbins_sec_bispec_bias),self.nZs])+0j
             # Get QE normalisation
             qe_norm_1D = exp.qe_norm.get_ml(np.arange(10, self.lmax_out, 40))
 
@@ -196,7 +199,7 @@ class hm_framework:
             integ_1h_for_2htrispec = np.zeros([nx,self.nMasses]) if fftlog_way else np.zeros([nx,nx,self.nMasses])
 
             if get_secondary_bispec_bias:
-                itgnd_1h_second_bispec = np.zeros([len(lbins_second_bispec_bias),self.nMasses])+0j
+                itgnd_1h_second_bispec = np.zeros([len(lbins_sec_bispec_bias),self.nMasses])+0j
 
             # This is the two halo term. P_k times the M integrals
             pk = tls.pkToPell(hcos.comoving_radial_distance(hcos.zs[i]), hcos.ks, hcos.Pzk[i], ellmax=self.lmax_out)
@@ -206,7 +209,8 @@ class hm_framework:
             # Integral over M for 2halo trispectrum. This will later go into a QE
             for j,m in enumerate(hcos.ms):
                 if m> exp.massCut: continue
-                y = tsz_filter * tls.pkToPell(hcos.comoving_radial_distance(hcos.zs[i]), hcos.ks, hcos.pk_profiles['y'][i,j], ellmax=exp.lmax)
+                y = tsz_filter * tls.pkToPell(hcos.comoving_radial_distance(hcos.zs[i]), hcos.ks,
+                                              hcos.pk_profiles['y'][i,j], ellmax=exp.lmax)
                 integ_1h_for_2htrispec[..., j] = y * hcos.nzm[i, j] * hcos.bh_ofM[i, j]
 
             # Do the 1- integral in the 1-3 trispectrum and impose consistency condition
@@ -215,7 +219,8 @@ class hm_framework:
             # M integral.
             for j,m in enumerate(hcos.ms):
                 if m> exp.massCut: continue
-                y = tsz_filter * tls.pkToPell(hcos.comoving_radial_distance(hcos.zs[i]), hcos.ks, hcos.pk_profiles['y'][i,j], ellmax=exp.lmax)
+                y = tsz_filter * tls.pkToPell(hcos.comoving_radial_distance(hcos.zs[i]), hcos.ks,
+                                              hcos.pk_profiles['y'][i,j], ellmax=exp.lmax)
                 kap = tls.pkToPell(hcos.comoving_radial_distance(hcos.zs[i]),
                                    hcos.ks, hcos.uk_profiles['nfw'][i,j], ellmax=self.lmax_out)
 
@@ -232,8 +237,7 @@ class hm_framework:
                                           ellmax=exp.lmax)
                     kap_damp = tls.pkToPell(hcos.comoving_radial_distance(hcos.zs[i]),
                                        hcos.ks, hcos.uk_profiles['nfw'][i, j], ellmax=self.lmax_out)
-                    kfft_damp = kap_damp * self.ms_rescaled[j] if fftlog_way else ql.spec.cl2cfft(kap_damp, exp.pix).fft * \
-                                                                        self.ms_rescaled[j]
+                    kfft_damp = kap_damp * self.ms_rescaled[j] if fftlog_way else ql.spec.cl2cfft(kap_damp, exp.pix).fft * self.ms_rescaled[j]
                     phicfft_damp = exp.get_TT_qe(fftlog_way, ells_out, y_damp, y_damp)
                 else:
                     y_damp = y; kap_damp = kap; kfft_damp = kfft; phicfft_damp = phicfft
@@ -258,11 +262,11 @@ class hm_framework:
                                                      hcos.uk_profiles['nfw'][i, j]
                                                      *(1 - np.exp(-(hcos.ks / hcos.p['kstar_damping']))),
                                                      ellmax=exp.lmax)
-                    secondary_bispec_bias_reconstructions = sbbs.get_secondary_bispec_bias(lbins_second_bispec_bias, qe_norm_1D,
-                                                                                           exp_param_dict, exp.cltt_tot,
-                                                                                           y_damp, kap_secbispec*self.ms_rescaled[j],\
-                                                                                           parallelise=parallelise_secondbispec)
-                    itgnd_1h_second_bispec[..., j] = hcos.nzm[i,j] * secondary_bispec_bias_reconstructions
+                    sec_bispec_rec = sbbs.get_sec_bispec_bias(lbins_sec_bispec_bias, qe_norm_1D,
+                                                              exp_param_dict, exp.cltt_tot,
+                                                              y_damp, kap_secbispec*self.ms_rescaled[j],
+                                                              parallelise=parallelise_secondbispec)
+                    itgnd_1h_second_bispec[..., j] = hcos.nzm[i,j] * sec_bispec_rec
                     # TODO:add the 2-halo term. Should be easy.
             # Perform the m integrals
             oneH_4pt[...,i]=np.trapz(itgnd_1h_4pt,hcos.ms,axis=-1)
@@ -294,11 +298,12 @@ class hm_framework:
                                                             *(hcos.h_of_z(hcos.zs)**2),hcos.zs,axis=-1)
         if get_secondary_bispec_bias:
             # Perm factors implemented in the get_secondary_bispec_bias_at_L() function
-            exp.biases['tsz']['second_bispec']['1h'] = self.T_CMB ** 2 * np.trapz( oneH_second_bispec *
-                                                                                   hcos.lensing_window(hcos.zs,1100.)
-                                                                                   / hcos.comoving_radial_distance(hcos.zs) ** 4
-                                                                                   * (hcos.h_of_z(hcos.zs) ** 2), hcos.zs, axis=-1)
-            exp.biases['second_bispec_bias_ells'] = lbins_second_bispec_bias
+            exp.biases['tsz']['second_bispec']['1h'] = self.T_CMB ** 2\
+                                                       * np.trapz( oneH_second_bispec *
+                                                                   hcos.lensing_window(hcos.zs,1100.)
+                                                                   / hcos.comoving_radial_distance(hcos.zs) ** 4
+                                                                   * (hcos.h_of_z(hcos.zs) ** 2), hcos.zs, axis=-1)
+            exp.biases['second_bispec_bias_ells'] = lbins_sec_bispec_bias
 
         if fftlog_way:
             exp.biases['ells'] = np.arange(self.lmax_out+1)
@@ -349,21 +354,25 @@ class hm_framework:
             # M integral.
             for j,m in enumerate(hcos.ms):
                 if m> exp.massCut: continue
-                y = tsz_filter * tls.pkToPell(hcos.comoving_radial_distance(hcos.zs[i]),hcos.ks,hcos.pk_profiles['y'][i,j], ellmax=exp.lmax)
+                y = tsz_filter * tls.pkToPell(hcos.comoving_radial_distance(hcos.zs[i]),hcos.ks,
+                                              hcos.pk_profiles['y'][i,j], ellmax=exp.lmax)
                 # Get the galaxy map --- analogous to kappa in the auto-biases. Note that we need a factor of
                 # H dividing the galaxy window function to translate the hmvec convention to e.g. Ferraro & Hill 18 #TODO: why do you say that?
                 gal = tls.pkToPell(hcos.comoving_radial_distance(hcos.zs[i]),
                                    hcos.ks,hcos.uk_profiles['nfw'][i,j], ellmax=self.lmax_out)
-                # TODO: if you remove the z-scaling dividing ms_rescaled, do it in the input to sbbs.get_secondary_bispec_bias as well
+                # TODO: if you remove the z-scaling dividing ms_rescaled, do it in the input to sbbs.get_sec_bispec_bias as well
                 galfft = gal / hcos.hods[survey_name]['ngal'][i] if fftlog_way else ql.spec.cl2cfft(gal, exp.pix).fft / hcos.hods[survey_name]['ngal'][i]
                 phicfft = exp.get_TT_qe(fftlog_way, ells_out, y, y)
 
                 # Consider damping the profiles at low k in 1h terms to avoid it exceeding many-halo amplitude
                 if damp_1h_prof:
-                    y_damp = tsz_filter * tls.pkToPell(hcos.comoving_radial_distance(hcos.zs[i]), hcos.ks,
-                                                  hcos.pk_profiles['y'][i, j]*(1 - np.exp(-(hcos.ks / hcos.p['kstar_damping']))), ellmax=exp.lmax)
-                    gal_damp = tls.pkToPell(hcos.comoving_radial_distance(hcos.zs[i]),
-                                       hcos.ks, hcos.uk_profiles['nfw'][i, j]*(1 - np.exp(-(hcos.ks / hcos.p['kstar_damping']))), ellmax=self.lmax_out)
+                    y_damp = tsz_filter\
+                             * tls.pkToPell(hcos.comoving_radial_distance(hcos.zs[i]), hcos.ks,
+                                            hcos.pk_profiles['y'][i, j]
+                                            *(1 - np.exp(-(hcos.ks / hcos.p['kstar_damping']))), ellmax=exp.lmax)
+                    gal_damp = tls.pkToPell(hcos.comoving_radial_distance(hcos.zs[i]), hcos.ks,
+                                            hcos.uk_profiles['nfw'][i, j]
+                                            *(1 - np.exp(-(hcos.ks / hcos.p['kstar_damping']))), ellmax=self.lmax_out)
                     galfft_damp = gal_damp / hcos.hods[survey_name]['ngal'][i] if fftlog_way else ql.spec.cl2cfft(gal_damp, exp.pix).fft / hcos.hods[survey_name]['ngal'][i]
                     phicfft_damp = exp.get_TT_qe(fftlog_way, ells_out, y_damp, y_damp)
                 else:
@@ -388,7 +397,7 @@ class hm_framework:
             twoH_cross[...,i] = np.trapz(itgnd_2h_2g,hcos.ms,axis=-1) * (tmpCorr + self.g_consistency[i]) * pk
 
         # Convert the NFW profile in the cross bias from kappa to phi
-        conversion_factor = 1#np.nan_to_num(1 / (0.5 * ells_out*(ells_out+1) )) if fftlog_way else ql.spec.cl2cfft(np.nan_to_num(1 / (0.5 * np.arange(self.lmax_out+1)*(np.arange(self.lmax_out+1)+1) )),exp.pix).fft
+        conversion_factor = 1
 
         # Integrate over z
         exp.biases['tsz']['cross_w_gals']['1h'] = conversion_factor * self.T_CMB**2 \
@@ -474,7 +483,8 @@ class hm_framework:
             # Single-frequency scenario. Return two (nZs, nMs) array containing f_cen(M,z) and f_sat(M,z)
             # Compute \Sum_{\nu} f^{\nu}(z,M) w^{\nu, ILC}_l
             self.CIB_central_filter = self.hcos.get_fcen(exp.freq_GHz*1e9)[:,:,0][np.newaxis,:,:]
-            self.CIB_satellite_filter = self.hcos.get_fsat(exp.freq_GHz*1e9, cibinteg='trap', satmf='Tinker')[:,:,0][np.newaxis,:,:]
+            self.CIB_satellite_filter = self.hcos.get_fsat(exp.freq_GHz*1e9, cibinteg='trap',
+                                                           satmf='Tinker')[:,:,0][np.newaxis,:,:]
 
     def get_cib_auto_biases(self, exp, fftlog_way=True, get_secondary_bispec_bias=False, bin_width_out=30, \
                      bin_width_out_second_bispec_bias=250, parallelise_secondbispec=True, damp_1h_prof=False):
@@ -509,8 +519,8 @@ class hm_framework:
         IIII_2h = IIII_1h.copy(); oneH_cross = IIII_1h.copy(); twoH_cross = IIII_1h.copy()
 
         if get_secondary_bispec_bias:
-            lbins_second_bispec_bias = np.arange(10, self.lmax_out + 1, bin_width_out_second_bispec_bias)
-            oneH_second_bispec = np.zeros([len(lbins_second_bispec_bias),self.nZs])+0j
+            lbins_sec_bispec_bias = np.arange(10, self.lmax_out + 1, bin_width_out_second_bispec_bias)
+            oneH_second_bispec = np.zeros([len(lbins_sec_bispec_bias),self.nZs])+0j
             # Get QE normalisation
             qe_norm_1D = exp.qe_norm.get_ml(np.arange(10, self.lmax_out, 40))
 
@@ -522,7 +532,7 @@ class hm_framework:
             integ_1h_for_2htrispec=np.zeros([nx,self.nMasses]) if fftlog_way else np.zeros([nx,nx,self.nMasses])
 
             if get_secondary_bispec_bias:
-                itgnd_1h_second_bispec = np.zeros([len(lbins_second_bispec_bias),self.nMasses])+0j
+                itgnd_1h_second_bispec = np.zeros([len(lbins_sec_bispec_bias),self.nMasses])+0j
 
             # Get Pk for 2h terms
             pk = tls.pkToPell(hcos.comoving_radial_distance(hcos.zs[i]), hcos.ks, hcos.Pzk[i], ellmax=self.lmax_out)
@@ -578,8 +588,7 @@ class hm_framework:
                     kap_damp = tls.pkToPell(hcos.comoving_radial_distance(hcos.zs[i]),
                                        hcos.ks, hcos.uk_profiles['nfw'][i, j]
                                             *(1 - np.exp(-(hcos.ks / hcos.p['kstar_damping']))), ellmax=self.lmax_out)
-                    kfft_damp = kap_damp * self.ms_rescaled[j] if fftlog_way else ql.spec.cl2cfft(kap_damp, exp.pix).fft * \
-                                                                        self.ms_rescaled[j]
+                    kfft_damp = kap_damp * self.ms_rescaled[j] if fftlog_way else ql.spec.cl2cfft(kap_damp, exp.pix).fft * self.ms_rescaled[j]
                 else:
                     u_sat_damp=u_sat; phicfft_ucen_usat_damp=phicfft_ucen_usat;
                     phicfft_usat_usat_damp=phicfft_usat_usat; kfft_damp=kfft
@@ -588,14 +597,13 @@ class hm_framework:
                 itgnd_1h_cross[...,j] = hcos.nzm[i,j] * np.conjugate(kfft_damp) * (phicfft_usat_usat_damp +
                                                                                        2 * phicfft_ucen_usat_damp)
                 itgnd_1h_IIII[...,j] = hcos.nzm[i,j] * (phicfft_usat_usat_damp * np.conjugate(phicfft_usat_usat_damp)
-                                                                 + 4 * phicfft_ucen_usat_damp * np.conjugate(phicfft_usat_usat_damp))
+                                                        + 4*phicfft_ucen_usat_damp*np.conjugate(phicfft_usat_usat_damp))
 
                 itgnd_2h_k[...,j] = np.conjugate(kfft) * hcos.nzm[i,j] * hcos.bh_ofM[i,j]
                 itgnd_2h_II[...,j] = hcos.nzm[i,j] * hcos.bh_ofM[i,j] * (phicfft_usat_usat + 2 * phicfft_ucen_usat)
                 itgnd_2h_IintIII[...,j] = hcos.nzm[i,j] * hcos.bh_ofM[i,j]\
-                                                   * (phicfft_Iint_ucen * np.conjugate(phicfft_usat_usat)
-                                                      + phicfft_Iint_usat * np.conjugate(2*phicfft_ucen_usat
-                                                                                                     + phicfft_usat_usat) )
+                                          * (phicfft_Iint_ucen * np.conjugate(phicfft_usat_usat)
+                                             +phicfft_Iint_usat * np.conjugate(2*phicfft_ucen_usat + phicfft_usat_usat))
 
                 if get_secondary_bispec_bias:
                     # Temporary secondary bispectrum bias stuff
@@ -612,13 +620,17 @@ class hm_framework:
                         kap_secbispec = tls.pkToPell(hcos.comoving_radial_distance(hcos.zs[i]), hcos.ks,
                                                      hcos.uk_profiles['nfw'][i, j],
                                                      ellmax=exp.lmax)
-                    secondary_bispec_bias_reconstructions = 2 * sbbs.get_secondary_bispec_bias(lbins_second_bispec_bias, qe_norm_1D,
-                                                                                           exp_param_dict, exp.cltt_tot, u_cen, kap_secbispec*self.ms_rescaled[j],\
-                                                                                           projected_fg_profile_2 = u_sat_damp, parallelise=parallelise_secondbispec) +\
-                                                            sbbs.get_secondary_bispec_bias(lbins_second_bispec_bias, qe_norm_1D,
-                                                                                           exp_param_dict, exp.cltt_tot, u_sat_damp, kap_secbispec*self.ms_rescaled[j],\
-                                                                                           projected_fg_profile_2 = u_sat_damp, parallelise=parallelise_secondbispec)
-                    itgnd_1h_second_bispec[..., j] = hcos.nzm[i,j] * secondary_bispec_bias_reconstructions
+                    sec_bispec_rec = 2 * sbbs.get_sec_bispec_bias(lbins_sec_bispec_bias, qe_norm_1D,
+                                                                  exp_param_dict, exp.cltt_tot, u_cen,
+                                                                  kap_secbispec*self.ms_rescaled[j],
+                                                                  projected_fg_profile_2 = u_sat_damp,
+                                                                  parallelise=parallelise_secondbispec)\
+                                     + sbbs.get_sec_bispec_bias(lbins_sec_bispec_bias, qe_norm_1D, exp_param_dict,
+                                                                exp.cltt_tot, u_sat_damp,
+                                                                kap_secbispec*self.ms_rescaled[j],
+                                                                projected_fg_profile_2 = u_sat_damp,
+                                                                parallelise=parallelise_secondbispec)
+                    itgnd_1h_second_bispec[..., j] = hcos.nzm[i,j] * sec_bispec_rec
                     # TODO:add the 2-halo term. Should be easy.
 
             # Perform the m integrals
@@ -655,7 +667,7 @@ class hm_framework:
         if get_secondary_bispec_bias:
             # Perm factors implemented in the get_secondary_bispec_bias_at_L() function
             exp.biases['cib']['second_bispec']['1h'] = np.trapz( oneH_second_bispec * kII_itgnd, hcos.zs, axis=-1)
-            exp.biases['second_bispec_bias_ells'] = lbins_second_bispec_bias
+            exp.biases['second_bispec_bias_ells'] = lbins_sec_bispec_bias
 
         if fftlog_way:
             exp.biases['ells'] = np.arange(self.lmax_out+1)
@@ -693,12 +705,13 @@ class hm_framework:
         nx = self.lmax_out+1 if fftlog_way else exp.nx
 
         # The one and two halo bias terms -- these store the itgnd to be integrated over z
-        oneH_cross = np.zeros([nx,self.nZs])+0j if fftlog_way else np.zeros([nx,nx,self.nZs])+0j; twoH_cross = oneH_cross.copy()
+        oneH_cross = np.zeros([nx,self.nZs])+0j if fftlog_way else np.zeros([nx,nx,self.nZs])+0j;
+        twoH_cross = oneH_cross.copy()
 
         for i,z in enumerate(hcos.zs):
             #Temporary storage
-            itgnd_1h_cross=np.zeros([nx,self.nMasses])+0j if fftlog_way else np.zeros([nx,nx,self.nMasses])+0j; itgnd_2h_k=itgnd_1h_cross.copy()
-            itgnd_2h_II=itgnd_1h_cross.copy()
+            itgnd_1h_cross=np.zeros([nx,self.nMasses])+0j if fftlog_way else np.zeros([nx,nx,self.nMasses])+0j;
+            itgnd_2h_k=itgnd_1h_cross.copy(); itgnd_2h_II=itgnd_1h_cross.copy()
 
             # M integral.
             for j,m in enumerate(hcos.ms):
@@ -713,9 +726,8 @@ class hm_framework:
                 # H dividing the galaxy window function to translate the hmvec convention to e.g. Ferraro & Hill 18 # TODO:Why?
                 gal = tls.pkToPell(hcos.comoving_radial_distance(hcos.zs[i]),
                                    hcos.ks,hcos.uk_profiles['nfw'][i,j], ellmax=self.lmax_out)
-                # TODO: if you remove the z-scaling dividing ms_rescaled, do it in the input to sbbs.get_secondary_bispec_bias as well
-                galfft = gal / hcos.hods[survey_name]['ngal'][i]  if fftlog_way else ql.spec.cl2cfft(gal, exp.pix).fft / \
-                                                                    hcos.hods[survey_name]['ngal'][i]
+                # TODO: if you remove the z-scaling dividing ms_rescaled, do it in the input to sbbs.get_sec_bispec_bias as well
+                galfft = gal / hcos.hods[survey_name]['ngal'][i]  if fftlog_way else ql.spec.cl2cfft(gal, exp.pix).fft / hcos.hods[survey_name]['ngal'][i]
 
                 phicfft_ucen_usat = exp.get_TT_qe(fftlog_way, ells_out, u_cen, u_sat)
                 phicfft_usat_usat = exp.get_TT_qe(fftlog_way, ells_out, u_sat, u_sat)
@@ -728,11 +740,8 @@ class hm_framework:
                     gal_damp = tls.pkToPell(hcos.comoving_radial_distance(hcos.zs[i]),
                                        hcos.ks, hcos.uk_profiles['nfw'][i, j]
                                             *(1 - np.exp(-(hcos.ks / hcos.p['kstar_damping']))), ellmax=self.lmax_out)
-                    # TODO: if you remove the z-scaling dividing ms_rescaled, do it in the input to sbbs.get_secondary_bispec_bias as well
-                    galfft_damp = gal_damp / hcos.hods[survey_name]['ngal'][i] if fftlog_way else ql.spec.cl2cfft(gal_damp,
-                                                                                                        exp.pix).fft / \
-                                                                                        hcos.hods[survey_name]['ngal'][
-                                                                                            i]
+                    # TODO: if you remove the z-scaling dividing ms_rescaled, do it in the input to sbbs.get_sec_bispec_bias as well
+                    galfft_damp = gal_damp / hcos.hods[survey_name]['ngal'][i] if fftlog_way else ql.spec.cl2cfft(gal_damp, exp.pix).fft / hcos.hods[survey_name]['ngal'][i]
 
                     phicfft_ucen_usat_damp = exp.get_TT_qe(fftlog_way, ells_out, u_cen, u_sat_damp)
                     phicfft_usat_usat_damp = exp.get_TT_qe(fftlog_way, ells_out, u_sat_damp, u_sat_damp)
@@ -759,10 +768,10 @@ class hm_framework:
             twoH_cross[...,i] = np.trapz(itgnd_2h_II,hcos.ms,axis=-1) * (tmpCorr + self.g_consistency[i]) * pk
 
         # Convert the NFW profile in the cross bias from kappa to phi
-        conversion_factor = 1#np.nan_to_num(1 / (0.5 * ells_out*(ells_out+1) )) if fftlog_way else ql.spec.cl2cfft(np.nan_to_num(1 / (0.5 * np.arange(self.lmax_out+1)*(np.arange(self.lmax_out+1)+1) )),exp.pix).fft
+        conversion_factor = 1
 
         # itgnd factors from Limber projection (adapted to hmvec conventions)
-        # Note there's only a (1+z)**-2 dependence. This is because there's another factor of (1+z)**-1 in the gal_window
+        # Note there's only a (1+z)**-2 dependence. This is bc there's another factor of (1+z)**-1 in the gal_window
         kII_itgnd  = hcos.h_of_z(hcos.zs)**-1 * (1+hcos.zs)**-2 * hcos.comoving_radial_distance(hcos.zs)**-4 \
                      * tls.gal_window(hcos.zs)
 
@@ -806,12 +815,13 @@ class hm_framework:
         nx = self.lmax_out+1 if fftlog_way else exp.nx
 
         # The one and two halo bias terms -- these store the itgnd to be integrated over z
-        oneH_cross = np.zeros([nx,self.nZs])+0j if fftlog_way else np.zeros([nx,nx,self.nZs])+0j; twoH_cross = oneH_cross.copy()
+        oneH_cross = np.zeros([nx,self.nZs])+0j if fftlog_way else np.zeros([nx,nx,self.nZs])+0j;
+        twoH_cross = oneH_cross.copy()
 
         for i,z in enumerate(hcos.zs):
             #Temporary storage
-            itgnd_1h_cross=np.zeros([nx,self.nMasses])+0j if fftlog_way else np.zeros([nx,nx,self.nMasses])+0j; itgnd_2h_k=itgnd_1h_cross.copy()
-            itgnd_2h_II=itgnd_1h_cross.copy()
+            itgnd_1h_cross=np.zeros([nx,self.nMasses])+0j if fftlog_way else np.zeros([nx,nx,self.nMasses])+0j;
+            itgnd_2h_k=itgnd_1h_cross.copy(); itgnd_2h_II=itgnd_1h_cross.copy()
 
             # M integral.
             for j,m in enumerate(hcos.ms):
@@ -827,9 +837,8 @@ class hm_framework:
                 # H dividing the galaxy window function to translate the hmvec convention to e.g. Ferraro & Hill 18 # TODO:Why?
                 gal = tls.pkToPell(hcos.comoving_radial_distance(hcos.zs[i]),
                                    hcos.ks,hcos.uk_profiles['nfw'][i,j], ellmax=self.lmax_out)
-                # TODO: if you remove the z-scaling dividing ms_rescaled, do it in the input to sbbs.get_secondary_bispec_bias as well
-                galfft = gal / hcos.hods[survey_name]['ngal'][i] if fftlog_way else ql.spec.cl2cfft(gal, exp.pix).fft / \
-                                                                    hcos.hods[survey_name]['ngal'][i]
+                # TODO: if you remove the z-scaling dividing ms_rescaled, do it in the input to sbbs.get_sec_bispec_bias as well
+                galfft = gal / hcos.hods[survey_name]['ngal'][i] if fftlog_way else ql.spec.cl2cfft(gal, exp.pix).fft / hcos.hods[survey_name]['ngal'][i]
 
                 phicfft_ucen_y = exp.get_TT_qe(fftlog_way, ells_out, u_cen, y)
                 phicfft_usat_y = exp.get_TT_qe(fftlog_way, ells_out, u_sat, y)
@@ -846,11 +855,8 @@ class hm_framework:
                     gal_damp = tls.pkToPell(hcos.comoving_radial_distance(hcos.zs[i]),
                                        hcos.ks, hcos.uk_profiles['nfw'][i, j]
                                        *(1 - np.exp(-(hcos.ks / hcos.p['kstar_damping']))), ellmax=self.lmax_out)
-                    # TODO: if you remove the z-scaling dividing ms_rescaled, do it in the input to sbbs.get_secondary_bispec_bias as well
-                    galfft_damp = gal_damp / hcos.hods[survey_name]['ngal'][i] if fftlog_way else ql.spec.cl2cfft(gal_damp,
-                                                                                                        exp.pix).fft / \
-                                                                                        hcos.hods[survey_name]['ngal'][
-                                                                                            i]
+                    # TODO: if you remove the z-scaling dividing ms_rescaled, do it in the input to sbbs.get_sec_bispec_bias as well
+                    galfft_damp = gal_damp / hcos.hods[survey_name]['ngal'][i] if fftlog_way else ql.spec.cl2cfft(gal_damp, exp.pix).fft / hcos.hods[survey_name]['ngal'][i]
                     phicfft_ucen_y_damp = exp.get_TT_qe(fftlog_way, ells_out, u_cen, y_damp)
                     phicfft_usat_y_damp = exp.get_TT_qe(fftlog_way, ells_out, u_sat_damp, y_damp)
                 else:
@@ -875,7 +881,7 @@ class hm_framework:
             twoH_cross[...,i] = np.trapz(itgnd_2h_II,hcos.ms,axis=-1) * (tmpCorr + self.g_consistency[i]) * pk
 
         # Convert the NFW profile in the cross bias from kappa to phi
-        conversion_factor = 1#np.nan_to_num(1 / (0.5 * ells_out*(ells_out+1) )) if fftlog_way else ql.spec.cl2cfft(np.nan_to_num(1 / (0.5 * np.arange(self.lmax_out+1)*(np.arange(self.lmax_out+1)+1) )),exp.pix).fft
+        conversion_factor = 1
 
         # itgnd factors from Limber projection (adapted to hmvec conventions)
         # Note there's only a (1+z)**-1 dependence. This is because there's another factor of (1+z)**-1 in the gal_window
@@ -930,7 +936,8 @@ class hm_framework:
             for j,m in enumerate(hcos.ms):
                 if m> exp.massCut: continue
                 # project the galaxy profiles
-                u = tls.pkToPell(hcos.comoving_radial_distance(hcos.zs[i]), hcos.ks, hcos.uk_profiles['nfw'][i, j], ellmax=exp.lmax)
+                u = tls.pkToPell(hcos.comoving_radial_distance(hcos.zs[i]), hcos.ks, hcos.uk_profiles['nfw'][i, j],
+                                 ellmax=exp.lmax)
 
                 u_cen = self.CIB_central_filter[:,i,j]
                 u_sat = self.CIB_satellite_filter[:,i,j] * u
@@ -944,8 +951,8 @@ class hm_framework:
                     u_sat_damp=u_sat
 
                 # Accumulate the itgnds
-                itgnd_1h_ps[:, j] = hcos.nzm[i, j] * (2*u_cen*u_sat_damp + u_sat_damp*u_sat_damp) #hod_fact_2gal[i, j] * hcos.nzm[i, j] * u_softened * np.conjugate(u_softened)
-                itgnd_2h_1g[:, j] = hcos.nzm[i, j] * hcos.bh_ofM[i, j] * (u_cen + u_sat)#hod_fact_1gal[i, j] * hcos.nzm[i, j] * hcos.bh_ofM[i, j] * u
+                itgnd_1h_ps[:, j] = hcos.nzm[i, j] * (2*u_cen*u_sat_damp + u_sat_damp*u_sat_damp)
+                itgnd_2h_1g[:, j] = hcos.nzm[i, j] * hcos.bh_ofM[i, j] * (u_cen + u_sat)
 
                 # Perform the m integrals
             oneH_ps[:, i] = np.trapz(itgnd_1h_ps, hcos.ms, axis=-1)
@@ -1001,8 +1008,8 @@ class hm_framework:
         IyIy_2h = Iyyy_1h.copy(); IyIy_1h = Iyyy_1h.copy()
 
         if get_secondary_bispec_bias:
-            lbins_second_bispec_bias = np.arange(10, self.lmax_out + 1, bin_width_out_second_bispec_bias)
-            oneH_second_bispec = np.zeros([len(lbins_second_bispec_bias),self.nZs])+0j
+            lbins_sec_bispec_bias = np.arange(10, self.lmax_out + 1, bin_width_out_second_bispec_bias)
+            oneH_second_bispec = np.zeros([len(lbins_sec_bispec_bias),self.nZs])+0j
             # Get QE normalisation
             qe_norm_1D = exp.qe_norm.get_ml(np.arange(10, self.lmax_out, 40))
 
@@ -1018,7 +1025,7 @@ class hm_framework:
             itgnd_2h_IyIy=itgnd_1h_cross.copy();itgnd_2h_yIII=itgnd_1h_cross.copy();
 
             if get_secondary_bispec_bias:
-                itgnd_1h_second_bispec = np.zeros([len(lbins_second_bispec_bias),self.nMasses])+0j
+                itgnd_1h_second_bispec = np.zeros([len(lbins_sec_bispec_bias),self.nMasses])+0j
 
             # This is the two halo term. P_k times the M integrals
             pk = tls.pkToPell(hcos.comoving_radial_distance(hcos.zs[i]), hcos.ks, hcos.Pzk[i], ellmax=self.lmax_out)
@@ -1075,7 +1082,8 @@ class hm_framework:
                 if damp_1h_prof:
                     y_damp = tsz_filter * tls.pkToPell(hcos.comoving_radial_distance(hcos.zs[i]), hcos.ks,
                                                        hcos.pk_profiles['y'][i, j]
-                                                       *(1 - np.exp(-(hcos.ks / hcos.p['kstar_damping']))), ellmax=exp.lmax)
+                                                       *(1 - np.exp(-(hcos.ks / hcos.p['kstar_damping']))),
+                                                       ellmax=exp.lmax)
                     u_damp = tls.pkToPell(hcos.comoving_radial_distance(hcos.zs[i]), hcos.ks,
                                      hcos.uk_profiles['nfw'][i, j]
                                      *(1 - np.exp(-(hcos.ks / hcos.p['kstar_damping']))), ellmax=exp.lmax)
@@ -1090,8 +1098,7 @@ class hm_framework:
                     kap_damp = tls.pkToPell(hcos.comoving_radial_distance(hcos.zs[i]), hcos.ks,
                                             hcos.uk_profiles['nfw'][i, j]
                                             *(1 - np.exp(-(hcos.ks / hcos.p['kstar_damping']))), ellmax=self.lmax_out)
-                    kfft_damp = kap_damp * self.ms_rescaled[j] if fftlog_way else ql.spec.cl2cfft(kap_damp, exp.pix).fft * \
-                                                                        self.ms_rescaled[j]
+                    kfft_damp = kap_damp * self.ms_rescaled[j] if fftlog_way else ql.spec.cl2cfft(kap_damp, exp.pix).fft * self.ms_rescaled[j]
                 else:
                     kfft_damp=kfft; phicfft_yy_damp=phicfft_yy; phicfft_usat_y_damp=phicfft_usat_y;
                     phicfft_ucen_y_damp=phicfft_ucen_y; phicfft_usat_usat_damp=phicfft_usat_usat;
@@ -1099,13 +1106,18 @@ class hm_framework:
 
 
                 # Accumulate the itgnds
-                itgnd_1h_cross[...,j] = hcos.nzm[i,j] * (phicfft_ucen_y_damp + phicfft_usat_y_damp) * np.conjugate(kfft_damp)
-                itgnd_1h_Iyyy[...,j] = hcos.nzm[i,j] * (phicfft_ucen_y_damp + phicfft_usat_y_damp) * np.conjugate(phicfft_yy_damp)
-                itgnd_1h_IIyy[...,j] = hcos.nzm[i,j] * np.conjugate(phicfft_yy_damp) * (phicfft_usat_usat_damp
-                                                                                   + 2 * phicfft_ucen_usat_damp)
-                itgnd_1h_IyIy[...,j] = hcos.nzm[i,j] * phicfft_usat_y_damp * (2*phicfft_ucen_y_damp + phicfft_usat_y_damp)
-                itgnd_1h_yIII[...,j] = hcos.nzm[i,j] * (phicfft_ucen_y_damp*phicfft_usat_usat_damp
-                                                        + phicfft_usat_y_damp*(2*phicfft_ucen_usat_damp + phicfft_usat_usat_damp) )
+                itgnd_1h_cross[...,j] = hcos.nzm[i,j] \
+                                        * (phicfft_ucen_y_damp + phicfft_usat_y_damp) * np.conjugate(kfft_damp)
+                itgnd_1h_Iyyy[...,j] = hcos.nzm[i,j] \
+                                       * (phicfft_ucen_y_damp + phicfft_usat_y_damp) * np.conjugate(phicfft_yy_damp)
+                itgnd_1h_IIyy[...,j] = hcos.nzm[i,j]\
+                                       * np.conjugate(phicfft_yy_damp) * (phicfft_usat_usat_damp
+                                                                          + 2 * phicfft_ucen_usat_damp)
+                itgnd_1h_IyIy[...,j] = hcos.nzm[i,j] \
+                                       * phicfft_usat_y_damp * (2*phicfft_ucen_y_damp + phicfft_usat_y_damp)
+                itgnd_1h_yIII[...,j] = hcos.nzm[i,j] \
+                                       * (phicfft_ucen_y_damp*phicfft_usat_usat_damp
+                                          + phicfft_usat_y_damp*(2*phicfft_ucen_usat_damp + phicfft_usat_usat_damp) )
 
                 itgnd_2h_k[...,j] = np.conjugate(kfft) * hcos.nzm[i,j] * hcos.bh_ofM[i,j]
                 itgnd_2h_Iy[...,j] = (phicfft_ucen_y + phicfft_usat_y) * hcos.nzm[i,j] * hcos.bh_ofM[i,j]
@@ -1142,13 +1154,18 @@ class hm_framework:
                     else:
                         kap_secbispec = tls.pkToPell(hcos.comoving_radial_distance(hcos.zs[i]), hcos.ks,
                                                      hcos.uk_profiles['nfw'][i, j], ellmax=exp.lmax)
-                    secondary_bispec_bias_reconstructions = sbbs.get_secondary_bispec_bias(lbins_second_bispec_bias, qe_norm_1D,
-                                                                                           exp_param_dict, exp.cltt_tot, u_cen, kap_secbispec*self.ms_rescaled[j],\
-                                                                                           projected_fg_profile_2 = y_damp, parallelise=parallelise_secondbispec) +\
-                                                            sbbs.get_secondary_bispec_bias(lbins_second_bispec_bias, qe_norm_1D,
-                                                                                           exp_param_dict, exp.cltt_tot, u_sat_damp, kap_secbispec*self.ms_rescaled[j],\
-                                                                                           projected_fg_profile_2 = y_damp, parallelise=parallelise_secondbispec)
-                    itgnd_1h_second_bispec[..., j] = hod_fact_1gal[i, j] * hcos.nzm[i,j] * secondary_bispec_bias_reconstructions
+                    sec_bispec_rec = sbbs.get_sec_bispec_bias(lbins_sec_bispec_bias, qe_norm_1D,
+                                                              exp_param_dict, exp.cltt_tot, u_cen,
+                                                              kap_secbispec*self.ms_rescaled[j],
+                                                              projected_fg_profile_2 = y_damp,
+                                                              parallelise=parallelise_secondbispec)\
+                                     + sbbs.get_sec_bispec_bias(lbins_sec_bispec_bias, qe_norm_1D, exp_param_dict,
+                                                                exp.cltt_tot, u_sat_damp,
+                                                                kap_secbispec*self.ms_rescaled[j],
+                                                                projected_fg_profile_2 = y_damp,
+                                                                parallelise=parallelise_secondbispec)
+                    # TODO: I deleted the function definining hod_fact_1gal! Restore it
+                    itgnd_1h_second_bispec[..., j] = hod_fact_1gal[i, j] * hcos.nzm[i,j] * sec_bispec_rec
 
             # Perform the m integrals
             Iyyy_1h[...,i]=np.trapz(itgnd_1h_Iyyy,hcos.ms,axis=-1)
@@ -1187,12 +1204,12 @@ class hm_framework:
         exp.biases['mixed']['trispec']['2h'] = np.trapz( Iyyy_itgnd*Iyyy_2h + IIyy_itgnd*IIyy_2h
                                                          + IyIy_itgnd*IyIy_2h + yIII_itgnd*yIII_2h, hcos.zs, axis=-1)
         exp.biases['mixed']['prim_bispec']['1h'] = conversion_factor * np.trapz( oneH_cross*kIy_itgnd, hcos.zs, axis=-1)
-        exp.biases['mixed']['prim_bispec']['2h'] =  conversion_factor * np.trapz( twoH_cross*kIy_itgnd, hcos.zs, axis=-1)
+        exp.biases['mixed']['prim_bispec']['2h'] = conversion_factor * np.trapz( twoH_cross*kIy_itgnd, hcos.zs, axis=-1)
 
         if get_secondary_bispec_bias:
             # Perm factor of 4 implemented in the get_secondary_bispec_bias_at_L() function
             exp.biases['mixed']['second_bispec']['1h'] = np.trapz( oneH_second_bispec * kIy_itgnd, hcos.zs, axis=-1)
-            exp.biases['second_bispec_bias_ells'] = lbins_second_bispec_bias
+            exp.biases['second_bispec_bias_ells'] = lbins_sec_bispec_bias
 
         if fftlog_way:
             exp.biases['ells'] = np.arange(self.lmax_out+1)
@@ -1271,7 +1288,7 @@ class hm_framework:
                     clkk_bias_tot += np.nan_to_num(np.interp(np.arange(lmax_clkk+1), ells,
                                                exp.biases[which_bias][which_coupling][which_term]))
                     if which_coupling=='prim_bispec':
-                        # The primary bispectrum bias to the rec cros true kappa is half of the prim bispec bias to the auto
+                        # The prim bispec bias to the recXtrueKappa is half of the prim bispec bias to the auto
                         clkcross_bias_tot += np.nan_to_num(0.5 * np.interp(np.arange(lmax_clkk+1), ells,
                                                              exp.biases[which_bias][which_coupling][which_term]))
 
@@ -1279,7 +1296,9 @@ class hm_framework:
         # TODO: speed up calculate_cl_bias() by using fftlog
         # TODO: It might be better to have W_E and W_phi provided externally rather than calculated internally
         cl_Btemp_x_Blens_bias_bcl = tls.calculate_cl_bias(exp.pix, exp.W_E * exp.cl_unl.clee, exp.W_phi * clkcross_bias_tot, lbins)
-        cl_Btemp_x_Btemp_bias_bcl = tls.calculate_cl_bias(exp.pix, exp.W_E**2 * (exp.cl_len.clee + exp.nlpp), exp.W_phi**2 * clkk_bias_tot, lbins)
+        cl_Btemp_x_Btemp_bias_bcl = tls.calculate_cl_bias(exp.pix, exp.W_E**2 * (exp.cl_len.clee + exp.nlpp),
+                                                          exp.W_phi**2 * clkk_bias_tot, lbins)
         cl_Bdel_x_Bdel_bias_array = - 2 * cl_Btemp_x_Blens_bias_bcl.specs['cl'] + cl_Btemp_x_Btemp_bias_bcl.specs['cl']
 
-        return cl_Btemp_x_Blens_bias_bcl.ls, cl_Btemp_x_Blens_bias_bcl.specs['cl'], cl_Btemp_x_Btemp_bias_bcl.specs['cl'], cl_Bdel_x_Bdel_bias_array
+        return cl_Btemp_x_Blens_bias_bcl.ls, cl_Btemp_x_Blens_bias_bcl.specs['cl'],\
+               cl_Btemp_x_Btemp_bias_bcl.specs['cl'], cl_Bdel_x_Bdel_bias_array
