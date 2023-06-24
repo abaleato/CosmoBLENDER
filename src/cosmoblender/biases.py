@@ -538,10 +538,12 @@ class hm_framework:
             if get_secondary_bispec_bias:
                 itgnd_1h_second_bispec = np.zeros([len(lbins_sec_bispec_bias),self.nMasses])+0j
 
-            # Get Pk for 2h terms
-            pk = tls.pkToPell(hcos.comoving_radial_distance(hcos.zs[i]), hcos.ks, hcos.Pzk[i], ellmax=self.lmax_out)
+            # Project the matter power spectrum for two-halo terms
+            pk_of_l = tls.pkToPell(hcos.comoving_radial_distance(hcos.zs[i]), hcos.ks, hcos.Pzk[i], ellmax=exp.lmax)
+            pk_of_L = tls.pkToPell(hcos.comoving_radial_distance(hcos.zs[i]), hcos.ks, hcos.Pzk[i], ellmax=self.lmax_out)
             if not fftlog_way:
-                pk = ql.spec.cl2cfft(pk, exp.pix).fft
+                pk_of_l = ql.spec.cl2cfft(pk_of_l, exp.pix).fft
+                pk_of_L = ql.spec.cl2cfft(pk_of_L, exp.pix).fft
 
             # Integral over M for 2halo trispectrum. This will later go into a QE
             for j,m in enumerate(hcos.ms):
@@ -555,7 +557,7 @@ class hm_framework:
                 integ_1h_for_2htrispec[..., j] = hcos.nzm[i, j] * hcos.bh_ofM[i, j] * (u_cen + u_sat)
 
             # Do the 1- integral in the 1-3 trispectrum and impose consistency condition
-            Iint = pk * (np.trapz(integ_1h_for_2htrispec,hcos.ms,axis=-1) + self.I_consistency[i])
+            Iint = pk_of_l * (np.trapz(integ_1h_for_2htrispec,hcos.ms,axis=-1) + self.I_consistency[i])
 
             # M integral.
             for j,m in enumerate(hcos.ms):
@@ -608,6 +610,8 @@ class hm_framework:
                 itgnd_2h_IintIII[...,j] = hcos.nzm[i,j] * hcos.bh_ofM[i,j]\
                                           * (phicfft_Iint_ucen * np.conjugate(phicfft_usat_usat)
                                              +phicfft_Iint_usat * np.conjugate(2*phicfft_ucen_usat + phicfft_usat_usat))
+                itgnd_2h_II[...,j] = hcos.nzm[i,j] * hcos.bh_ofM[i,j] * (phicfft_usat_usat + 2 * phicfft_ucen_usat)
+
 
                 if get_secondary_bispec_bias:
                     # Temporary secondary bispectrum bias stuff
@@ -646,10 +650,12 @@ class hm_framework:
                 oneH_second_bispec[...,i]=np.trapz(itgnd_1h_second_bispec,hcos.ms,axis=-1)
 
             IIII_2h_1_3[...,i] = 4 * np.trapz(itgnd_2h_IintIII,hcos.ms,axis=-1)
+            # TODO: implement consistency for 2-2 trispectrum
+            IIII_2h_2_2[..., i] = 2 * np.trapz(itgnd_2h_II, hcos.ms, axis=-1) ** 2 * pk_of_L
 
             tmpCorr =np.trapz(itgnd_2h_k,hcos.ms,axis=-1)
             twoH_cross[...,i]=np.trapz(itgnd_2h_II,hcos.ms,axis=-1)\
-                                 *(tmpCorr + self.m_consistency[i])*pk
+                                 *(tmpCorr + self.m_consistency[i]) * pk_of_L
 
         # Convert the NFW profile in the cross bias from kappa to phi (bc the QEs give phi)
         conversion_factor = np.nan_to_num(1 / (0.5 * ells_out*(ells_out+1) )) if fftlog_way else ql.spec.cl2cfft(np.nan_to_num(1 / (0.5 * np.arange(self.lmax_out+1)*(np.arange(self.lmax_out+1)+1) )),exp.pix).fft
@@ -1028,14 +1034,17 @@ class hm_framework:
             integ_1h_y_for_2htrispec = integ_1h_I_for_2htrispec.copy()
             itgnd_2h_Iyyy=itgnd_1h_cross.copy();itgnd_2h_IIyy=itgnd_1h_cross.copy();
             itgnd_2h_IyIy=itgnd_1h_cross.copy();itgnd_2h_yIII=itgnd_1h_cross.copy();
+            itgnd_2h_Iy=itgnd_1h_cross.copy(); itgnd_2h_yy=itgnd_1h_cross.copy(); itgnd_2h_II=itgnd_1h_cross.copy();
 
             if get_secondary_bispec_bias:
                 itgnd_1h_second_bispec = np.zeros([len(lbins_sec_bispec_bias),self.nMasses])+0j
 
-            # This is the two halo term. P_k times the M integrals
-            pk = tls.pkToPell(hcos.comoving_radial_distance(hcos.zs[i]), hcos.ks, hcos.Pzk[i], ellmax=self.lmax_out)
+            # Project the matter power spectrum for two-halo terms
+            pk_of_l = tls.pkToPell(hcos.comoving_radial_distance(hcos.zs[i]), hcos.ks, hcos.Pzk[i], ellmax=exp.lmax)
+            pk_of_L = tls.pkToPell(hcos.comoving_radial_distance(hcos.zs[i]), hcos.ks, hcos.Pzk[i], ellmax=self.lmax_out)
             if not fftlog_way:
-                pk = ql.spec.cl2cfft(pk, exp.pix).fft
+                pk_of_l = ql.spec.cl2cfft(pk_of_l, exp.pix).fft
+                pk_of_L = ql.spec.cl2cfft(pk_of_L, exp.pix).fft
 
             # Integral over M for 2halo trispectrum. This will later go into a QE
             for j,m in enumerate(hcos.ms):
@@ -1052,8 +1061,8 @@ class hm_framework:
                 integ_1h_y_for_2htrispec[..., j] = hcos.nzm[i, j] * hcos.bh_ofM[i, j] * y
 
             # Do the 1- integrals in the 1-3 trispectrum and impose consistency conditions
-            Iint = pk * (np.trapz(integ_1h_I_for_2htrispec, hcos.ms, axis=-1) + self.I_consistency[i])
-            yint = pk * (np.trapz(integ_1h_y_for_2htrispec, hcos.ms, axis=-1) + self.y_consistency[i])
+            Iint = pk_of_l * (np.trapz(integ_1h_I_for_2htrispec, hcos.ms, axis=-1) + self.I_consistency[i])
+            yint = pk_of_l * (np.trapz(integ_1h_y_for_2htrispec, hcos.ms, axis=-1) + self.y_consistency[i])
 
             # M integral.
             for j,m in enumerate(hcos.ms):
@@ -1126,6 +1135,8 @@ class hm_framework:
 
                 itgnd_2h_k[...,j] = np.conjugate(kfft) * hcos.nzm[i,j] * hcos.bh_ofM[i,j]
                 itgnd_2h_Iy[...,j] = (phicfft_ucen_y + phicfft_usat_y) * hcos.nzm[i,j] * hcos.bh_ofM[i,j]
+                itgnd_2h_yy[...,j] = phicfft_yy * hcos.nzm[i,j] * hcos.bh_ofM[i,j]
+                itgnd_2h_II[...,j] = hcos.nzm[i,j] * hcos.bh_ofM[i,j] * (phicfft_usat_usat + 2 * phicfft_ucen_usat)
 
                 itgnd_2h_Iyyy[...,j] = hcos.nzm[i,j] * hcos.bh_ofM[i,j] * (phicfft_Iint_y*phicfft_yy
                                                                        + 3*phicfft_yint_y*(phicfft_ucen_y
@@ -1189,8 +1200,17 @@ class hm_framework:
             IyIy_2h_1_3[...,i] = np.trapz(itgnd_2h_IyIy,hcos.ms,axis=-1)
             yIII_2h_1_3[...,i] = np.trapz(itgnd_2h_yIII,hcos.ms,axis=-1)
 
+            # Accumulate integrands for 2-2 2-halo trispectrum
+            Iyyy_2h_2_2[...,i] = 2 * np.trapz(itgnd_2h_Iy,hcos.ms,axis=-1)\
+                                 * np.trapz(itgnd_2h_yy,hcos.ms,axis=-1) * pk_of_L
+            IIyy_2h_2_2[...,i] = 2 * np.trapz(itgnd_2h_II,hcos.ms,axis=-1)\
+                                 * np.trapz(itgnd_2h_yy,hcos.ms,axis=-1) * pk_of_L
+            IyIy_2h_2_2[...,i] = 2 * np.trapz(itgnd_2h_Iy,hcos.ms,axis=-1)**2 * pk_of_L
+            yIII_2h_2_2[...,i] = 2 * np.trapz(itgnd_2h_Iy,hcos.ms,axis=-1)\
+                                 * np.trapz(itgnd_2h_II,hcos.ms,axis=-1) * pk_of_L
+
             tmpCorr =np.trapz(itgnd_2h_k,hcos.ms,axis=-1)
-            twoH_cross[...,i]=np.trapz(itgnd_2h_Iy,hcos.ms,axis=-1) * (tmpCorr + self.m_consistency[i]) *pk
+            twoH_cross[...,i]=np.trapz(itgnd_2h_Iy,hcos.ms,axis=-1) * (tmpCorr + self.m_consistency[i]) * pk_of_L
 
         # Convert the NFW profile in the cross bias from kappa to phi
         conversion_factor = np.nan_to_num(1 / (0.5 * ells_out*(ells_out+1) )) if fftlog_way else ql.spec.cl2cfft(np.nan_to_num(1 / (0.5 * np.arange(self.lmax_out+1)*(np.arange(self.lmax_out+1)+1) )),exp.pix).fft
