@@ -363,7 +363,7 @@ class hm_framework:
                 # H dividing the galaxy window function to translate the hmvec convention to e.g. Ferraro & Hill 18 #TODO: why do you say that?
                 gal = tls.pkToPell(hcos.comoving_radial_distance(hcos.zs[i]),
                                    hcos.ks,hcos.uk_profiles['nfw'][i,j], ellmax=self.lmax_out)
-                # TODO: if you remove the z-scaling dividing ms_rescaled, do it in the input to sbbs.get_sec_bispec_bias as well
+                #TODO: should ngal in denominator depend on z? ms_rescaled doesn't
                 galfft = gal / hcos.hods[survey_name]['ngal'][i] if fftlog_way else ql.spec.cl2cfft(gal, exp.pix).fft / hcos.hods[survey_name]['ngal'][i]
                 phicfft = exp.get_TT_qe(fftlog_way, ells_out, y, y)
 
@@ -616,7 +616,6 @@ class hm_framework:
                 if get_secondary_bispec_bias:
                     # Temporary secondary bispectrum bias stuff
                     # The part with the nested lensing reconstructions
-                    # TODO: if you remove the z-scaling dividing ms_rescaled in kfft, do it here too
                     exp_param_dict = {'lmax': exp.lmax, 'nx': exp.nx, 'dx_arcmin': exp.dx*60.*180./np.pi}
                     # Get the kappa map, up to lmax rather than lmax_out as was needed in other terms
                     if damp_1h_prof:
@@ -736,7 +735,6 @@ class hm_framework:
                 # H dividing the galaxy window function to translate the hmvec convention to e.g. Ferraro & Hill 18 # TODO:Why?
                 gal = tls.pkToPell(hcos.comoving_radial_distance(hcos.zs[i]),
                                    hcos.ks,hcos.uk_profiles['nfw'][i,j], ellmax=self.lmax_out)
-                # TODO: if you remove the z-scaling dividing ms_rescaled, do it in the input to sbbs.get_sec_bispec_bias as well
                 galfft = gal / hcos.hods[survey_name]['ngal'][i]  if fftlog_way else ql.spec.cl2cfft(gal, exp.pix).fft / hcos.hods[survey_name]['ngal'][i]
 
                 phicfft_ucen_usat = exp.get_TT_qe(fftlog_way, ells_out, u_cen, u_sat)
@@ -750,7 +748,6 @@ class hm_framework:
                     gal_damp = tls.pkToPell(hcos.comoving_radial_distance(hcos.zs[i]),
                                        hcos.ks, hcos.uk_profiles['nfw'][i, j]
                                             *(1 - np.exp(-(hcos.ks / hcos.p['kstar_damping']))), ellmax=self.lmax_out)
-                    # TODO: if you remove the z-scaling dividing ms_rescaled, do it in the input to sbbs.get_sec_bispec_bias as well
                     galfft_damp = gal_damp / hcos.hods[survey_name]['ngal'][i] if fftlog_way else ql.spec.cl2cfft(gal_damp, exp.pix).fft / hcos.hods[survey_name]['ngal'][i]
 
                     phicfft_ucen_usat_damp = exp.get_TT_qe(fftlog_way, ells_out, u_cen, u_sat_damp)
@@ -847,7 +844,6 @@ class hm_framework:
                 # H dividing the galaxy window function to translate the hmvec convention to e.g. Ferraro & Hill 18 # TODO:Why?
                 gal = tls.pkToPell(hcos.comoving_radial_distance(hcos.zs[i]),
                                    hcos.ks,hcos.uk_profiles['nfw'][i,j], ellmax=self.lmax_out)
-                # TODO: if you remove the z-scaling dividing ms_rescaled, do it in the input to sbbs.get_sec_bispec_bias as well
                 galfft = gal / hcos.hods[survey_name]['ngal'][i] if fftlog_way else ql.spec.cl2cfft(gal, exp.pix).fft / hcos.hods[survey_name]['ngal'][i]
 
                 phicfft_ucen_y = exp.get_TT_qe(fftlog_way, ells_out, u_cen, y)
@@ -865,7 +861,6 @@ class hm_framework:
                     gal_damp = tls.pkToPell(hcos.comoving_radial_distance(hcos.zs[i]),
                                        hcos.ks, hcos.uk_profiles['nfw'][i, j]
                                        *(1 - np.exp(-(hcos.ks / hcos.p['kstar_damping']))), ellmax=self.lmax_out)
-                    # TODO: if you remove the z-scaling dividing ms_rescaled, do it in the input to sbbs.get_sec_bispec_bias as well
                     galfft_damp = gal_damp / hcos.hods[survey_name]['ngal'][i] if fftlog_way else ql.spec.cl2cfft(gal_damp, exp.pix).fft / hcos.hods[survey_name]['ngal'][i]
                     phicfft_ucen_y_damp = exp.get_TT_qe(fftlog_way, ells_out, u_cen, y_damp)
                     phicfft_usat_y_damp = exp.get_TT_qe(fftlog_way, ells_out, u_sat_damp, y_damp)
@@ -1159,7 +1154,6 @@ class hm_framework:
                 if get_secondary_bispec_bias:
                     # Temporary secondary bispectrum bias stuff
                     # The part with the nested lensing reconstructions
-                    # TODO: if you remove the z-scaling dividing ms_rescaled in kfft, do it here too
                     exp_param_dict = {'lmax': exp.lmax, 'nx': exp.nx, 'dx_arcmin': exp.dx*60.*180./np.pi}
                     # Get the kappa map, up to lmax rather than lmax_out as was needed in other terms
                     if damp_1h_prof:
@@ -1206,7 +1200,7 @@ class hm_framework:
             IIyy_2h_2_2[...,i] = 2 * np.trapz(itgnd_2h_II,hcos.ms,axis=-1)\
                                  * np.trapz(itgnd_2h_yy,hcos.ms,axis=-1) * pk_of_L
             IyIy_2h_2_2[...,i] = 2 * np.trapz(itgnd_2h_Iy,hcos.ms,axis=-1)**2 * pk_of_L
-            yIII_2h_2_2[...,i] = 2 * np.trapz(itgnd_2h_Iy,hcos.ms,axis=-1)\
+            yIII_2h_2_2[...,i] = 2 *  np.trapz(itgnd_2h_Iy,hcos.ms,axis=-1)\
                                  * np.trapz(itgnd_2h_II,hcos.ms,axis=-1) * pk_of_L
 
             tmpCorr =np.trapz(itgnd_2h_k,hcos.ms,axis=-1)
