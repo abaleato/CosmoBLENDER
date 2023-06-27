@@ -286,6 +286,7 @@ class hm_framework:
         conversion_factor = np.nan_to_num(1 / (0.5 * ells_out*(ells_out+1) )) if fftlog_way else ql.spec.cl2cfft(np.nan_to_num(1 / (0.5 * np.arange(self.lmax_out+1)*(np.arange(self.lmax_out+1)+1) )),exp.pix).fft
 
         # Integrate over z
+        # Note that the window function for tSZ is just unity bc the a(z) is absorbed into the projected y profile
         exp.biases['tsz']['trispec']['1h'] = self.T_CMB**4 \
                                              * np.trapz(oneH_4pt*hcos.comoving_radial_distance(hcos.zs)**-6\
                                                         *(hcos.h_of_z(hcos.zs)**3),hcos.zs,axis=-1)
@@ -861,7 +862,6 @@ class hm_framework:
 
         # itgnd factors from Limber projection (adapted to hmvec conventions)
         # Note there's only a (1+z)**-2 dependence. This is bc there's another factor of (1+z)**-1 in the gal_window
-        # TODO: need a dndz here!
         # TODO: check all of these factors!
         kII_itgnd  = hcos.h_of_z(hcos.zs)**-1 * (1+hcos.zs)**-2 * hcos.comoving_radial_distance(hcos.zs)**-4 \
                      * tls.gal_window(hcos.zs, gzs, gdndz)

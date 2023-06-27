@@ -142,6 +142,14 @@ def gal_window(zs, gzs, gdndz=None):
         Wz2s = np.ones_like(gzs)
     return np.interp(zs, gzs, Wz2s, left=0, right=0)
 
+def y_window(hcos, zs):
+    """ Window function for tSZ projection. In theory this is just W(chi)=a(chi) (see Appendix A of Hill & Pajer 13)
+       However, here we need to adapt to how things are implemented in hmvec: the a(z) is absorbed into the projected
+       profile, which ini addition y_2D_hmvec = chi**2/H(chi)*y_2D_theory
+    zs = zs at which we want to evaluate the window
+    """
+    return hcos.h_oz_z(hcos.zs) / hcos.chis**2
+
 def my_lensing_window(hcos, zs, dndz=None):
     """
     Wrapper around hmvec's lensing_window to have the dependence on H(z) that is more common in the literature

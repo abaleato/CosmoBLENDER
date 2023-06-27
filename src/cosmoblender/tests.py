@@ -123,15 +123,12 @@ def test_gal_cross_lensing(hm_object, exp_object, damp_1h_prof=False):
     plt.loglog(clkg_twoHalo_ps, label='2 halo term', color='b')
 
     # HMVEC CALCULATION
-    # TODO: Is this galaxy-matter different from galaxy-CMBlensing?
     Pgm_hmvec_1h = hm_calc.hcos.get_power_1halo("nfw", hod_name)
     Pgm_hmvec_2h = hm_calc.hcos.get_power_2halo("nfw", hod_name)
 
-    # TODO: do we need the dN/dz to project here? It looks like we do
     # TODO: Why is the 1-halo term more important than pyccl suggests?
     clgm_1h_hmvec = hm_calc.hcos.C_kg(ells, hm_object.hcos.zs, hm_object.hcos.ks, Pgm_hmvec_1h, gzs=z, gdndz=nz, lzs=1100.)
     clgm_2h_hmvec = hm_calc.hcos.C_kg(ells, hm_object.hcos.zs, hm_object.hcos.ks, Pgm_hmvec_2h, gzs=z, gdndz=nz, lzs=1100.)
-
 
     plt.loglog(ells, clgm_1h_hmvec + clgm_2h_hmvec, label="Hmvec tot", color='k', ls='-')
     plt.loglog(ells, clgm_1h_hmvec, label="Hmvec 1h", color='k', ls=':')
