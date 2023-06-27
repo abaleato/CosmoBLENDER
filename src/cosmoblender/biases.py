@@ -152,7 +152,8 @@ class hm_framework:
     def get_tsz_auto_biases(self, exp, fftlog_way=True, get_secondary_bispec_bias=False, bin_width_out=30, \
                      bin_width_out_second_bispec_bias=250, parallelise_secondbispec=True, damp_1h_prof=True):
         """
-        Calculate the tsz biases to the lensing auto-spectrum given an "experiment" object (defined in qest.py)
+        Calculate the tsz biases to the CMB lensing auto-spectrum (C^{\phi\phi}_L)
+        given an "experiment" object (defined in qest.py)
         Input:
             * exp = a qest.experiment object
             * (optional) fftlog_way = Boolean. If true, use 1D fftlog reconstructions, otherwise use 2D quicklens
@@ -401,15 +402,12 @@ class hm_framework:
             twoH_cross[...,i] = np.trapz(itgnd_2h_2g,hcos.ms,axis=-1) * (tmpCorr + self.g_consistency[i]) * pk
             twoH_cross[...,i] = np.trapz(itgnd_2h_2g,hcos.ms,axis=-1) * (tmpCorr + self.g_consistency[i]) * pk
 
-        # Convert the NFW profile in the cross bias from kappa to phi
-        conversion_factor = 1
-
         # Integrate over z
-        exp.biases['tsz']['cross_w_gals']['1h'] = conversion_factor * self.T_CMB**2 \
+        exp.biases['tsz']['cross_w_gals']['1h'] = self.T_CMB**2 \
                                                  * np.trapz(oneH_cross * hcos.comoving_radial_distance(hcos.zs)**-4
                                                             * hcos.h_of_z(hcos.zs)
                                                             * tls.gal_window(hcos.zs, gzs, gdndz), hcos.zs,axis=-1)
-        exp.biases['tsz']['cross_w_gals']['2h'] = conversion_factor * self.T_CMB**2 \
+        exp.biases['tsz']['cross_w_gals']['2h'] = self.T_CMB**2 \
                                                  * np.trapz(twoH_cross * hcos.comoving_radial_distance(hcos.zs)**-4\
                                                             * hcos.h_of_z(hcos.zs)*tls.gal_window(hcos.zs),hcos.zs,axis=-1)
         if fftlog_way:
@@ -474,6 +472,8 @@ class hm_framework:
             * (optional) damp_1h_prof = Bool. Default is False. Whether to damp the profiles at low k in 1h terms
         """
         hcos = self.hcos
+        self.get_galaxy_consistency(exp, survey_name)
+        self.get_matter_consistency(exp)
 
         # Output ells
         ells_out = np.arange(self.lmax_out+1)
@@ -481,47 +481,67 @@ class hm_framework:
         nx = self.lmax_out+1
 
         # The one and two halo bias terms -- these store the itgnd to be integrated over z
-        oneH_ps = np.zeros([nx,self.nZs])+0j
+        oneH_ps = np.zeros([nx,self.nZs])+0j; twoH_ps = oneH_ps.copy()
         for i,z in enumerate(hcos.zs):
             #Temporary storage
             itgnd_1h_ps = np.zeros([nx,self.nMasses])+0j
+            itgnd_2h_1g = itgnd_1h_ps.copy(); itgnd_2h_1m = itgnd_1h_ps.copy()
 
             # M integral.
             for j,m in enumerate(hcos.ms):
                 if m> exp.massCut: continue
                 #project the galaxy profiles
+                kap = tls.pkToPell(hcos.comoving_radial_distance(hcos.zs[i]),
+                                   hcos.ks, hcos.uk_profiles['nfw'][i,j], ellmax=self.lmax_out)
+                gal = tls.pkToPell(hcos.comoving_radial_distance(hcos.zs[i]),
+                                   hcos.ks, hcos.uk_profiles['nfw'][i, j], ellmax=self.lmax_out)
+                # TODO: should ngal in denominator depend on z? ms_rescaled doesn't
+                galfft = gal / hcos.hods[survey_name]['ngal'][i] if fftlog_way else ql.spec.cl2cfft(gal,exp.pix).fft / \
+                                                                                         hcos.hods[survey_name]['ngal'][
+                                                                                             i]
+                kfft = kap*self.ms_rescaled[j] if fftlog_way else ql.spec.cl2cfft(kap,exp.pix).fft*self.ms_rescaled[j]
+
                 if damp_1h_prof:
-                    gal = tls.pkToPell(hcos.comoving_radial_distance(hcos.zs[i]),
+                    gal_damp = tls.pkToPell(hcos.comoving_radial_distance(hcos.zs[i]),
                                        hcos.ks, hcos.uk_profiles['nfw'][i, j]
                                        *(1 - np.exp(-(hcos.ks / hcos.p['kstar_damping']))), ellmax=self.lmax_out)
-                    kap_damp = tls.pkToPell(hcos.comoving_radial_distance(hcos.zs[i]),
-                                       hcos.ks, hcos.uk_profiles['nfw'][i, j], ellmax=self.lmax_out)
-                else:
-                    gal = tls.pkToPell(hcos.comoving_radial_distance(hcos.zs[i]),
-                                       hcos.ks, hcos.uk_profiles['nfw'][i, j], ellmax=self.lmax_out)
-                    kap_damp = tls.pkToPell(hcos.comoving_radial_distance(hcos.zs[i]),
-                                            hcos.ks, hcos.uk_profiles['nfw'][i, j], ellmax=self.lmax_out)
-
-                # TODO: should ngal in denominator depend on z? ms_rescaled doesn't
-                galfft_damp = gal / hcos.hods[survey_name]['ngal'][i] if fftlog_way else ql.spec.cl2cfft(gal,exp.pix).fft / \
+                    kap_damp = tls.pkToPell(hcos.comoving_radial_distance(hcos.zs[i]), hcos.ks,
+                                            hcos.uk_profiles['nfw'][i, j] *(1 - np.exp(-(hcos.ks / hcos.p['kstar_damping']))),
+                                            ellmax=self.lmax_out)
+                    galfft_damp = gal_damp / hcos.hods[survey_name]['ngal'][i] if fftlog_way else ql.spec.cl2cfft(gal,
+                                                                                                        exp.pix).fft / \
                                                                                         hcos.hods[survey_name]['ngal'][
                                                                                             i]
-                kfft_damp = kap_damp * self.ms_rescaled[j] if fftlog_way else ql.spec.cl2cfft(kap_damp, exp.pix).fft * \
-                                                                              self.ms_rescaled[j]
+                    kfft_damp = kap_damp * self.ms_rescaled[j] if fftlog_way else ql.spec.cl2cfft(kap_damp,
+                                                                                                  exp.pix).fft * \
+                                                                                  self.ms_rescaled[j]
+                else:
+                    kap_damp = kap; gal_damp = gal; kfft_damp = kfft
 
                 mean_Ngal = hcos.hods[survey_name]['Nc'][i, j] + hcos.hods[survey_name]['Ns'][i, j]
                 # Accumulate the itgnds
                 itgnd_1h_ps[:,j] = mean_Ngal * galfft_damp * np.conjugate(kfft_damp)*hcos.nzm[i,j]
-                # Implement 2h including consistency
+                # TODO: Implement 2h including consistency
+                itgnd_2h_1g[:, j] = mean_Ngal * np.conjugate(galfft)*hcos.nzm[i,j]*hcos.bh_ofM[i,j]
+                itgnd_2h_1m[:, j] = np.conjugate(kfft)*hcos.nzm[i,j]*hcos.bh_ofM[i,j]
 
-                # Perform the m integrals
+            # Perform the m integrals
             oneH_ps[:,i]=np.trapz(itgnd_1h_ps,hcos.ms,axis=-1)
 
+            # This is the two halo term. P_k times the M integrals
+            pk = tls.pkToPell(hcos.comoving_radial_distance(hcos.zs[i]),hcos.ks,hcos.Pzk[i], ellmax=self.lmax_out)
+            if not fftlog_way:
+                pk = ql.spec.cl2cfft(pk, exp.pix).fft
+
+            twoH_ps[:, i] = (np.trapz(itgnd_2h_1g, hcos.ms, axis=-1) +self.g_consistency[i])\
+                            * (np.trapz(itgnd_2h_1m, hcos.ms, axis=-1) +self.m_consistency[i]) * pk
         # Integrate over z
         ps_oneH = np.trapz( oneH_ps * 1. / hcos.comoving_radial_distance(hcos.zs) ** 2
                             * tls.my_lensing_window(hcos, 1100.)
                             * tls.gal_window(hcos.zs, gzs, gdndz), hcos.zs, axis=-1)
-        ps_twoH = np.zeros_like(ps_oneH)
+        ps_twoH = np.trapz( twoH_ps * 1. / hcos.comoving_radial_distance(hcos.zs) ** 2
+                            * tls.my_lensing_window(hcos, 1100.)
+                            * tls.gal_window(hcos.zs, gzs, gdndz), hcos.zs, axis=-1)
         return ps_oneH, ps_twoH
 
     def get_CIB_filters(self, exp):
@@ -553,7 +573,8 @@ class hm_framework:
     def get_cib_auto_biases(self, exp, fftlog_way=True, get_secondary_bispec_bias=False, bin_width_out=30, \
                      bin_width_out_second_bispec_bias=250, parallelise_secondbispec=True, damp_1h_prof=True):
         """
-        Calculate the CIB biases to the lensing auto-spectrum given an "experiment" object (defined in qest.py)
+        Calculate the CIB biases to the CMB lensing auto-spectrum (C^{\phi\phi}_L)
+        given an "experiment" object (defined in qest.py)
         Input:
             * exp = a qest.experiment object
             * (optional) fftlog_way = Boolean. If true, use 1D fftlog reconstructions, otherwise use 2D qiucklens
@@ -837,8 +858,6 @@ class hm_framework:
             tmpCorr =np.trapz(itgnd_2h_k,hcos.ms,axis=-1)
             twoH_cross[...,i] = np.trapz(itgnd_2h_II,hcos.ms,axis=-1) * (tmpCorr + self.g_consistency[i]) * pk
 
-        # Convert the NFW profile in the cross bias from kappa to phi
-        conversion_factor = 1
 
         # itgnd factors from Limber projection (adapted to hmvec conventions)
         # Note there's only a (1+z)**-2 dependence. This is bc there's another factor of (1+z)**-1 in the gal_window
@@ -848,8 +867,8 @@ class hm_framework:
                      * tls.gal_window(hcos.zs, gzs, gdndz)
 
         # Integrate over z
-        exp.biases['cib']['cross_w_gals']['1h'] = conversion_factor * np.trapz( oneH_cross*kII_itgnd, hcos.zs, axis=-1)
-        exp.biases['cib']['cross_w_gals']['2h'] = conversion_factor * np.trapz( twoH_cross*kII_itgnd, hcos.zs, axis=-1)
+        exp.biases['cib']['cross_w_gals']['1h'] = np.trapz( oneH_cross*kII_itgnd, hcos.zs, axis=-1)
+        exp.biases['cib']['cross_w_gals']['2h'] = np.trapz( twoH_cross*kII_itgnd, hcos.zs, axis=-1)
 
         if fftlog_way:
             exp.biases['ells'] = np.arange(self.lmax_out+1)
@@ -952,18 +971,15 @@ class hm_framework:
             tmpCorr =np.trapz(itgnd_2h_k,hcos.ms,axis=-1)
             twoH_cross[...,i] = np.trapz(itgnd_2h_II,hcos.ms,axis=-1) * (tmpCorr + self.g_consistency[i]) * pk
 
-        # Convert the NFW profile in the cross bias from kappa to phi
-        conversion_factor = 1
-
         # itgnd factors from Limber projection (adapted to hmvec conventions)
         # Note there's only a (1+z)**-1 dependence. This is because there's another factor of (1+z)**-1 in the gal_window
         gIy_itgnd  = (1+hcos.zs)**-1 * hcos.comoving_radial_distance(hcos.zs)**-4
 
         # Integrate over z
-        exp.biases['mixed']['cross_w_gals']['1h'] = conversion_factor * tls.scale_sz(exp.freq_GHz) * self.T_CMB \
+        exp.biases['mixed']['cross_w_gals']['1h'] = tls.scale_sz(exp.freq_GHz) * self.T_CMB \
                                                     * np.trapz( 2 * oneH_cross*gIy_itgnd
                                                                 * tls.gal_window(hcos.zs, gzs, gdndz), hcos.zs, axis=-1)
-        exp.biases['mixed']['cross_w_gals']['2h'] = conversion_factor * tls.scale_sz(exp.freq_GHz) * self.T_CMB \
+        exp.biases['mixed']['cross_w_gals']['2h'] = tls.scale_sz(exp.freq_GHz) * self.T_CMB \
                                                     * np.trapz(twoH_cross*gIy_itgnd
                                                                * tls.gal_window(hcos.zs, gzs, gdndz), hcos.zs, axis=-1)
 
@@ -1044,7 +1060,7 @@ class hm_framework:
     def get_mixed_auto_biases(self, exp, fftlog_way=True, get_secondary_bispec_bias=False, bin_width_out=30, \
                          bin_width_out_second_bispec_bias=250, parallelise_secondbispec=True, damp_1h_prof=True):
         """
-        Calculate biases to CMB lensing auto-spectra from both CIB and tSZ
+        Calculate biases to the CMB lensing auto-spectrum (C^{\phi\phi}_L) from both CIB and tSZ
         given an "experiment" object (defined in qest.py)
         Input:
             * exp = a qest.experiment object
