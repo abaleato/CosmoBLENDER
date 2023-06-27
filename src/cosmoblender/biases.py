@@ -292,20 +292,20 @@ class hm_framework:
                                              * np.trapz((twoH_1_3 + twoH_2_2)*hcos.comoving_radial_distance(hcos.zs)**-6\
                                                         *(hcos.h_of_z(hcos.zs)**3),hcos.zs,axis=-1)
         exp.biases['tsz']['prim_bispec']['1h'] = 2 * conversion_factor * self.T_CMB**2 \
-                                                 * np.trapz(oneH_cross*hcos.lensing_window(hcos.zs,1100.)
+                                                 * np.trapz(oneH_cross*tls.my_lensing_window(hcos, 1100.)
                                                             /hcos.comoving_radial_distance(hcos.zs)**4\
-                                                            *(hcos.h_of_z(hcos.zs)**2),hcos.zs,axis=-1)
+                                                            *hcos.h_of_z(hcos.zs),hcos.zs,axis=-1)
         exp.biases['tsz']['prim_bispec']['2h'] = 2 * conversion_factor * self.T_CMB**2 \
-                                                 * np.trapz(twoH_cross*hcos.lensing_window(hcos.zs,1100.)
+                                                 * np.trapz(twoH_cross*tls.my_lensing_window(hcos, 1100.)
                                                             /hcos.comoving_radial_distance(hcos.zs)**4\
-                                                            *(hcos.h_of_z(hcos.zs)**2),hcos.zs,axis=-1)
+                                                            *hcos.h_of_z(hcos.zs),hcos.zs,axis=-1)
         if get_secondary_bispec_bias:
             # Perm factors implemented in the get_secondary_bispec_bias_at_L() function
             exp.biases['tsz']['second_bispec']['1h'] = self.T_CMB ** 2\
                                                        * np.trapz( oneH_second_bispec *
-                                                                   hcos.lensing_window(hcos.zs,1100.)
+                                                                   tls.my_lensing_window(hcos, 1100.)
                                                                    / hcos.comoving_radial_distance(hcos.zs) ** 4
-                                                                   * (hcos.h_of_z(hcos.zs) ** 2), hcos.zs, axis=-1)
+                                                                   * hcos.h_of_z(hcos.zs), hcos.zs, axis=-1)
             exp.biases['second_bispec_bias_ells'] = lbins_sec_bispec_bias
 
         if fftlog_way:
@@ -724,7 +724,7 @@ class hm_framework:
         # kII_itgnd has a perm factor of 2
         IIII_itgnd = (1+hcos.zs)**-4 * hcos.comoving_radial_distance(hcos.zs)**-6 * hcos.h_of_z(hcos.zs)**-1
         kII_itgnd  = 2 * (1+hcos.zs)**-2 * hcos.comoving_radial_distance(hcos.zs)**-4 \
-                     * hcos.lensing_window(hcos.zs,1100.)
+                     * tls.my_lensing_window(hcos, 1100.) / hcos.h_of_z(hcos.zs)
 
         # Integrate over z
         exp.biases['cib']['trispec']['1h'] = np.trapz( IIII_itgnd*IIII_1h, hcos.zs, axis=-1)
@@ -1283,7 +1283,7 @@ class hm_framework:
         yIII_itgnd = 4 * (1+hcos.zs)**-3 * hcos.comoving_radial_distance(hcos.zs)**-6
         # kIy_itgnd contains a perm factor of 2 is for the exchange of I and y relative to the cib or tsz only cases
         kIy_itgnd  = 4 * (1+hcos.zs)**-1 * hcos.comoving_radial_distance(hcos.zs)**-4 \
-                     * hcos.h_of_z(hcos.zs) * hcos.lensing_window(hcos.zs,1100.)
+                     * tls.my_lensing_window(hcos, 1100.)
 
         # Integrate over z
         exp.biases['mixed']['trispec']['1h'] = np.trapz( Iyyy_itgnd*Iyyy_1h + IIyy_itgnd*IIyy_1h
