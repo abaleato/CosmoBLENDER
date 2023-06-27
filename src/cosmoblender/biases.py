@@ -150,7 +150,7 @@ class hm_framework:
         self.I_consistency = ((1 - I)/(self.hcos.ms[0]/self.hcos.rho_matter_z(0)))[:,None]*W_of_Mlow # Function of z & k
 
     def get_tsz_auto_biases(self, exp, fftlog_way=True, get_secondary_bispec_bias=False, bin_width_out=30, \
-                     bin_width_out_second_bispec_bias=250, parallelise_secondbispec=True, damp_1h_prof=False):
+                     bin_width_out_second_bispec_bias=250, parallelise_secondbispec=True, damp_1h_prof=True):
         """
         Calculate the tsz biases to the lensing auto-spectrum given an "experiment" object (defined in qest.py)
         Input:
@@ -319,12 +319,14 @@ class hm_framework:
             exp.biases['tsz']['prim_bispec']['2h'] = ql.maps.cfft(exp.nx,exp.dx,fft=exp.biases['tsz']['prim_bispec']['2h']).get_ml(lbins).specs['cl']
             return
 
-    def get_tsz_cross_biases(self, exp, fftlog_way=True, bin_width_out=30, survey_name='LSST', damp_1h_prof=False):
+    def get_tsz_cross_biases(self, exp, gzs, gdndz, fftlog_way=True, bin_width_out=30, survey_name='LSST', damp_1h_prof=True):
         """
         Calculate the tsz biases to the cross-correlation of CMB lensing with a galaxy survey,
         given an "experiment" object (defined in qest.py)
         Input:
             * exp = a qest.experiment object
+            * gzs = array. Redsfhits at which the dndz is defined. Assumed to be zero otherwise.
+            * gdndz = array of same size as gzs. The dndz of the galaxy sample (does not need to be normalized)
             * (optional) fftlog_way = Boolean. If true, use 1D fftlog reconstructions, otherwise use 2D quicklens
             * (optional) bin_width_out = int. Bin width of the output lensing reconstruction
             * (optional) survey_name = str. Name labelling the HOD characterizing the survey we are x-ing lensing with
@@ -405,7 +407,8 @@ class hm_framework:
         # Integrate over z
         exp.biases['tsz']['cross_w_gals']['1h'] = conversion_factor * self.T_CMB**2 \
                                                  * np.trapz(oneH_cross * hcos.comoving_radial_distance(hcos.zs)**-4
-                                                            * hcos.h_of_z(hcos.zs)*tls.gal_window(hcos.zs),hcos.zs,axis=-1)
+                                                            * hcos.h_of_z(hcos.zs)
+                                                            * tls.gal_window(hcos.zs, gzs, gdndz), hcos.zs,axis=-1)
         exp.biases['tsz']['cross_w_gals']['2h'] = conversion_factor * self.T_CMB**2 \
                                                  * np.trapz(twoH_cross * hcos.comoving_radial_distance(hcos.zs)**-4\
                                                             * hcos.h_of_z(hcos.zs)*tls.gal_window(hcos.zs),hcos.zs,axis=-1)
@@ -418,7 +421,7 @@ class hm_framework:
             exp.biases['tsz']['cross_w_gals']['2h'] = ql.maps.cfft(exp.nx,exp.dx,fft=exp.biases['tsz']['cross_w_gals']['2h']).get_ml(lbins).specs['cl']
             return
 
-    def get_tsz_ps(self, exp, damp_1h_prof=False):
+    def get_tsz_ps(self, exp, damp_1h_prof=True):
         """
         Calculate the tSZ power spectrum
         Input:
@@ -463,6 +466,64 @@ class hm_framework:
         ps_twoH_tSZ = np.zeros(ps_oneH_tSZ.shape)
         return ps_oneH_tSZ, ps_twoH_tSZ
 
+    def get_g_cross_kappa(self, exp, survey_name, gzs, gdndz, damp_1h_prof=True, fftlog_way=True):
+        """
+        Calculate galaxy cross CMB lensing spectrum. This is a for a test.
+        Input:
+            * exp = a qest.experiment object
+            * (optional) damp_1h_prof = Bool. Default is False. Whether to damp the profiles at low k in 1h terms
+        """
+        hcos = self.hcos
+
+        # Output ells
+        ells_out = np.arange(self.lmax_out+1)
+
+        nx = self.lmax_out+1
+
+        # The one and two halo bias terms -- these store the itgnd to be integrated over z
+        oneH_ps = np.zeros([nx,self.nZs])+0j
+        for i,z in enumerate(hcos.zs):
+            #Temporary storage
+            itgnd_1h_ps = np.zeros([nx,self.nMasses])+0j
+
+            # M integral.
+            for j,m in enumerate(hcos.ms):
+                if m> exp.massCut: continue
+                #project the galaxy profiles
+                if damp_1h_prof:
+                    gal = tls.pkToPell(hcos.comoving_radial_distance(hcos.zs[i]),
+                                       hcos.ks, hcos.uk_profiles['nfw'][i, j]
+                                       *(1 - np.exp(-(hcos.ks / hcos.p['kstar_damping']))), ellmax=self.lmax_out)
+                    kap_damp = tls.pkToPell(hcos.comoving_radial_distance(hcos.zs[i]),
+                                       hcos.ks, hcos.uk_profiles['nfw'][i, j], ellmax=self.lmax_out)
+                else:
+                    gal = tls.pkToPell(hcos.comoving_radial_distance(hcos.zs[i]),
+                                       hcos.ks, hcos.uk_profiles['nfw'][i, j], ellmax=self.lmax_out)
+                    kap_damp = tls.pkToPell(hcos.comoving_radial_distance(hcos.zs[i]),
+                                            hcos.ks, hcos.uk_profiles['nfw'][i, j], ellmax=self.lmax_out)
+
+                # TODO: should ngal in denominator depend on z? ms_rescaled doesn't
+                galfft_damp = gal / hcos.hods[survey_name]['ngal'][i] if fftlog_way else ql.spec.cl2cfft(gal,exp.pix).fft / \
+                                                                                        hcos.hods[survey_name]['ngal'][
+                                                                                            i]
+                kfft_damp = kap_damp * self.ms_rescaled[j] if fftlog_way else ql.spec.cl2cfft(kap_damp, exp.pix).fft * \
+                                                                              self.ms_rescaled[j]
+
+                mean_Ngal = hcos.hods[survey_name]['Nc'][i, j] + hcos.hods[survey_name]['Ns'][i, j]
+                # Accumulate the itgnds
+                itgnd_1h_ps[:,j] = mean_Ngal * galfft_damp * np.conjugate(kfft_damp)*hcos.nzm[i,j]
+                # Implement 2h including consistency
+
+                # Perform the m integrals
+            oneH_ps[:,i]=np.trapz(itgnd_1h_ps,hcos.ms,axis=-1)
+
+        # Integrate over z
+        ps_oneH = np.trapz( oneH_ps * 1. / hcos.comoving_radial_distance(hcos.zs) ** 2
+                            * tls.my_lensing_window(hcos, 1100.)
+                            * tls.gal_window(hcos.zs, gzs, gdndz), hcos.zs, axis=-1)
+        ps_twoH = np.zeros_like(ps_oneH)
+        return ps_oneH, ps_twoH
+
     def get_CIB_filters(self, exp):
         """
         Get f_cen and f_sat factors for CIB halo model scaled by foreground cleaning weights. That is,
@@ -490,7 +551,7 @@ class hm_framework:
                                                            satmf='Tinker')[:,:,0][np.newaxis,:,:]
 
     def get_cib_auto_biases(self, exp, fftlog_way=True, get_secondary_bispec_bias=False, bin_width_out=30, \
-                     bin_width_out_second_bispec_bias=250, parallelise_secondbispec=True, damp_1h_prof=False):
+                     bin_width_out_second_bispec_bias=250, parallelise_secondbispec=True, damp_1h_prof=True):
         """
         Calculate the CIB biases to the lensing auto-spectrum given an "experiment" object (defined in qest.py)
         Input:
@@ -689,12 +750,14 @@ class hm_framework:
             exp.biases['cib']['prim_bispec']['2h'] = ql.maps.cfft(exp.nx,exp.dx,fft=exp.biases['cib']['prim_bispec']['2h']).get_ml(lbins).specs['cl']
             return
 
-    def get_cib_cross_biases(self, exp, fftlog_way=True, bin_width_out=30, survey_name='LSST', damp_1h_prof=False):
+    def get_cib_cross_biases(self, exp, gzs, gdndz, fftlog_way=True, bin_width_out=30, survey_name='LSST', damp_1h_prof=True):
         """
         Calculate the CIB biases to the cross-correlation of CMB lensing with a galaxy survey,
         given an "experiment" object (defined in qest.py)
         Input:
             * exp = a qest.experiment object
+            * gzs = array. Redsfhits at which the dndz is defined. Assumed to be zero otherwise.
+            * gdndz = array of same size as gzs. The dndz of the galaxy sample (does not need to be normalized)
             * (optional) fftlog_way = Boolean. If true, use 1D fftlog reconstructions, otherwise use 2D qiucklens
             * (optional) bin_width_out = int. Bin width of the output lensing reconstruction
             * (optional) survey_name = str. Name labelling the HOD characterizing the survey we are x-ing lensing with
@@ -779,8 +842,10 @@ class hm_framework:
 
         # itgnd factors from Limber projection (adapted to hmvec conventions)
         # Note there's only a (1+z)**-2 dependence. This is bc there's another factor of (1+z)**-1 in the gal_window
+        # TODO: need a dndz here!
+        # TODO: check all of these factors!
         kII_itgnd  = hcos.h_of_z(hcos.zs)**-1 * (1+hcos.zs)**-2 * hcos.comoving_radial_distance(hcos.zs)**-4 \
-                     * tls.gal_window(hcos.zs)
+                     * tls.gal_window(hcos.zs, gzs, gdndz)
 
         # Integrate over z
         exp.biases['cib']['cross_w_gals']['1h'] = conversion_factor * np.trapz( oneH_cross*kII_itgnd, hcos.zs, axis=-1)
@@ -795,12 +860,14 @@ class hm_framework:
             exp.biases['cib']['cross_w_gals']['2h'] = ql.maps.cfft(exp.nx,exp.dx,fft=exp.biases['cib']['cross_w_gals']['2h']).get_ml(lbins).specs['cl']
             return
 
-    def get_mixed_cross_biases(self, exp, fftlog_way=True, bin_width_out=30, survey_name='LSST', damp_1h_prof=False):
+    def get_mixed_cross_biases(self, exp, gzs, gdndz, fftlog_way=True, bin_width_out=30, survey_name='LSST', damp_1h_prof=True):
         """
         Calculate the mixed tsz-cib  biases to the cross-correlation of CMB lensing with a galaxy survey,
         given an "experiment" object (defined in qest.py)
         Input:
             * exp = a qest.experiment object
+            * gzs = array. Redsfhits at which the dndz is defined. Assumed to be zero otherwise.
+            * gdndz = array of same size as gzs. The dndz of the galaxy sample (does not need to be normalized)
             * (optional) fftlog_way = Boolean. If true, use 1D fftlog reconstructions, otherwise use 2D qiucklens
             * (optional) bin_width_out = int. Bin width of the output lensing reconstruction
             * (optional) survey_name = str. Name labelling the HOD characterizing the survey we are x-ing lensing with
@@ -894,11 +961,11 @@ class hm_framework:
 
         # Integrate over z
         exp.biases['mixed']['cross_w_gals']['1h'] = conversion_factor * tls.scale_sz(exp.freq_GHz) * self.T_CMB \
-                                                    * np.trapz( 2 * oneH_cross*gIy_itgnd*tls.gal_window(hcos.zs),
-                                                                hcos.zs, axis=-1)
+                                                    * np.trapz( 2 * oneH_cross*gIy_itgnd
+                                                                * tls.gal_window(hcos.zs, gzs, gdndz), hcos.zs, axis=-1)
         exp.biases['mixed']['cross_w_gals']['2h'] = conversion_factor * tls.scale_sz(exp.freq_GHz) * self.T_CMB \
-                                                    * np.trapz(twoH_cross*gIy_itgnd*tls.gal_window(hcos.zs),
-                                                               hcos.zs, axis=-1)
+                                                    * np.trapz(twoH_cross*gIy_itgnd
+                                                               * tls.gal_window(hcos.zs, gzs, gdndz), hcos.zs, axis=-1)
 
         if fftlog_way:
             exp.biases['ells'] = np.arange(self.lmax_out+1)
@@ -909,7 +976,7 @@ class hm_framework:
             exp.biases['mixed']['cross_w_gals']['2h'] = ql.maps.cfft(exp.nx,exp.dx,fft=exp.biases['mixed']['cross_w_gals']['2h']).get_ml(lbins).specs['cl']
             return
 
-    def get_cib_ps(self, exp, damp_1h_prof=False):
+    def get_cib_ps(self, exp, damp_1h_prof=True):
         """
         Calculate the CIB power spectrum.
 
@@ -975,7 +1042,7 @@ class hm_framework:
         return clCIBCIB_oneH_ps, clCIBCIB_twoH_ps
 
     def get_mixed_auto_biases(self, exp, fftlog_way=True, get_secondary_bispec_bias=False, bin_width_out=30, \
-                         bin_width_out_second_bispec_bias=250, parallelise_secondbispec=True, damp_1h_prof=False):
+                         bin_width_out_second_bispec_bias=250, parallelise_secondbispec=True, damp_1h_prof=True):
         """
         Calculate biases to CMB lensing auto-spectra from both CIB and tSZ
         given an "experiment" object (defined in qest.py)

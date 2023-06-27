@@ -128,11 +128,25 @@ def calculate_cl_bias(pix, clee, clpp, lbins, clee_ls=None, clpp_ls=None, aux_e_
 
     return ret.get_ml(lbins)
 
-def gal_window(zs):
+def gal_window(zs, gzs, gdndz=None):
     """ Galaxy window function
+    zs = zs at which we want to evaluate the dndz
+    gzs = zs at which dndz is defined
+    gdndz = H(z)*dndz
     """
-    # Todo:check this
-    return 1./(1.+zs)
+    gzs = np.array(gzs).reshape(-1)
+    if gzs.size > 1:
+        nznorm = np.trapz(gdndz, gzs)
+        Wz2s = gdndz / nznorm
+    else:
+        Wz2s = np.ones_like(gzs)
+    return np.interp(zs, gzs, Wz2s, left=0, right=0)
+
+def my_lensing_window(hcos, zs, dndz=None):
+    """
+    Wrapper around hmvec's lensing_window to have the dependence on H(z) that is more common in the literature
+    """
+    return hcos.h_of_z(hcos.zs) * hcos.lensing_window(hcos.zs,zs,dndz)
 
 # Functions associated with galaxy hods
 
