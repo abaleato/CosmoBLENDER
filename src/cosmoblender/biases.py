@@ -287,27 +287,21 @@ class hm_framework:
 
         # Integrate over z
         # Note that the window function for tSZ is just unity bc the a(z) is absorbed into the projected y profile
-        exp.biases['tsz']['trispec']['1h'] = self.T_CMB**4 \
-                                             * np.trapz(oneH_4pt*hcos.comoving_radial_distance(hcos.zs)**-6\
-                                                        *(hcos.h_of_z(hcos.zs)**3),hcos.zs,axis=-1)
-        exp.biases['tsz']['trispec']['2h'] = self.T_CMB**4 \
-                                             * np.trapz((twoH_1_3 + twoH_2_2)*hcos.comoving_radial_distance(hcos.zs)**-6\
-                                                        *(hcos.h_of_z(hcos.zs)**3),hcos.zs,axis=-1)
-        exp.biases['tsz']['prim_bispec']['1h'] = 2 * conversion_factor * self.T_CMB**2 \
-                                                 * np.trapz(oneH_cross*tls.my_lensing_window(hcos, 1100.)
-                                                            /hcos.comoving_radial_distance(hcos.zs)**4\
-                                                            *hcos.h_of_z(hcos.zs),hcos.zs,axis=-1)
-        exp.biases['tsz']['prim_bispec']['2h'] = 2 * conversion_factor * self.T_CMB**2 \
-                                                 * np.trapz(twoH_cross*tls.my_lensing_window(hcos, 1100.)
-                                                            /hcos.comoving_radial_distance(hcos.zs)**4\
-                                                            *hcos.h_of_z(hcos.zs),hcos.zs,axis=-1)
+        yyyy_trispec_intgrnd = self.T_CMB**4 * tls.limber_itgrnd_kernel(hcos, 4) * tls.y_window(hcos)**4
+        kyy_bispec_intgrnd = 2 * self.T_CMB**2 * tls.limber_itgrnd_kernel(hcos, 3) * tls.my_lensing_window(hcos, 1100.)\
+                             * tls.y_window(hcos)**2
+
+        exp.biases['tsz']['trispec']['1h'] = np.trapz(oneH_4pt * yyyy_trispec_intgrnd, hcos.zs,axis=-1)
+        exp.biases['tsz']['trispec']['2h'] = np.trapz((twoH_1_3 + twoH_2_2)*yyyy_trispec_intgrnd, hcos.zs, axis=-1)
+        exp.biases['tsz']['prim_bispec']['1h'] = conversion_factor * np.trapz(oneH_cross * kyy_bispec_intgrnd,
+                                                                              hcos.zs,axis=-1)
+        exp.biases['tsz']['prim_bispec']['2h'] = conversion_factor * np.trapz(twoH_cross * kyy_bispec_intgrnd,
+                                                                              hcos.zs,axis=-1)
         if get_secondary_bispec_bias:
             # Perm factors implemented in the get_secondary_bispec_bias_at_L() function
-            exp.biases['tsz']['second_bispec']['1h'] = self.T_CMB ** 2\
-                                                       * np.trapz( oneH_second_bispec *
-                                                                   tls.my_lensing_window(hcos, 1100.)
-                                                                   / hcos.comoving_radial_distance(hcos.zs) ** 4
-                                                                   * hcos.h_of_z(hcos.zs), hcos.zs, axis=-1)
+            # TODO: Why doesn't this use a conversion_factor?
+            exp.biases['tsz']['second_bispec']['1h'] = 0.5 * np.trapz( oneH_second_bispec * kyy_bispec_intgrnd,
+                                                                       hcos.zs, axis=-1)
             exp.biases['second_bispec_bias_ells'] = lbins_sec_bispec_bias
 
         if fftlog_way:

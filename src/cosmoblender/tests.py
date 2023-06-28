@@ -43,7 +43,6 @@ def test_cib_ps(hm_object, exp_object, damp_1h_prof=False):
 
     plt.title('CIB power spectrum')
 
-
 def test_gal_cross_lensing(hm_object, exp_object, damp_1h_prof=False):
     """ Check the galaxy power spectrum from some HODs
         Note that the HODs ini pyccl and hmvec are not exactly the same, we 're just looking for order-of-magnitude
