@@ -145,22 +145,24 @@ def gal_window(zs, gzs, gdndz=None):
 def y_window(hcos):
     """ Window function for tSZ projection. In theory this is just W(chi)=a(chi) (see Appendix A of Hill & Pajer 13)
        However, here we need to adapt to how things are implemented in hmvec: the a(z) is absorbed into the projected
-       profile, which in addition y_3D_hmvec = y_3D_theory /H(chi)
+       profile, which in addition has y_3D_hmvec = y_3D_theory /H(chi)
     """
     return hcos.h_of_z(hcos.zs)
 
 def my_lensing_window(hcos, zs, dndz=None):
     """
-    Wrapper around hmvec's lensing_window to have the dependence on H(z) that is more common in the literature
+    Wrapper around hmvec's lensing_window to have W(chi) = dchi/dz W(z) = (c/H) W(z)
+    With this convention, the Limber projection can be obtained using limber_itgrnd_kernel(), but NOT
+    hmvec's cosmology.limber_integral (in that case, use hmvec's lensing_window, but that may only be valid for
+    power spectra)
     """
-    return hcos.lensing_window(hcos.zs,zs,dndz)
+    return hcos.h_of_z(hcos.zs) * hcos.lensing_window(hcos.zs,zs,dndz)
 
 def limber_itgrnd_kernel(hcos, polyspectrum_order):
     '''
-    Prefactor in Limber integrals of nth-order polyspectra: chi**(2(1-n))
-    Assumes window function have absorbed any dchi/dz
+    Prefactor in Limber integrals of nth-order polyspectra: c/H * chi**(2(1-n))
     '''
-    return hcos.h_of_z(hcos.zs) * hcos.comoving_radial_distance(hcos.zs) ** (2 * (1 - polyspectrum_order))
+    return hcos.comoving_radial_distance(hcos.zs) ** (2 * (1 - polyspectrum_order)) / hcos.h_of_z(hcos.zs)
 
 # Functions associated with galaxy hods
 
