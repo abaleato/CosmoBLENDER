@@ -540,7 +540,7 @@ class hm_framework:
     def get_CIB_filters(self, exp):
         """
         Get f_cen and f_sat factors for CIB halo model scaled by foreground cleaning weights. That is,
-        compute \Sum_{\nu} f^{\nu}(z,M) w^{\nu, ILC}_l
+        compute \Sum_{\nu} f^{\nu}(z,M) w^{\nu, ILC}_l. While you're at it, convert to CMB units.
         Input:
             * exp = a qest.experiment object
         """
@@ -548,20 +548,21 @@ class hm_framework:
             f_cen_array = np.zeros((len(exp.freq_GHz), len(self.hcos.zs), len(self.hcos.ms)))
             f_sat_array = f_cen_array.copy()
             for i, freq in enumerate(np.array(exp.freq_GHz*1e9)):
-                #TODO: make this cleaner
                 freq = np.array([freq])
-                f_cen_array[i, :, :] = self.hcos.get_fcen(freq)[:,:,0]
-                f_sat_array[i, :, :] = self.hcos.get_fsat(freq, cibinteg='trap', satmf='Tinker')[:,:,0]
-
+                f_cen_array[i, :, :] = tls.from_Jypersr_to_uK(freq[0]*1e-9) * self.hcos.get_fcen(freq)[:,:,0]
+                f_sat_array[i, :, :] = tls.from_Jypersr_to_uK(freq[0]*1e-9)\
+                                       * self.hcos.get_fsat(freq, cibinteg='trap', satmf='Tinker')[:,:,0]
             # Compute \Sum_{\nu} f^{\nu}(z,M) w^{\nu, ILC}_l
             self.CIB_central_filter = np.sum(exp.ILC_weights[:,:,None,None] * f_cen_array, axis=1)
             self.CIB_satellite_filter = np.sum(exp.ILC_weights[:,:,None,None] * f_sat_array, axis=1)
         else:
             # Single-frequency scenario. Return two (nZs, nMs) array containing f_cen(M,z) and f_sat(M,z)
             # Compute \Sum_{\nu} f^{\nu}(z,M) w^{\nu, ILC}_l
-            self.CIB_central_filter = self.hcos.get_fcen(exp.freq_GHz*1e9)[:,:,0][np.newaxis,:,:]
-            self.CIB_satellite_filter = self.hcos.get_fsat(exp.freq_GHz*1e9, cibinteg='trap',
-                                                           satmf='Tinker')[:,:,0][np.newaxis,:,:]
+            self.CIB_central_filter = tls.from_Jypersr_to_uK(exp.freq_GHz)\
+                                      * self.hcos.get_fcen(exp.freq_GHz*1e9)[:,:,0][np.newaxis,:,:]
+            self.CIB_satellite_filter = tls.from_Jypersr_to_uK(exp.freq_GHz) \
+                                        * self.hcos.get_fsat(exp.freq_GHz*1e9, cibinteg='trap',
+                                                             satmf='Tinker')[:,:,0][np.newaxis,:,:]
 
     def get_cib_auto_biases(self, exp, fftlog_way=True, get_secondary_bispec_bias=False, bin_width_out=30, \
                      bin_width_out_second_bispec_bias=250, parallelise_secondbispec=True, damp_1h_prof=True,
