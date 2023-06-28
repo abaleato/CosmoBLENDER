@@ -128,11 +128,11 @@ def calculate_cl_bias(pix, clee, clpp, lbins, clee_ls=None, clpp_ls=None, aux_e_
 
     return ret.get_ml(lbins)
 
-def gal_window(zs, gzs, gdndz=None):
+def gal_window(hcos, zs, gzs, gdndz=None):
     """ Galaxy window function
     zs = zs at which we want to evaluate the dndz
     gzs = zs at which dndz is defined
-    gdndz = H(z)*dndz
+    gdndz = dndz, need not be normalized (we'll do that here)
     """
     gzs = np.array(gzs).reshape(-1)
     if gzs.size > 1:
@@ -140,7 +140,8 @@ def gal_window(zs, gzs, gdndz=None):
         Wz2s = gdndz / nznorm
     else:
         Wz2s = np.ones_like(gzs)
-    return np.interp(zs, gzs, Wz2s, left=0, right=0)
+    # TODO: do we need factors of a here?
+    return hcos.h_of_z(zs) * np.interp(zs, gzs, Wz2s, left=0, right=0)
 
 def y_window(hcos):
     """ Window function for tSZ projection. In theory this is just W(chi)=a(chi) (see Appendix A of Hill & Pajer 13)
@@ -148,6 +149,12 @@ def y_window(hcos):
        profile, which in addition has y_3D_hmvec = y_3D_theory /H(chi)
     """
     return hcos.h_of_z(hcos.zs)
+
+def CIB_window(hcos):
+    """ Window function for CIB projection. In theory this is just W(chi)=a(chi), and in fact this is also the form that
+        matches our implementation
+    """
+    return (1+hcos.zs)**-1
 
 def my_lensing_window(hcos, zs, dndz=None):
     """

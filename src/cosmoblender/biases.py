@@ -286,7 +286,6 @@ class hm_framework:
         conversion_factor = np.nan_to_num(1 / (0.5 * ells_out*(ells_out+1) )) if fftlog_way else ql.spec.cl2cfft(np.nan_to_num(1 / (0.5 * np.arange(self.lmax_out+1)*(np.arange(self.lmax_out+1)+1) )),exp.pix).fft
 
         # Integrate over z
-        # Note that the window function for tSZ is just unity bc the a(z) is absorbed into the projected y profile
         yyyy_trispec_intgrnd = self.T_CMB**4 * tls.limber_itgrnd_kernel(hcos, 4) * tls.y_window(hcos)**4
         kyy_bispec_intgrnd = 2 * self.T_CMB**2 * tls.limber_itgrnd_kernel(hcos, 3) * tls.my_lensing_window(hcos, 1100.)\
                              * tls.y_window(hcos)**2
@@ -398,13 +397,10 @@ class hm_framework:
             twoH_cross[...,i] = np.trapz(itgnd_2h_2g,hcos.ms,axis=-1) * (tmpCorr + self.g_consistency[i]) * pk
 
         # Integrate over z
-        exp.biases['tsz']['cross_w_gals']['1h'] = self.T_CMB**2 \
-                                                 * np.trapz(oneH_cross * hcos.comoving_radial_distance(hcos.zs)**-4
-                                                            * hcos.h_of_z(hcos.zs)
-                                                            * tls.gal_window(hcos.zs, gzs, gdndz), hcos.zs,axis=-1)
-        exp.biases['tsz']['cross_w_gals']['2h'] = self.T_CMB**2 \
-                                                 * np.trapz(twoH_cross * hcos.comoving_radial_distance(hcos.zs)**-4\
-                                                            * hcos.h_of_z(hcos.zs)*tls.gal_window(hcos.zs),hcos.zs,axis=-1)
+        gyy_intgrnd = self.T_CMB ** 2 * tls.limber_itgrnd_kernel(hcos, 3) \
+                      * tls.gal_window(hcos, hcos.zs, gzs, gdndz) * tls.y_window(hcos) ** 2
+        exp.biases['tsz']['cross_w_gals']['1h'] = np.trapz(oneH_cross * gyy_intgrnd, hcos.zs, axis=-1)
+        exp.biases['tsz']['cross_w_gals']['2h'] = np.trapz(twoH_cross * gyy_intgrnd, hcos.zs, axis=-1)
         if fftlog_way:
             exp.biases['ells'] = np.arange(self.lmax_out+1)
             return
@@ -452,8 +448,8 @@ class hm_framework:
             oneH_ps_tz[:,i]=np.trapz(itgnd_1h_ps_tSZ,hcos.ms,axis=-1)
 
         # Integrate over z
-        ps_oneH_tSZ = self.T_CMB**2 * np.trapz( oneH_ps_tz * 1. / hcos.comoving_radial_distance(hcos.zs) ** 2\
-                                                   * (hcos.h_of_z(hcos.zs)), hcos.zs, axis=-1)
+        yy_integrand = self.T_CMB ** 2 * tls.limber_itgrnd_kernel(hcos, 2) * tls.y_window(hcos) ** 2
+        ps_oneH_tSZ = np.trapz( oneH_ps_tz * yy_integrand, hcos.zs, axis=-1)
 
         # ToDo: implement 2 halo term for tSZ PS tests
         ps_twoH_tSZ = np.zeros(ps_oneH_tSZ.shape)
@@ -464,7 +460,11 @@ class hm_framework:
         Calculate galaxy cross CMB lensing spectrum. This is a for a test.
         Input:
             * exp = a qest.experiment object
+            * survey_name = str. Name of the HOD
+            * gzs = array of floats. Redshifts at which the dndz is defined
+            * gdndz = array of floats. dndz of the galaxy sample, at the zs given by gzs. Need not be normalized
             * (optional) damp_1h_prof = Bool. Default is False. Whether to damp the profiles at low k in 1h terms
+            * (optional) fftlog_way = Boolean. If true, use 1D fftlog reconstructions, otherwise use 2D quicklens
         """
         hcos = self.hcos
         self.get_galaxy_consistency(exp, survey_name)
@@ -528,15 +528,13 @@ class hm_framework:
             if not fftlog_way:
                 pk = ql.spec.cl2cfft(pk, exp.pix).fft
 
-            twoH_ps[:, i] = (np.trapz(itgnd_2h_1g, hcos.ms, axis=-1) +self.g_consistency[i])\
-                            * (np.trapz(itgnd_2h_1m, hcos.ms, axis=-1) +self.m_consistency[i]) * pk
+            twoH_ps[:, i] = (np.trapz(itgnd_2h_1g, hcos.ms, axis=-1) + self.g_consistency[i])\
+                            * (np.trapz(itgnd_2h_1m, hcos.ms, axis=-1) + self.m_consistency[i]) * pk
         # Integrate over z
-        ps_oneH = np.trapz( oneH_ps * 1. / hcos.comoving_radial_distance(hcos.zs) ** 2
-                            * tls.my_lensing_window(hcos, 1100.)
-                            * tls.gal_window(hcos.zs, gzs, gdndz), hcos.zs, axis=-1)
-        ps_twoH = np.trapz( twoH_ps * 1. / hcos.comoving_radial_distance(hcos.zs) ** 2
-                            * tls.my_lensing_window(hcos, 1100.)
-                            * tls.gal_window(hcos.zs, gzs, gdndz), hcos.zs, axis=-1)
+        gk_intgrnd = tls.limber_itgrnd_kernel(hcos, 2) * tls.gal_window(hcos, hcos.zs, gzs, gdndz)\
+                     * tls.my_lensing_window(hcos, 1100.)
+        ps_oneH = np.trapz( oneH_ps * gk_intgrnd, hcos.zs, axis=-1)
+        ps_twoH = np.trapz( twoH_ps * gk_intgrnd, hcos.zs, axis=-1)
         return ps_oneH, ps_twoH
 
     def get_CIB_filters(self, exp):
@@ -566,7 +564,8 @@ class hm_framework:
                                                            satmf='Tinker')[:,:,0][np.newaxis,:,:]
 
     def get_cib_auto_biases(self, exp, fftlog_way=True, get_secondary_bispec_bias=False, bin_width_out=30, \
-                     bin_width_out_second_bispec_bias=250, parallelise_secondbispec=True, damp_1h_prof=True):
+                     bin_width_out_second_bispec_bias=250, parallelise_secondbispec=True, damp_1h_prof=True,
+                     cib_consistency=True):
         """
         Calculate the CIB biases to the CMB lensing auto-spectrum (C^{\phi\phi}_L)
         given an "experiment" object (defined in qest.py)
@@ -578,12 +577,16 @@ class hm_framework:
             * (optional) bin_width_out_second_bispec_bias = int. Bin width of the output secondary bispectrum bias
             * (optional) parallelise_secondbispec = bool.
             * (optional) damp_1h_prof = Bool. Default is False. Whether to damp the profiles at low k in 1h terms
+            * (optional) cib_consistency = Bool. Whether to impose consistency condition on CIB to correct for missing
+                                          low mass halos in integrals. A la Schmidt 15
         """
         hcos = self.hcos
 
         # Pre-calculate consistency for 2h integrals
         self.get_matter_consistency(exp)
         self.get_cib_consistency(exp, lmax_proj=exp.lmax)
+        if not cib_consistency:
+            self.I_consistency = np.zeros_like(self.I_consistency)
 
         # Compute effective CIB weights, including f_cen and f_sat factors as well as possibly fg cleaning
         self.get_CIB_filters(exp)
@@ -736,11 +739,10 @@ class hm_framework:
         # Convert the NFW profile in the cross bias from kappa to phi (bc the QEs give phi)
         conversion_factor = np.nan_to_num(1 / (0.5 * ells_out*(ells_out+1) )) if fftlog_way else ql.spec.cl2cfft(np.nan_to_num(1 / (0.5 * np.arange(self.lmax_out+1)*(np.arange(self.lmax_out+1)+1) )),exp.pix).fft
 
-        # itgnd factors from Limber projection (adapted to hmvec conventions)
+        # itgnd factors from Limber projection
         # kII_itgnd has a perm factor of 2
-        IIII_itgnd = (1+hcos.zs)**-4 * hcos.comoving_radial_distance(hcos.zs)**-6 * hcos.h_of_z(hcos.zs)**-1
-        kII_itgnd  = 2 * (1+hcos.zs)**-2 * hcos.comoving_radial_distance(hcos.zs)**-4 \
-                     * tls.my_lensing_window(hcos, 1100.) / hcos.h_of_z(hcos.zs)
+        IIII_itgnd = tls.limber_itgrnd_kernel(hcos, 4) * tls.CIB_window(hcos)**4
+        kII_itgnd = 2 * tls.limber_itgrnd_kernel(hcos, 3) * tls.my_lensing_window(hcos, 1100.) * tls.CIB_window(hcos)**2
 
         # Integrate over z
         exp.biases['cib']['trispec']['1h'] = np.trapz( IIII_itgnd*IIII_1h, hcos.zs, axis=-1)
@@ -855,14 +857,11 @@ class hm_framework:
 
 
         # itgnd factors from Limber projection (adapted to hmvec conventions)
-        # Note there's only a (1+z)**-2 dependence. This is bc there's another factor of (1+z)**-1 in the gal_window
-        # TODO: check all of these factors!
-        kII_itgnd  = hcos.h_of_z(hcos.zs)**-1 * (1+hcos.zs)**-2 * hcos.comoving_radial_distance(hcos.zs)**-4 \
-                     * tls.gal_window(hcos.zs, gzs, gdndz)
+        gII_itgnd = tls.limber_itgrnd_kernel(hcos, 3) * tls.gal_window(hcos, hcos.zs, gzs, gdndz) * tls.CIB_window(hcos)**2
 
         # Integrate over z
-        exp.biases['cib']['cross_w_gals']['1h'] = np.trapz( oneH_cross*kII_itgnd, hcos.zs, axis=-1)
-        exp.biases['cib']['cross_w_gals']['2h'] = np.trapz( twoH_cross*kII_itgnd, hcos.zs, axis=-1)
+        exp.biases['cib']['cross_w_gals']['1h'] = np.trapz( oneH_cross*gII_itgnd, hcos.zs, axis=-1)
+        exp.biases['cib']['cross_w_gals']['2h'] = np.trapz( twoH_cross*gII_itgnd, hcos.zs, axis=-1)
 
         if fftlog_way:
             exp.biases['ells'] = np.arange(self.lmax_out+1)
@@ -966,16 +965,12 @@ class hm_framework:
             twoH_cross[...,i] = np.trapz(itgnd_2h_II,hcos.ms,axis=-1) * (tmpCorr + self.g_consistency[i]) * pk
 
         # itgnd factors from Limber projection (adapted to hmvec conventions)
-        # Note there's only a (1+z)**-1 dependence. This is because there's another factor of (1+z)**-1 in the gal_window
-        gIy_itgnd  = (1+hcos.zs)**-1 * hcos.comoving_radial_distance(hcos.zs)**-4
+        gIy_itgnd = 2 * tls.scale_sz(exp.freq_GHz) * self.T_CMB * tls.limber_itgrnd_kernel(hcos, 3)\
+                    * tls.gal_window(hcos, hcos.zs, gzs, gdndz) * tls.CIB_window(hcos) * tls.y_window(hcos)
 
         # Integrate over z
-        exp.biases['mixed']['cross_w_gals']['1h'] = tls.scale_sz(exp.freq_GHz) * self.T_CMB \
-                                                    * np.trapz( 2 * oneH_cross*gIy_itgnd
-                                                                * tls.gal_window(hcos.zs, gzs, gdndz), hcos.zs, axis=-1)
-        exp.biases['mixed']['cross_w_gals']['2h'] = tls.scale_sz(exp.freq_GHz) * self.T_CMB \
-                                                    * np.trapz(twoH_cross*gIy_itgnd
-                                                               * tls.gal_window(hcos.zs, gzs, gdndz), hcos.zs, axis=-1)
+        exp.biases['mixed']['cross_w_gals']['1h'] = np.trapz( oneH_cross*gIy_itgnd, hcos.zs, axis=-1)
+        exp.biases['mixed']['cross_w_gals']['2h'] = np.trapz(twoH_cross*gIy_itgnd, hcos.zs, axis=-1)
 
         if fftlog_way:
             exp.biases['ells'] = np.arange(self.lmax_out+1)
@@ -986,7 +981,7 @@ class hm_framework:
             exp.biases['mixed']['cross_w_gals']['2h'] = ql.maps.cfft(exp.nx,exp.dx,fft=exp.biases['mixed']['cross_w_gals']['2h']).get_ml(lbins).specs['cl']
             return
 
-    def get_cib_ps(self, exp, damp_1h_prof=True):
+    def get_cib_ps(self, exp, damp_1h_prof=True, cib_consistency=True):
         """
         Calculate the CIB power spectrum.
 
@@ -997,12 +992,17 @@ class hm_framework:
         Input:
             * exp = a qest.experiment object
             * (optional) damp_1h_prof = Bool. Default is False. Whether to damp the profiles at low k in 1h terms
+            * (optional) cib_consistency = Bool. Whether to enforce consistency condition correcting for lack of low mass
+                                    halos in truncated integral. When using hmvec/Planck/Viero best fit params, must
+                                    be False.
         """
         hcos = self.hcos
         # Compute effective CIB weights, including f_cen and f_sat factors as well as possibly fg cleaning
         self.get_CIB_filters(exp)
         # Compute consistency relation for 2h term
         self.get_cib_consistency(exp)
+        if not cib_consistency:
+            self.I_consistency = np.zeros_like(self.I_consistency)
 
         nx = self.lmax_out+1
 
@@ -1042,13 +1042,11 @@ class hm_framework:
             pk = tls.pkToPell(hcos.comoving_radial_distance(hcos.zs[i]), hcos.ks, hcos.Pzk[i], ellmax=self.lmax_out)
             twoH_ps[:, i] = (np.trapz(itgnd_2h_1g, hcos.ms, axis=-1) +self.I_consistency[i])** 2 * pk
 
+
         # Integrate over z
-        clCIBCIB_oneH_ps = np.trapz(
-            oneH_ps * (1 + hcos.zs) ** -2 * hcos.comoving_radial_distance(hcos.zs) ** -2 *
-            (hcos.h_of_z(hcos.zs) ** -1), hcos.zs, axis=-1)
-        clCIBCIB_twoH_ps = np.trapz(
-            twoH_ps * (1 + hcos.zs) ** -2 * hcos.comoving_radial_distance(hcos.zs) ** -2 *
-            (hcos.h_of_z(hcos.zs) ** -1), hcos.zs, axis=-1)
+        II_itgrnd = tls.limber_itgrnd_kernel(hcos, 2) * tls.CIB_window(hcos) ** 2
+        clCIBCIB_oneH_ps = np.trapz( oneH_ps * II_itgrnd, hcos.zs, axis=-1)
+        clCIBCIB_twoH_ps = np.trapz( twoH_ps * II_itgrnd, hcos.zs, axis=-1)
         return clCIBCIB_oneH_ps, clCIBCIB_twoH_ps
 
     def get_mixed_auto_biases(self, exp, fftlog_way=True, get_secondary_bispec_bias=False, bin_width_out=30, \
@@ -1287,12 +1285,11 @@ class hm_framework:
         conversion_factor = np.nan_to_num(1 / (0.5 * ells_out*(ells_out+1) )) if fftlog_way else ql.spec.cl2cfft(np.nan_to_num(1 / (0.5 * np.arange(self.lmax_out+1)*(np.arange(self.lmax_out+1)+1) )),exp.pix).fft
 
         # itgnd factors from Limber projection (adapted to hmvec conventions)
-        Iyyy_itgnd = 4 * (1+hcos.zs)**-1 * hcos.comoving_radial_distance(hcos.zs)**-6 * hcos.h_of_z(hcos.zs)**2
-        IIyy_itgnd = 2 * (1+hcos.zs)**-2 * hcos.comoving_radial_distance(hcos.zs)**-6 * hcos.h_of_z(hcos.zs)
+        Iyyy_itgnd = 4 * tls.limber_itgrnd_kernel(hcos, 4) * tls.CIB_window(hcos) * tls.y_window(hcos)**3
+        IIyy_itgnd = 2 * tls.limber_itgrnd_kernel(hcos, 4) * tls.CIB_window(hcos)**2 * tls.y_window(hcos)**2
         IyIy_itgnd = 2 * IIyy_itgnd
-        yIII_itgnd = 4 * (1+hcos.zs)**-3 * hcos.comoving_radial_distance(hcos.zs)**-6
-        # kIy_itgnd contains a perm factor of 2 is for the exchange of I and y relative to the cib or tsz only cases
-        kIy_itgnd  = 4 * (1+hcos.zs)**-1 * hcos.comoving_radial_distance(hcos.zs)**-4 \
+        yIII_itgnd = 4 * tls.limber_itgrnd_kernel(hcos, 4) * tls.CIB_window(hcos)**3 * tls.y_window(hcos)
+        kIy_itgnd  = 4 * tls.limber_itgrnd_kernel(hcos, 3) * tls.CIB_window(hcos) * tls.y_window(hcos) \
                      * tls.my_lensing_window(hcos, 1100.)
 
         # Integrate over z
