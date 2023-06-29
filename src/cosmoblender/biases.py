@@ -150,7 +150,8 @@ class hm_framework:
         self.I_consistency = ((1 - I)/(self.hcos.ms[0]/self.hcos.rho_matter_z(0)))[:,None]*W_of_Mlow # Function of z & k
 
     def get_tsz_auto_biases(self, exp, fftlog_way=True, get_secondary_bispec_bias=False, bin_width_out=30, \
-                     bin_width_out_second_bispec_bias=250, parallelise_secondbispec=True, damp_1h_prof=True):
+                     bin_width_out_second_bispec_bias=250, parallelise_secondbispec=True, damp_1h_prof=True,
+                     tsz_consistency=False):
         """
         Calculate the tsz biases to the CMB lensing auto-spectrum (C^{\phi\phi}_L)
         given an "experiment" object (defined in qest.py)
@@ -162,10 +163,14 @@ class hm_framework:
             * (optional) bin_width_out_second_bispec_bias = int. Bin width of the output secondary bispectrum bias
             * (optional) parallelise_secondbispec = bool.
             * (optional) damp_1h_prof = Bool. Default is False. Whether to damp the profiles at low k in 1h terms
+            * (optional) tsz_consistency = Bool. Whether to impose consistency condition on g to correct for missing
+                  low mass halos in integrals a la Schmidt 15. Typically not needed
         """
         hcos = self.hcos
         self.get_matter_consistency(exp)
         self.get_tsz_consistency(exp, lmax_proj=exp.lmax)
+        if not tsz_consistency:
+            self.tsz_consistency = np.zeros_like(self.tsz_consistency)
 
         # Output ells
         ells_out = np.arange(self.lmax_out+1)
@@ -314,7 +319,8 @@ class hm_framework:
             exp.biases['tsz']['prim_bispec']['2h'] = ql.maps.cfft(exp.nx,exp.dx,fft=exp.biases['tsz']['prim_bispec']['2h']).get_ml(lbins).specs['cl']
             return
 
-    def get_tsz_cross_biases(self, exp, gzs, gdndz, fftlog_way=True, bin_width_out=30, survey_name='LSST', damp_1h_prof=True):
+    def get_tsz_cross_biases(self, exp, gzs, gdndz, fftlog_way=True, bin_width_out=30, survey_name='LSST',
+                             damp_1h_prof=True, gal_consistency=False):
         """
         Calculate the tsz biases to the cross-correlation of CMB lensing with a galaxy survey,
         given an "experiment" object (defined in qest.py)
@@ -326,9 +332,13 @@ class hm_framework:
             * (optional) bin_width_out = int. Bin width of the output lensing reconstruction
             * (optional) survey_name = str. Name labelling the HOD characterizing the survey we are x-ing lensing with
             * (optional) damp_1h_prof = Bool. Default is False. Whether to damp the profiles at low k in 1h terms
+            * (optional) gal_consistency = Bool. Whether to impose consistency condition on g to correct for missing
+                              low mass halos in integrals a la Schmidt 15. Typically not needed
         """
         hcos = self.hcos
         self.get_galaxy_consistency(exp, survey_name)
+        if not gal_consistency:
+            self.g_consistency = np.zeros_like(self.g_consistency)
 
         # Output ells
         ells_out = np.arange(self.lmax_out+1)
@@ -410,7 +420,7 @@ class hm_framework:
             exp.biases['tsz']['cross_w_gals']['2h'] = ql.maps.cfft(exp.nx,exp.dx,fft=exp.biases['tsz']['cross_w_gals']['2h']).get_ml(lbins).specs['cl']
             return
 
-    def get_tsz_ps(self, exp, damp_1h_prof=True):
+    def get_tsz_ps(self, exp, damp_1h_prof=True, gal_consistency=False):
         """
         Calculate the tSZ power spectrum
         Input:
@@ -465,9 +475,13 @@ class hm_framework:
             * gdndz = array of floats. dndz of the galaxy sample, at the zs given by gzs. Need not be normalized
             * (optional) damp_1h_prof = Bool. Default is False. Whether to damp the profiles at low k in 1h terms
             * (optional) fftlog_way = Boolean. If true, use 1D fftlog reconstructions, otherwise use 2D quicklens
+            * (optional) gal_consistency = Bool. Whether to impose consistency condition on g to correct for missing
+                              low mass halos in integrals a la Schmidt 15. Typically not needed
         """
         hcos = self.hcos
         self.get_galaxy_consistency(exp, survey_name)
+        if not gal_consistency:
+            self.g_consistency = np.zeros_like(self.g_consistency)
         self.get_matter_consistency(exp)
 
         # Output ells
@@ -566,7 +580,7 @@ class hm_framework:
 
     def get_cib_auto_biases(self, exp, fftlog_way=True, get_secondary_bispec_bias=False, bin_width_out=30, \
                      bin_width_out_second_bispec_bias=250, parallelise_secondbispec=True, damp_1h_prof=True,
-                     cib_consistency=True):
+                     cib_consistency=False):
         """
         Calculate the CIB biases to the CMB lensing auto-spectrum (C^{\phi\phi}_L)
         given an "experiment" object (defined in qest.py)
@@ -579,7 +593,7 @@ class hm_framework:
             * (optional) parallelise_secondbispec = bool.
             * (optional) damp_1h_prof = Bool. Default is False. Whether to damp the profiles at low k in 1h terms
             * (optional) cib_consistency = Bool. Whether to impose consistency condition on CIB to correct for missing
-                                          low mass halos in integrals. A la Schmidt 15
+                                          low mass halos in integrals a la Schmidt 15. Typically not needed
         """
         hcos = self.hcos
 
@@ -769,7 +783,8 @@ class hm_framework:
             exp.biases['cib']['prim_bispec']['2h'] = ql.maps.cfft(exp.nx,exp.dx,fft=exp.biases['cib']['prim_bispec']['2h']).get_ml(lbins).specs['cl']
             return
 
-    def get_cib_cross_biases(self, exp, gzs, gdndz, fftlog_way=True, bin_width_out=30, survey_name='LSST', damp_1h_prof=True):
+    def get_cib_cross_biases(self, exp, gzs, gdndz, fftlog_way=True, bin_width_out=30, survey_name='LSST',
+                             damp_1h_prof=True, gal_consistency=False):
         """
         Calculate the CIB biases to the cross-correlation of CMB lensing with a galaxy survey,
         given an "experiment" object (defined in qest.py)
@@ -781,9 +796,13 @@ class hm_framework:
             * (optional) bin_width_out = int. Bin width of the output lensing reconstruction
             * (optional) survey_name = str. Name labelling the HOD characterizing the survey we are x-ing lensing with
             * (optional) damp_1h_prof = Bool. Default is False. Whether to damp the profiles at low k in 1h terms
+            * (optional) gal_consistency = Bool. Whether to impose consistency condition on g to correct for missing
+                              low mass halos in integrals a la Schmidt 15. Typically not needed
         """
         hcos = self.hcos
         self.get_galaxy_consistency(exp, survey_name)
+        if not gal_consistency:
+            self.g_consistency = np.zeros_like(self.g_consistency)
 
         # Compute effective CIB weights, including f_cen and f_sat factors as well as possibly fg cleaning
         self.get_CIB_filters(exp)
@@ -873,7 +892,8 @@ class hm_framework:
             exp.biases['cib']['cross_w_gals']['2h'] = ql.maps.cfft(exp.nx,exp.dx,fft=exp.biases['cib']['cross_w_gals']['2h']).get_ml(lbins).specs['cl']
             return
 
-    def get_mixed_cross_biases(self, exp, gzs, gdndz, fftlog_way=True, bin_width_out=30, survey_name='LSST', damp_1h_prof=True):
+    def get_mixed_cross_biases(self, exp, gzs, gdndz, fftlog_way=True, bin_width_out=30, survey_name='LSST',
+                               damp_1h_prof=True, gal_consistency=False):
         """
         Calculate the mixed tsz-cib  biases to the cross-correlation of CMB lensing with a galaxy survey,
         given an "experiment" object (defined in qest.py)
@@ -885,10 +905,13 @@ class hm_framework:
             * (optional) bin_width_out = int. Bin width of the output lensing reconstruction
             * (optional) survey_name = str. Name labelling the HOD characterizing the survey we are x-ing lensing with
             * (optional) damp_1h_prof = Bool. Default is False. Whether to damp the profiles at low k in 1h terms
+            * (optional) gal_consistency = Bool. Whether to impose consistency condition on g to correct for missing
+                              low mass halos in integrals a la Schmidt 15. Typically not needed
         """
         hcos = self.hcos
         self.get_galaxy_consistency(exp, survey_name)
-
+        if not gal_consistency:
+            self.g_consistency = np.zeros_like(self.g_consistency)
         # Compute effective CIB weights, including f_cen and f_sat factors as well as possibly fg cleaning
         self.get_CIB_filters(exp)
         # Get frequency scaling of tSZ, possibly including harmonic ILC cleaning
@@ -982,7 +1005,7 @@ class hm_framework:
             exp.biases['mixed']['cross_w_gals']['2h'] = ql.maps.cfft(exp.nx,exp.dx,fft=exp.biases['mixed']['cross_w_gals']['2h']).get_ml(lbins).specs['cl']
             return
 
-    def get_cib_ps(self, exp, damp_1h_prof=True, cib_consistency=True):
+    def get_cib_ps(self, exp, damp_1h_prof=True, cib_consistency=False):
         """
         Calculate the CIB power spectrum.
 
@@ -1051,7 +1074,8 @@ class hm_framework:
         return clCIBCIB_oneH_ps, clCIBCIB_twoH_ps
 
     def get_mixed_auto_biases(self, exp, fftlog_way=True, get_secondary_bispec_bias=False, bin_width_out=30, \
-                         bin_width_out_second_bispec_bias=250, parallelise_secondbispec=True, damp_1h_prof=True):
+                         bin_width_out_second_bispec_bias=250, parallelise_secondbispec=True, damp_1h_prof=True,
+                         tsz_consistency=False, cib_consistency=False):
         """
         Calculate biases to the CMB lensing auto-spectrum (C^{\phi\phi}_L) from both CIB and tSZ
         given an "experiment" object (defined in qest.py)
@@ -1063,12 +1087,20 @@ class hm_framework:
             * (optional) bin_width_out_second_bispec_bias = int. Bin width of the output secondary bispectrum bias
             * (optional) parallelise_secondbispec = bool.
             * (optional) damp_1h_prof = Bool. Default is False. Whether to damp the profiles at low k in 1h terms
+            * (optional) tsz_consistency = Bool. Whether to impose consistency condition on g to correct for missing
+                              low mass halos in integrals a la Schmidt 15. Typically not needed
+            * (optional) cib_consistency = Bool. Whether to impose consistency condition on CIB to correct for missing
+                              low mass halos in integrals a la Schmidt 15. Typically not needed
         """
         hcos = self.hcos
         # Get consistency conditions for 2h terms
         self.get_matter_consistency(exp)
-        self.get_cib_consistency(exp, lmax_proj=exp.lmax)
         self.get_tsz_consistency(exp, lmax_proj=exp.lmax)
+        self.get_cib_consistency(exp, lmax_proj=exp.lmax)
+        if not tsz_consistency:
+            self.tsz_consistency = np.zeros_like(self.tsz_consistency)
+        if not cib_consistency:
+            self.cib_consistency = np.zeros_like(self.cib_consistency)
 
         # Get frequency scaling of tSZ, possibly including harmonic ILC cleaning
         tsz_filter = exp.get_tsz_filter()
