@@ -64,7 +64,7 @@ def split_positive_negative(spectrum):
 
 def pkToPell(chi,ks,pk,ellmax=9001):
     # State that the argument in P(k) is P(k*chi), and then set l=k*chi so that P(l/chi)
-    interp = interp1d(ks*chi,pk,kind='cubic',bounds_error=False,fill_value=0)
+    interp = interp1d(ks*chi - 0.5,pk,kind='cubic',bounds_error=False,fill_value=0)
     return interp(np.arange(0,ellmax+1))
 
 def cl2cfft_mod(cl, pix, ls=None, right=0, left=None):
@@ -128,11 +128,48 @@ def calculate_cl_bias(pix, clee, clpp, lbins, clee_ls=None, clpp_ls=None, aux_e_
 
     return ret.get_ml(lbins)
 
-def gal_window(zs):
+def gal_window(hcos, zs, gzs, gdndz=None):
     """ Galaxy window function
+    zs = zs at which we want to evaluate the dndz
+    gzs = zs at which dndz is defined
+    gdndz = dndz, need not be normalized (we'll do that here)
     """
-    # Todo:check this
-    return 1./(1.+zs)
+    gzs = np.array(gzs).reshape(-1)
+    if gzs.size > 1:
+        nznorm = np.trapz(gdndz, gzs)
+        Wz2s = gdndz / nznorm
+    else:
+        Wz2s = np.ones_like(gzs)
+    # TODO: do we need factors of a here?
+    return hcos.h_of_z(zs) * np.interp(zs, gzs, Wz2s, left=0, right=0)
+
+def y_window(hcos):
+    """ Window function for tSZ projection. In theory this is just W(chi)=a(chi) (see Appendix A of Hill & Pajer 13)
+       However, here we need to adapt to how things are implemented in hmvec: the a(z) is absorbed into the projected
+       profile, which in addition has y_3D_hmvec = y_3D_theory /H(chi)
+    """
+    return hcos.h_of_z(hcos.zs)
+
+def CIB_window(hcos):
+    """ Window function for CIB projection. In theory this is just W(chi)=a(chi), and in fact this is also the form that
+        matches our implementation
+    """
+    return (1+hcos.zs)**-1
+
+def my_lensing_window(hcos, zs, dndz=None):
+    """
+    Wrapper around hmvec's lensing_window to have W(chi) = dchi/dz W(z) = (c/H) W(z)
+    With this convention, the Limber projection can be obtained using limber_itgrnd_kernel(), but NOT
+    hmvec's cosmology.limber_integral (in that case, use hmvec's lensing_window, but that may only be valid for
+    power spectra)
+    """
+    return hcos.h_of_z(hcos.zs) * hcos.lensing_window(hcos.zs,zs,dndz)
+
+def limber_itgrnd_kernel(hcos, polyspectrum_order):
+    '''
+    Prefactor in Limber integrals of nth-order polyspectra: c/H * chi**(2(1-n))
+    '''
+    return hcos.comoving_radial_distance(hcos.zs) ** (2 * (1 - polyspectrum_order)) / hcos.h_of_z(hcos.zs)
 
 # Functions associated with galaxy hods
 

@@ -4,6 +4,7 @@ import hmvec as hm
 from cosmoblender import qest
 from cosmoblender import tools as tls
 from cosmoblender import biases
+import pyccl as ccl
 
 def test_clbb_bias(hm_calc, exp):
     """ Check the biases to the power spectrum of delensed B-modes"""
@@ -15,10 +16,11 @@ def test_clbb_bias(hm_calc, exp):
     plt.xlabel(r'$l$')
     plt.legend()
 
-def test_cib_ps(hm_object, exp_object, damp_1h_prof=False):
+def test_cib_ps(hm_object, exp_object, damp_1h_prof=True, cib_consistency=False):
     """ Check the CIB power spectrum"""
     # Our calculation
-    clCIBCIB_oneHalo_ps, clCIBCIB_twoHalo_ps = hm_object.get_cib_ps(exp_object, damp_1h_prof=damp_1h_prof)
+    clCIBCIB_oneHalo_ps, clCIBCIB_twoHalo_ps = hm_object.get_cib_ps(exp_object, damp_1h_prof=damp_1h_prof,
+                                                                    cib_consistency=cib_consistency)
     # Compare to Yogesh' calculation
     ells = np.arange(3000)
     PII_yogesh_1h = hm_calc.hcos.get_power_1halo('cib', nu_obs=np.array([exp_object.freq_GHz * 1e9]))
@@ -42,6 +44,104 @@ def test_cib_ps(hm_object, exp_object, damp_1h_prof=False):
 
     plt.title('CIB power spectrum')
 
+def test_gal_cross_lensing(hm_object, exp_object, damp_1h_prof=False):
+    """ Check the galaxy power spectrum from some HODs
+        Note that the HODs ini pyccl and hmvec are not exactly the same, we 're just looking for order-of-magnitude
+        agreement
+    """
+
+    lMmin = 10.5
+    # PYCCL PART
+    # First, set up the projection
+    cosmo = ccl.CosmologyVanillaLCDM()
+    z = np.linspace(0.01, 1, 256)
+    nz = np.exp(-0.5 * ((z - 0.5) / 0.1) ** 2)
+    b1 = np.ones_like(z)
+
+    tracers = {}
+    # Galaxy clustering
+    tracers['g'] = ccl.NumberCountsTracer(cosmo, has_rsd=False, dndz=(z, nz), bias=(z, b1))
+    # CMB lensing
+    tracers['k'] = ccl.CMBLensingTracer(cosmo, z_source=1100)
+
+    # Now get the 3D PS in the halo model of pyccl
+    lk_arr = np.log(np.geomspace(1E-4, 100, 256))
+    a_arr = 1. / (1 + np.linspace(0, 6., 40)[::-1])
+
+    mass_def = ccl.halos.MassDef(200, 'critical')
+    hmf = ccl.halos.MassFuncTinker08(cosmo, mass_def=mass_def)
+    hbf = ccl.halos.HaloBiasTinker10(cosmo, mass_def=mass_def)
+    cm = ccl.halos.ConcentrationDuffy08(mass_def)
+    hmc = ccl.halos.HMCalculator(cosmo, hmf, hbf, mass_def)
+
+    profs = {}
+    # This just defines which of these tracers should be normalized (e.g. overdensities)
+    norm = {}
+
+    # Galaxy clustering
+    profs['g'] = ccl.halos.HaloProfileHOD(cm, lMmin_0=lMmin, siglM_0=np.sqrt(2)*0.2)
+    norm['g'] = True
+    # CMB lensing
+    profs['k'] = ccl.halos.HaloProfileNFW(cm)
+    norm['k'] = True
+
+    tracer_list = list(profs.keys())
+    profs2pt = {f'{t1}-{t2}': ccl.halos.Profile2pt() for t1 in tracer_list for t2 in tracer_list}
+    profs2pt['g-g'] = ccl.halos.Profile2ptHOD()
+
+    pks = {f'{t1}-{t2}': ccl.halos.halomod_Pk2D(cosmo, hmc,
+                                                profs[t1],
+                                                prof_2pt=profs2pt[f'{t1}-{t2}'],
+                                                prof2=profs[t2],
+                                                normprof1=norm[t1],
+                                                normprof2=norm[t2],
+                                                a_arr=a_arr,
+                                                lk_arr=lk_arr)
+           for t1 in tracer_list for t2 in tracer_list}
+
+    ells = np.unique(np.geomspace(2, 2000, 128).astype(int)).astype(float)
+    c_ells = {f'{t1}-{t2}': ccl.angular_cl(cosmo, tracers[t1], tracers[t2], ells, p_of_k_a=pks[f'{t1}-{t2}'])
+              for t1 in tracer_list for t2 in tracer_list}
+
+    plt.figure(figsize=(8, 4))
+    for i1, t1 in enumerate(tracer_list):
+        for t2 in tracer_list[i1:]:
+            plt.plot(ells,  c_ells[f'{t1}-{t2}'] , label=f'{t1}-{t2}')
+        plt.loglog()
+        plt.legend(ncol=2)
+        plt.xlabel(r'$\ell$', fontsize=14)
+        plt.ylabel(r'$C_\ell$', fontsize=14)
+
+    hod_name = "built-in"
+    hm_object.hcos.add_hod(name=hod_name, mthresh=10 ** lMmin + hm_object.hcos.zs * 0.)
+    ells = np.arange(3000)
+
+    # OUR CALCULATION
+    clkg_oneHalo_ps, clkg_twoHalo_ps = hm_object.get_g_cross_kappa(exp_object, hod_name, z, nz, damp_1h_prof=damp_1h_prof)
+    plt.loglog(clkg_oneHalo_ps + clkg_twoHalo_ps, label='total', color='r')
+    plt.loglog(clkg_oneHalo_ps, label='1 halo term', color='g')
+    plt.loglog(clkg_twoHalo_ps, label='2 halo term', color='b')
+
+    # HMVEC CALCULATION
+    Pgm_hmvec_1h = hm_calc.hcos.get_power_1halo("nfw", hod_name)
+    Pgm_hmvec_2h = hm_calc.hcos.get_power_2halo("nfw", hod_name)
+
+    # TODO: Why is the 1-halo term more important than pyccl suggests?
+    clgm_1h_hmvec = hm_calc.hcos.C_kg(ells, hm_object.hcos.zs, hm_object.hcos.ks, Pgm_hmvec_1h, gzs=z, gdndz=nz, lzs=1100.)
+    clgm_2h_hmvec = hm_calc.hcos.C_kg(ells, hm_object.hcos.zs, hm_object.hcos.ks, Pgm_hmvec_2h, gzs=z, gdndz=nz, lzs=1100.)
+
+    plt.loglog(ells, clgm_1h_hmvec + clgm_2h_hmvec, label="Hmvec tot", color='k', ls='-')
+    plt.loglog(ells, clgm_1h_hmvec, label="Hmvec 1h", color='k', ls=':')
+    plt.loglog(ells, clgm_2h_hmvec, label="Hmvec 2h", color='k', ls='--')
+
+    plt.xlabel(r'l')
+    plt.legend()
+    #plt.ylabel(r'$C_l\,[\mathrm{Jy}^2\,\mathrm{sr}^{-1}]$')
+    #plt.xlim([10, 1e4])
+    #plt.ylim([1,3e6])
+
+    plt.title('Galaxy - matter spectrum')
+
 def test_tsz_ps(hm_object):
     """ Check the tSZ power spectrum as a function of the pressure profile xmax out to which we integrate
         by generating plots that should resemble Fig.5 of Battaglia, Bond, Pfrommer & Sievers
@@ -49,6 +149,7 @@ def test_tsz_ps(hm_object):
                 * hm_object = a biases.hm_framework object with the halo model information
 
     """
+    # TODO: this is outdated, use the version in biases.py
     nx_tsz = 10000 # FIXME: clarify what this is
 
     for xmax in range(6):
@@ -96,7 +197,7 @@ def test_tsz_bias(hm_object, experiment):
     plt.loglog(experiment.biases['ells'], -experiment.biases['tsz']['trispec']['2h'], ls='--')
 
 if __name__ == '__main__':
-    which_test = 'test_CIB' # 'test_CIB' or 'test_tSZ' or 'test_clbb_bias'
+    which_test = 'test_gal_cross_lensing' # 'test_CIB' or 'test_tSZ' or 'test_clbb_bias' or 'test_gal_cross_lensing'
 
     # Initialise the experiment and halo model object for which to run the tests
     # This should roughly match the cosmology in Nick's tSZ papers
@@ -171,7 +272,30 @@ if __name__ == '__main__':
         z_max = 4
         hm_calc = biases.hm_framework(m_min=1e12/0.7, cosmoParams=cosmoParams, nZs=nZs, nMasses=nMasses, z_max=z_max)
         # Check CIB power spectrum
-        test_cib_ps(hm_calc, SPT_5e15, damp_1h_prof=True)
+        test_cib_ps(hm_calc, SPT_5e15, damp_1h_prof=True, cib_consistency=False)
+        plt.show()
+
+    elif which_test == 'test_gal_cross_lensing':
+        # Foreground cleaning? Only relevant if many frequencies are provided
+        MV_ILC_bool = True
+        deproject_CIB = False
+        deproject_tSZ = False
+        fg_cleaning_dict = {'MV_ILC_bool': MV_ILC_bool, 'deproject_CIB': deproject_CIB, 'deproject_tSZ': deproject_tSZ}
+
+        SPT_properties = {'nlev_t': np.array([18.]),
+                          'beam_size': np.array([1.]),
+                          'freq_GHz': np.array([545.])}
+
+        # Initialise experiments with various different mass cuts
+        SPT_5e15 = qest.experiment(lmax=3000, massCut_Mvir=5e15, **SPT_properties, **fg_cleaning_dict)
+
+        # Initialise a halo model object for the CIB PS calculation, using mostly default parameters
+        nZs = 20  # 30
+        nMasses = 20  # 30
+        z_max = 3
+        hm_calc = biases.hm_framework(m_min=1e10/0.7, cosmoParams=cosmoParams, nZs=nZs, nMasses=nMasses, z_max=z_max)
+        # Check CIB power spectrum
+        test_gal_cross_lensing(hm_calc, SPT_5e15, damp_1h_prof=True)
         plt.show()
 
     elif which_test=='test_clbb_bias':
