@@ -28,6 +28,7 @@ def get_sec_bispec_bias(lbins, qe_norm_1D, exp_param_dict, cltt_tot, projected_f
         projected_fg_profile_2 = projected_fg_profile_1
 
     if parallelise:
+        # TODO: there's probably better ways than to count explicitly the number of cores
         # Use multiprocessing to speed up calculation
         pool = multiprocessing.Pool(multiprocessing.cpu_count() - 1) # Start as many processes as machine can handle
         # Helper function (pool.map can only take one, iterable input)
@@ -38,10 +39,12 @@ def get_sec_bispec_bias(lbins, qe_norm_1D, exp_param_dict, cltt_tot, projected_f
 
     else:
         second_bispec_bias = np.zeros(lbins.shape)
+        # TODO: JIT this?
         for i, L in enumerate(lbins):
             second_bispec_bias[i] = get_sec_bispec_bias_at_L(projected_fg_profile_1, projected_fg_profile_2, \
                                                                    projected_kappa_profile, exp_param_dict, cltt_tot, L)
     # Finally, normalise the reconstruction
+    # TODO: We're interpolating the norm for every M and z. Should be able to do this just once
     qe_norm_at_L = np.interp(lbins, qe_norm_1D.ls, qe_norm_1D.specs['cl'])
     return second_bispec_bias / (qe_norm_at_L ** 2)
 

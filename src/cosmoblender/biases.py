@@ -189,6 +189,7 @@ class hm_framework:
         twoH_cross = oneH_4pt.copy();
 
         if get_secondary_bispec_bias:
+            # TODO: choose an Lmin that makes sense given Limber
             lbins_sec_bispec_bias = np.arange(10, self.lmax_out + 1, bin_width_out_second_bispec_bias)
             oneH_second_bispec = np.zeros([len(lbins_sec_bispec_bias),self.nZs])+0j
             # Get QE normalisation
@@ -618,6 +619,7 @@ class hm_framework:
         twoH_cross = IIII_1h.copy()
 
         if get_secondary_bispec_bias:
+            # TODO: choose an Lmin that makes sense given Limber
             lbins_sec_bispec_bias = np.arange(10, self.lmax_out + 1, bin_width_out_second_bispec_bias)
             oneH_second_bispec = np.zeros([len(lbins_sec_bispec_bias),self.nZs])+0j
             # Get QE normalisation
@@ -1122,6 +1124,7 @@ class hm_framework:
         IyIy_2h_2_2 = Iyyy_1h.copy(); IyIy_2h_1_3 = Iyyy_1h.copy(); IyIy_1h = Iyyy_1h.copy()
 
         if get_secondary_bispec_bias:
+            # TODO: choose an Lmin that makes sense given Limber
             lbins_sec_bispec_bias = np.arange(10, self.lmax_out + 1, bin_width_out_second_bispec_bias)
             oneH_second_bispec = np.zeros([len(lbins_sec_bispec_bias),self.nZs])+0j
             # Get QE normalisation
