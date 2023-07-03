@@ -170,7 +170,7 @@ class hm_framework:
         self.get_matter_consistency(exp)
         self.get_tsz_consistency(exp, lmax_proj=exp.lmax)
         if not tsz_consistency:
-            self.tsz_consistency = np.zeros_like(self.tsz_consistency)
+            self.y_consistency = np.zeros_like(self.y_consistency)
 
         # Output ells
         ells_out = np.arange(self.lmax_out+1)
@@ -305,7 +305,8 @@ class hm_framework:
         if get_secondary_bispec_bias:
             # Perm factors implemented in the get_secondary_bispec_bias_at_L() function
             # TODO: Why doesn't this use a conversion_factor?
-            exp.biases['tsz']['second_bispec']['1h'] = 0.5 * np.trapz( oneH_second_bispec * kyy_bispec_intgrnd,
+            # TODO: does this give the correct permutation factor of 4?
+            exp.biases['tsz']['second_bispec']['1h'] = 2 * np.trapz( oneH_second_bispec * kyy_bispec_intgrnd,
                                                                        hcos.zs, axis=-1)
             exp.biases['second_bispec_bias_ells'] = lbins_sec_bispec_bias
 
@@ -1100,7 +1101,7 @@ class hm_framework:
         self.get_tsz_consistency(exp, lmax_proj=exp.lmax)
         self.get_cib_consistency(exp, lmax_proj=exp.lmax)
         if not tsz_consistency:
-            self.tsz_consistency = np.zeros_like(self.tsz_consistency)
+            self.y_consistency = np.zeros_like(self.y_consistency)
         if not cib_consistency:
             self.cib_consistency = np.zeros_like(self.cib_consistency)
 

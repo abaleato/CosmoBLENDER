@@ -1,15 +1,16 @@
 # Script to generate secondary bispectrum bias on a cluster
-
-import sys    freq_GHz = np.array([150.])#np.array([27.3, 41.7, 93., 143., 225.,278.])  # [Hz]
-    beam_size = np.array([1.])#np.array([7.4, 5.1, 2.2, 1.4, 1.0, 0.9])  # [arcmin]
-    nlev_t = np.array([18.])#np.array([52., 27., 5.8, 6.3, 15., 37.])  # [muK*arcmin]
+'''
+import sys
 sys.path.insert(0,'/Users/antonbaleatolizancos/Projects/lensing_rec_biases/lensing_rec_biases_code/')
 sys.path.insert(0,'/Users/antonbaleatolizancos/Projects/lensing_rec_biases/')
-import numpy as np
-import matplotlib.pyplot as plt
 from lensing_rec_biases_code import qest
 from lensing_rec_biases_code import biases
+'''
 import time
+import numpy as np
+import matplotlib.pyplot as plt
+from cosmoblender import qest
+from cosmoblender import biases
 
 # Press the green button in the gutter to run the script.
 if __name__ == '__main__':
@@ -19,22 +20,26 @@ if __name__ == '__main__':
     nx = 256
     dx_arcmin = 1.0 * 2
 
-
-    MV_ILC_bool = True
+    # Foreground cleaning? Only relevant if many frequencies are provided
+    MV_ILC_bool = False
+    deproject_CIB = False
+    deproject_tSZ = False
+    fg_cleaning_dict = {'MV_ILC_bool': MV_ILC_bool, 'deproject_CIB': deproject_CIB, 'deproject_tSZ': deproject_tSZ}
+    SPT_properties = {'nlev_t': np.array([18.]),
+                      'beam_size': np.array([1.]),
+                      'freq_GHz': np.array([150.])}
+    # Initialise experiments with various different mass cuts
+    experiment = qest.experiment(lmax=lmax, massCut_Mvir=5e15, **SPT_properties, **fg_cleaning_dict)
 
     # Set CIB halo model
     cib_model = 'planck13'  # 'vierro'
-    # Initialise an experiment object. Store the list of params so we can later initialise it again within multiple processes
-    massCut_Mvir=5e15
-    experiment = qest.experiment(nlev_t, beam_size, lmax, massCut_Mvir,  nx, dx_arcmin, freq_GHz=freq_GHz, MV_ILC_bool=MV_ILC_bool)
-
     # This should roughly match the cosmology in Nick's tSZ papers
     cosmoParams = {'As': 2.4667392631170437e-09, 'ns': .96, 'omch2': (0.25 - .043) * .7 ** 2, 'ombh2': 0.044 * .7 ** 2,
                    'H0': 70.}  # Note that for now there is still cosmology dpendence in the cls defined within the experiment class
 
-    nZs = 30
-    nMasses = 30
-    bin_width_out_second_bispec_bias = 100
+    nZs = 5
+    nMasses = 5
+    bin_width_out_second_bispec_bias = 250
     parallelise_secondbispec = True
 
     # Initialise a halo model object for the calculation, using mostly default parameters
@@ -77,7 +82,6 @@ if __name__ == '__main__':
     ax = plt.gca()
     ax.tick_params(axis='both', which='major', labelsize=8)
     ax.tick_params(axis='both', which='minor', labelsize=8)
-    plt.show()
     plt.savefig('testing_second_bispec_bias_nZs{}_nMasses{}_which_bias{}_bin_width_out_second_bispec_bias{}.png'.format(nZs, nMasses, which_bias, bin_width_out_second_bispec_bias))
     plt.close()
     t1 = time.time()

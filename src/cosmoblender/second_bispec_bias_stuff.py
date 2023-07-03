@@ -91,7 +91,7 @@ def get_sec_bispec_bias_at_L(projected_fg_profile_1, projected_fg_profile_2, pro
     # TODO: implement experiment.ny in addition to experiment.nx
     integral_over_y = np.trapz( integral_over_x, np.roll(ly[:, 0], experiment.nx//2, axis=0), axis=-1)
 
-    return (-2) / np.pi / (2*np.pi)**2 * L**2 * integral_over_y
+    return (-2) / (2*np.pi)**3 * L**2 * integral_over_y
 
 def shift_array(array_to_paste, exp, lx_shift, ly_shift=0):
     """
