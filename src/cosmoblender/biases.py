@@ -70,6 +70,19 @@ class hm_framework:
                + '  z_min: ' + z_min + '  z_max: ' + z_max + '  n_zs: ' + str(self.nZs) +  '\n'\
                +'  Mass function: ' + self.mass_function + '  Mass definition: ' + self.mdef
 
+    def get_picklable_dict(self, exp):
+        hcos = self.hcos
+        dict = {"m_consistency": self.m_consistency, "ms": hcos.ms, "nzm": hcos.nzm, "ms_rescaled": self.ms_rescaled,
+                "cltt_tot": exp.cltt_tot, "qe_norm_1D": exp.qe_norm_1D,
+                "ks": hcos.ks, "comoving_radial_distance": hcos.comoving_radial_distance(hcos.zs),
+                "nfw": hcos.uk_profiles['nfw'], "y": hcos.pk_profiles['y'],
+                "damping_factor": (1 - np.exp(-(hcos.ks / hcos.p['kstar_damping']))),
+                "lmax": exp.lmax, "nx": exp.nx, "dx": exp.dx, "bh_ofM": hcos.bh_ofM, "pix": exp.pix,
+                "lmax_out": self.lmax_out,
+                "tsz_filter": exp.tsz_filter, "massCut": exp.massCut, "y_consistency": self.y_consistency,
+                "Pzk": hcos.Pzk, "nMasses":self.nMasses}
+        return dict
+
     def get_matter_consistency(self, exp):
         """
         Calculate consistency relation for 2-halo term given some mass cut for an integral over dark matter
@@ -194,18 +207,24 @@ class hm_framework:
         if get_secondary_bispec_bias:
             # Get QE normalisation
             exp.qe_norm_1D = exp.qe_norm.get_ml(np.arange(10, self.lmax_out, 40))
+        else:
+            exp.qe_norm_1D = 0
 
         # Run in parallel
-        self.working_exp = exp
+        dict_for_parallel_work = self.get_picklable_dict(exp)
         print('Launching parallel processes...')
+
         with concurrent.futures.ProcessPoolExecutor() as executor:
             n = len(hcos.zs)
-            outputs = executor.map(self.tsZ_auto_itgrnds_each_z, np.arange(n), n*[fftlog_way],
-                                   n*[get_secondary_bispec_bias], n*[parallelise_secondbispec], n*[damp_1h_prof],
-                                   n*[lbins_sec_bispec_bias])
+            fn = test_fn
+            outputs = executor.map(fn, np.arange(n), n * [dict_for_parallel_work], n * [fftlog_way],
+                                   n * [get_secondary_bispec_bias], n * [parallelise_secondbispec], n * [damp_1h_prof],
+                                   n * [lbins_sec_bispec_bias])
+
             for idx, itgnds_at_i in enumerate(outputs):
                 print(idx)
                 oneH_4pt[...,idx], oneH_cross[...,idx], twoH_2_2[...,idx], twoH_1_3[...,idx], twoH_cross[...,idx], oneH_second_bispec[...,idx] = itgnds_at_i
+
 
         # Convert the NFW profile in the cross bias from kappa to phi
         conversion_factor = np.nan_to_num(1 / (0.5 * ells_out*(ells_out+1) )) if fftlog_way else ql.spec.cl2cfft(np.nan_to_num(1 / (0.5 * np.arange(self.lmax_out+1)*(np.arange(self.lmax_out+1)+1) )),exp.pix).fft
@@ -1458,3 +1477,114 @@ class hm_framework:
 
         return cl_Btemp_x_Blens_bias_bcl.ls, cl_Btemp_x_Blens_bias_bcl.specs['cl'],\
                cl_Btemp_x_Btemp_bias_bcl.specs['cl'], cl_Bdel_x_Bdel_bias_array
+
+
+def test_fn(i, d, fftlog_way, get_secondary_bispec_bias, parallelise_secondbispec, damp_1h_prof, lbins_sec_bispec_bias):
+    print(f'Now in parallel loop {i}')
+    nx = d['lmax_out'] + 1 if fftlog_way else d['pix'].nx
+    # Temporary storage
+    itgnd_1h_4pt = np.zeros([nx, d['nMasses']]) + 0j if fftlog_way else np.zeros([nx, nx, d['nMasses']]) + 0j
+    itgnd_1h_cross = itgnd_1h_4pt.copy();
+    itgnd_2h_1_3_trispec = itgnd_1h_4pt.copy();
+    itgnd_2h_2_2_trispec = itgnd_1h_4pt.copy();
+    itgnd_2h_1g = itgnd_1h_4pt.copy();
+    itgnd_2h_2g = itgnd_1h_4pt.copy();
+    integ_1h_for_2htrispec = np.zeros([nx, d['nMasses']]) if fftlog_way else np.zeros([nx, nx, d['nMasses']])
+    itgnd_1h_second_bispec = np.zeros([len(lbins_sec_bispec_bias), d['nMasses']]) + 0j
+
+    # Project the matter power spectrum for two-halo terms
+    pk_of_l = tls.pkToPell(d['comoving_radial_distance'][i], d['ks'], d['Pzk'][i], ellmax=d['lmax'])
+    pk_of_L = tls.pkToPell(d['comoving_radial_distance'][i], d['ks'], d['Pzk'][i], ellmax=d['lmax_out'])
+    if not fftlog_way:
+        pk_of_l = ql.spec.cl2cfft(pk_of_l, d['pix']).fft
+        pk_of_L = ql.spec.cl2cfft(pk_of_L, d['pix']).fft
+
+    # Integral over M for 2halo trispectrum. This will later go into a QE
+    for j, m in enumerate(d['ms']):
+        if m > d['massCut']: continue
+        y = d['tsz_filter'] * tls.pkToPell(d['comoving_radial_distance'][i], d['ks'],
+                                      d['y'][i, j], ellmax=d['lmax'])
+        integ_1h_for_2htrispec[..., j] = y * d['nzm'][i, j] * d['bh_ofM'][i, j]
+
+    # Do the 1- integral in the 1-3 trispectrum and impose consistency condition
+    int_over_M_of_profile = pk_of_l * (np.trapz(integ_1h_for_2htrispec, d['ms'], axis=-1) + d['y_consistency'][i])
+
+    # M integral.
+    print(f'Now in parallel loop {i}, about to enter M loop')
+
+    for j, m in enumerate(d['ms']):
+        if m > d['massCut']: continue
+        y = d['tsz_filter'] * tls.pkToPell(d['comoving_radial_distance'][i], d['ks'], d['y'][i, j],
+                                           ellmax=d['lmax_out'])
+        kap = tls.pkToPell(d['comoving_radial_distance'][i],
+                           d['ks'], d['nfw'][i, j], ellmax=d['lmax_out'])
+
+        kfft = kap * d['ms_rescaled'][j] if fftlog_way else ql.spec.cl2cfft(kap, d['pix']).fft * d['ms_rescaled'][j]
+
+        phicfft = exp.get_TT_qe(fftlog_way, ells_out, y, y)
+        phicfft_mixed = exp.get_TT_qe(fftlog_way, ells_out, y, int_over_M_of_profile)
+
+        # Consider damping the profiles at low k in 1h terms to avoid it exceeding many-halo amplitude
+        if damp_1h_prof:
+            y_damp = d['tsz_filter'] * \
+                     tls.pkToPell(d['comoving_radial_distance'][i], d['ks'], d['y'][i, j] * d['damping_factor'],
+                                  ellmax=d['lmax'])
+            kap_damp = tls.pkToPell(d['comoving_radial_distance'][i],
+                                    d['ks'], d['nfw'][i, j], ellmax=d['lmax_out'])
+            kfft_damp = kap_damp * d['ms_rescaled'][j] if fftlog_way else ql.spec.cl2cfft(kap_damp, d['pix']).fft * \
+                                                                          d['ms_rescaled'][j]
+            phicfft_damp = exp.get_TT_qe(fftlog_way, ells_out, y_damp, y_damp)
+        else:
+            y_damp = y;
+            kfft_damp = kfft;
+            phicfft_damp = phicfft
+
+        # Accumulate the itgnds
+        itgnd_1h_cross[..., j] = phicfft_damp * np.conjugate(kfft_damp) * d['nzm'][i, j]
+        itgnd_1h_4pt[..., j] = phicfft_damp * np.conjugate(phicfft_damp) * d['nzm'][i, j]
+        itgnd_2h_1g[..., j] = np.conjugate(kfft) * d['nzm'][i, j] * d['bh_ofM'][i, j]
+        itgnd_2h_2g[..., j] = phicfft * d['nzm'][i, j] * d['bh_ofM'][i, j]
+        itgnd_2h_1_3_trispec[..., j] = phicfft * np.conjugate(phicfft_mixed) * d['nzm'][i, j] * d['bh_ofM'][i, j]
+        itgnd_2h_2_2_trispec[..., j] = phicfft * d['nzm'][i, j] * d['bh_ofM'][i, j]
+
+        if get_secondary_bispec_bias:
+            # Temporary secondary bispectrum bias stuff
+            # The part with the nested lensing reconstructions
+            exp_param_dict = {'lmax': d['lmax'], 'nx':d['nx'], 'dx_arcmin': d['dx'] * 60. * 180. / np.pi}
+            # Get the kappa map, up to lmax rather than lmax_out as was needed in other terms
+            if damp_1h_prof:
+                kap_secbispec = tls.pkToPell(d['comoving_radial_distance'][i], d['ks'],
+                                             d['nfw'][i, j], ellmax=d['lmax'])
+            else:
+                kap_secbispec = tls.pkToPell(d['comoving_radial_distance'][i], d['ks'],
+                                             d['nfw'][i, j] * d['damping_factor'], ellmax=d['lmax'])
+            sec_bispec_rec = sbbs.get_sec_bispec_bias(lbins_sec_bispec_bias, d['qe_norm_1D'],
+                                                      exp_param_dict, d['cltt_tot'],
+                                                      y_damp, kap_secbispec * d['ms_rescaled'][j],
+                                                      parallelise=parallelise_secondbispec)
+            itgnd_1h_second_bispec[..., j] = d['nzm'][i, j] * sec_bispec_rec
+            # TODO:add the 2-halo term. Should be easy.
+    # Perform the m integrals
+    oneH_4pt_at_i, = np.trapz(itgnd_1h_4pt, d['ms'], axis=-1)
+    oneH_cross_at_i = np.trapz(itgnd_1h_cross, d['ms'], axis=-1)
+    oneH_second_bispec_at_i = np.trapz(itgnd_1h_second_bispec, d['ms'], axis=-1)
+
+    # TODO: apply consistency to 2-2 trispectrum
+    twoH_2_2_at_i = 2 * np.trapz(itgnd_2h_2_2_trispec, d['ms'], axis=-1) ** 2 * pk_of_L
+    twoH_1_3_at_i = 4 * np.trapz(itgnd_2h_1_3_trispec, d['ms'], axis=-1)
+    tmpCorr = np.trapz(itgnd_2h_1g, d['ms'], axis=-1)
+    twoH_cross_at_i = np.trapz(itgnd_2h_2g, d['ms'], axis=-1) * (tmpCorr + d['m_consistency'][i]) * pk_of_L
+
+    return oneH_4pt_at_i, oneH_cross_at_i, twoH_2_2_at_i, twoH_1_3_at_i, twoH_cross_at_i, oneH_second_bispec_at_i
+'''
+
+
+def test_fn(i, d, fftlog_way, get_secondary_bispec_bias, parallelise_secondbispec, damp_1h_prof, lbins_sec_bispec_bias):
+
+
+    # Temporary storage
+    itgnd_1h_4pt = np.zeros([1000, 5]) + 0j if fftlog_way else np.zeros([1000, 1000, 5]) + 0j
+
+
+    return itgnd_1h_4pt, itgnd_1h_4pt, itgnd_1h_4pt, itgnd_1h_4pt, itgnd_1h_4pt, itgnd_1h_4pt
+'''
