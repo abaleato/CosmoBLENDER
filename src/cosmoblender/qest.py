@@ -10,6 +10,18 @@ import sys
 sys.path.insert(0, '/Users/antonbaleatolizancos/Software/BasicILC_py3/')
 import cmb_ilc
 
+class Exp_minimal:
+    """ A helper class to encapsulate some essential attributes of experiment() objects to be passed to parallelized
+        workers, saving as much memory as possible
+        - Inputs:
+            * exp = an instance of the experiment() class
+    """
+    def __init__(self, exp):
+        dict = {"cltt_tot": exp.cltt_tot, "qe_norm_1D": exp.qe_norm_1D, "lmax": exp.lmax, "nx": exp.nx, "dx": exp.dx,
+                "pix": exp.pix, "tsz_filter": exp.tsz_filter, "massCut": exp.massCut, "ls":exp.ls,
+                "cl_len":exp.cl_len, "qest_lib":exp.qest_lib, "ivf_lib":exp.ivf_lib, "qe_norm":exp.qe_norm}
+        self.__dict__ = dict
+
 class experiment:
     def __init__(self, nlev_t=np.array([5.]), beam_size=np.array([1.]), lmax=3500, massCut_Mvir = np.inf, nx=1024,
                  dx_arcmin=1.0, fname_scalar=None, fname_lensed=None, freq_GHz=np.array([150.]), atm_fg=True,
@@ -186,6 +198,19 @@ class experiment:
             self.cltt_tot = np.interp(self.cl_unl.ls, L, np.array(list(map(f, L))))
         # Avoid infinities when dividing by inverse variance
         self.cltt_tot[np.where(np.isnan(self.cltt_tot))] = np.inf
+
+    def __getstate__(self):
+        # this method is called when you are
+        # going to pickle the class, to know what to pickle
+        state = self.__dict__.copy()
+
+        # don't pickle the parameter fun. otherwise will raise
+        # AttributeError: Can't pickle local object 'Process.__init__.<locals>.<lambda>'
+        del state['sky']
+        return state
+
+    def __setstate__(self, state):
+        self.__dict__.update(state)
 
     def get_qe_norm(self, key='ptt'):
         """
