@@ -25,8 +25,9 @@ class Hm_minimal:
                 "comoving_radial_distance": hm_full.hcos.comoving_radial_distance(hm_full.hcos.zs),
                 "uk_profiles": hm_full.hcos.uk_profiles, "pk_profiles": hm_full.hcos.pk_profiles,
                 "p": hm_full.hcos.p, "bh_ofM": hm_full.hcos.bh_ofM, "lmax_out": hm_full.lmax_out,
-                "y_consistency": hm_full.y_consistency, "Pzk": hm_full.hcos.Pzk, "nMasses": hm_full.nMasses,
-                "nZs": hm_full.nZs}
+                "y_consistency": hm_full.y_consistency, "g_consistency": hm_full.g_consistency,
+                "I_consistency": hm_full.I_consistency, "Pzk": hm_full.hcos.Pzk, "nMasses": hm_full.nMasses,
+                "nZs": hm_full.nZs, "hods":hm_full.hcos.hods}
         self.__dict__ = dict
 
 class hm_framework:
@@ -75,6 +76,11 @@ class hm_framework:
         self.hcos.set_cibParams(cib_model)
 
         self.ms_rescaled = self.hcos.ms[...]/self.hcos.rho_matter_z(0)
+
+        self.m_consistency = np.zeros((len(self.hcos.zs)))
+        self.y_consistency = np.zeros((len(self.hcos.zs), self.lmax_out + 1))
+        self.g_consistency = np.zeros((len(self.hcos.zs), self.lmax_out + 1))
+        self.I_consistency = np.zeros((len(self.hcos.zs), self.lmax_out + 1))
 
     def __str__(self):
         """ Print out halo model calculator properties """
@@ -172,7 +178,8 @@ class hm_framework:
                      tsz_consistency=False):
         """
         Calculate the tsz biases to the CMB lensing auto-spectrum (C^{\phi\phi}_L)
-        given an "experiment" object (defined in qest.py)
+        given an "experiment" object (defined in qest.py).
+        Uses serialization/pickling to parallelize the calculation of each z-point in the integrands
         Input:
             * exp = a qest.experiment object
             * (optional) fftlog_way = Boolean. If true, use 1D fftlog reconstructions, otherwise use 2D quicklens
@@ -218,7 +225,6 @@ class hm_framework:
         print('Launching parallel processes...')
         hm_minimal = Hm_minimal(self)
         exp_minimal = qest.Exp_minimal(exp)
-
         with concurrent.futures.ProcessPoolExecutor() as executor:
             n = len(hcos.zs)
             outputs = executor.map(tsZ_auto_itgrnds_each_z, np.arange(n), n * [ells_out], n * [fftlog_way],
@@ -266,6 +272,7 @@ class hm_framework:
         """
         Calculate the tsz biases to the cross-correlation of CMB lensing with a galaxy survey,
         given an "experiment" object (defined in qest.py)
+        Uses serialization/pickling to parallelize the calculation of each z-point in the integrands
         Input:
             * exp = a qest.experiment object
             * gzs = array. Redsfhits at which the dndz is defined. Assumed to be zero otherwise.
@@ -290,63 +297,24 @@ class hm_framework:
         nx = self.lmax_out+1 if fftlog_way else exp.pix.nx
 
         # Get frequency scaling of tSZ, possibly including harmonic ILC cleaning
-        tsz_filter = exp.get_tsz_filter()
+        exp.tsz_filter = exp.get_tsz_filter()
 
         # The one and two halo bias terms -- these store the itgnd to be integrated over z.
         # Dimensions depend on method
         oneH_cross = np.zeros([nx,self.nZs])+0j if fftlog_way else np.zeros([nx,nx,self.nZs])+0j
         twoH_cross = np.zeros([nx,self.nZs])+0j if fftlog_way else np.zeros([nx,nx,self.nZs])+0j
 
-        for i,z in enumerate(hcos.zs):
-            #Temporary storage
-            itgnd_1h_cross =np.zeros([nx,self.nMasses])+0j if fftlog_way else np.zeros([nx,nx,self.nMasses])+0j
-            itgnd_2h_2g = np.zeros([nx,self.nMasses])+0j if fftlog_way else np.zeros([nx,nx,self.nMasses])+0j
-            itgnd_2h_1g = np.zeros([nx,self.nMasses])+0j if fftlog_way else np.zeros([nx,nx,self.nMasses])+0j
+        # Run in parallel
+        print('Launching parallel processes...')
+        hm_minimal = Hm_minimal(self)
+        exp_minimal = qest.Exp_minimal(exp)
+        with concurrent.futures.ProcessPoolExecutor() as executor:
+            n = len(hcos.zs)
+            outputs = executor.map(tsZ_cross_itgrnds_each_z, np.arange(n), n * [ells_out], n * [fftlog_way],
+                                   n * [damp_1h_prof], n * [exp_minimal], n * [hm_minimal], n * [survey_name])
 
-            # M integral.
-            for j,m in enumerate(hcos.ms):
-                if m> exp.massCut: continue
-                y = tsz_filter * tls.pkToPell(hcos.comoving_radial_distance(hcos.zs[i]),hcos.ks,
-                                              hcos.pk_profiles['y'][i,j], ellmax=exp.lmax)
-                # Get the galaxy map --- analogous to kappa in the auto-biases. Note that we need a factor of
-                # H dividing the galaxy window function to translate the hmvec convention to e.g. Ferraro & Hill 18 #TODO: why do you say that?
-                gal = tls.pkToPell(hcos.comoving_radial_distance(hcos.zs[i]),
-                                   hcos.ks,hcos.uk_profiles['nfw'][i,j], ellmax=self.lmax_out)
-                #TODO: should ngal in denominator depend on z? ms_rescaled doesn't
-                galfft = gal / hcos.hods[survey_name]['ngal'][i] if fftlog_way else ql.spec.cl2cfft(gal, exp.pix).fft / hcos.hods[survey_name]['ngal'][i]
-                phicfft = exp.get_TT_qe(fftlog_way, ells_out, y, y)
-
-                # Consider damping the profiles at low k in 1h terms to avoid it exceeding many-halo amplitude
-                if damp_1h_prof:
-                    y_damp = tsz_filter\
-                             * tls.pkToPell(hcos.comoving_radial_distance(hcos.zs[i]), hcos.ks,
-                                            hcos.pk_profiles['y'][i, j]
-                                            *(1 - np.exp(-(hcos.ks / hcos.p['kstar_damping']))), ellmax=exp.lmax)
-                    gal_damp = tls.pkToPell(hcos.comoving_radial_distance(hcos.zs[i]), hcos.ks,
-                                            hcos.uk_profiles['nfw'][i, j]
-                                            *(1 - np.exp(-(hcos.ks / hcos.p['kstar_damping']))), ellmax=self.lmax_out)
-                    galfft_damp = gal_damp / hcos.hods[survey_name]['ngal'][i] if fftlog_way else ql.spec.cl2cfft(gal_damp, exp.pix).fft / hcos.hods[survey_name]['ngal'][i]
-                    phicfft_damp = exp.get_TT_qe(fftlog_way, ells_out, y_damp, y_damp)
-                else:
-                    y_damp = y; gal_damp = gal; galfft_damp = galfft; phicfft_damp = phicfft
-
-                # Accumulate the itgnds
-                mean_Ngal = hcos.hods[survey_name]['Nc'][i, j] + hcos.hods[survey_name]['Ns'][i, j]
-                itgnd_1h_cross[..., j] = mean_Ngal * phicfft_damp * np.conjugate(galfft_damp) * hcos.nzm[i, j]
-                itgnd_2h_1g[..., j] = mean_Ngal * np.conjugate(galfft) * hcos.nzm[i, j] * hcos.bh_ofM[i, j]
-                itgnd_2h_2g[..., j] = phicfft * hcos.nzm[i, j] * hcos.bh_ofM[i, j]
-
-            # Perform the m integrals
-            oneH_cross[...,i]=np.trapz(itgnd_1h_cross,hcos.ms,axis=-1)
-
-            # This is the two halo term. P_k times the M integrals
-            pk = tls.pkToPell(hcos.comoving_radial_distance(hcos.zs[i]),hcos.ks,hcos.Pzk[i], ellmax=self.lmax_out)
-            if not fftlog_way:
-                pk = ql.spec.cl2cfft(pk, exp.pix).fft
-
-            tmpCorr =np.trapz(itgnd_2h_1g,hcos.ms,axis=-1)
-            twoH_cross[...,i] = np.trapz(itgnd_2h_2g,hcos.ms,axis=-1) * (tmpCorr + self.g_consistency[i]) * pk
-            twoH_cross[...,i] = np.trapz(itgnd_2h_2g,hcos.ms,axis=-1) * (tmpCorr + self.g_consistency[i]) * pk
+            for idx, itgnds_at_i in enumerate(outputs):
+                oneH_cross[...,idx], twoH_cross[...,idx] = itgnds_at_i
 
         # Integrate over z
         gyy_intgrnd = self.T_CMB ** 2 * tls.limber_itgrnd_kernel(hcos, 3) \
@@ -571,7 +539,7 @@ class hm_framework:
             itgnd_1h_cross=np.zeros([nx,self.nMasses])+0j if fftlog_way else np.zeros([nx,nx,self.nMasses])+0j
             itgnd_1h_IIII=itgnd_1h_cross.copy(); itgnd_2h_k=itgnd_1h_cross.copy()
             itgnd_2h_II=itgnd_1h_cross.copy(); itgnd_2h_IintIII=itgnd_1h_cross.copy()
-            integ_1h_for_2htrispec=np.zeros([nx,self.nMasses]) if fftlog_way else np.zeros([nx,nx,self.nMasses])
+            integ_1h_for_2htrispec=np.zeros([exp.lmax + 1,self.nMasses]) if fftlog_way else np.zeros([nx,nx,self.nMasses])
 
             if get_secondary_bispec_bias:
                 itgnd_1h_second_bispec = np.zeros([len(lbins_sec_bispec_bias),self.nMasses])+0j
@@ -1376,11 +1344,24 @@ class hm_framework:
         return cl_Btemp_x_Blens_bias_bcl.ls, cl_Btemp_x_Blens_bias_bcl.specs['cl'],\
                cl_Btemp_x_Btemp_bias_bcl.specs['cl'], cl_Bdel_x_Bdel_bias_array
 
-
+#
+# On to the integrands at each z
+#
 
 def tsZ_auto_itgrnds_each_z(i, ells_out, fftlog_way, get_secondary_bispec_bias, parallelise_secondbispec,
                             damp_1h_prof, lbins_sec_bispec_bias, exp_minimal, hm_minimal):
-    # TODO: document
+    """
+    Obtain the integrand at the i-th redshift by doing the integrals over mass and the QE reconstructions.
+    Input:
+        * i = int. Index of the ith redshift in the halo model calculation
+        * fftlog_way = Boolean. If true, use 1D fftlog reconstructions, otherwise use 2D quicklens
+        * get_secondary_bispec_bias = False. Compute and return the secondary bispectrum bias (slow)
+        * parallelise_secondbispec = bool.
+        * damp_1h_prof = Bool. Default is False. Whether to damp the profiles at low k in 1h terms
+        * lbins_sec_bispec_bias = 1D np array. Bins to be used in the secondary bispec bias calculation
+        * exp_minimal = instance of qest.exp_minimal(exp)
+        * hm_minimal = instance of biases.hm_minimal(hm_framework)
+    """
     print(f'Now in parallel loop {i}')
     nx = hm_minimal.lmax_out + 1 if fftlog_way else exp_minimal.pix.nx
     # Temporary storage
@@ -1390,7 +1371,7 @@ def tsZ_auto_itgrnds_each_z(i, ells_out, fftlog_way, get_secondary_bispec_bias, 
     itgnd_2h_2_2_trispec = itgnd_1h_4pt.copy();
     itgnd_2h_1g = itgnd_1h_4pt.copy();
     itgnd_2h_2g = itgnd_1h_4pt.copy();
-    integ_1h_for_2htrispec = np.zeros([nx, hm_minimal.nMasses]) if fftlog_way else np.zeros([nx, nx, hm_minimal.nMasses])
+    integ_1h_for_2htrispec = np.zeros([exp_minimal.lmax + 1, hm_minimal.nMasses]) if fftlog_way else np.zeros([nx, nx, hm_minimal.nMasses]) # TODO: not sure what to do here with nx for QL
     itgnd_1h_second_bispec = np.zeros([len(lbins_sec_bispec_bias), hm_minimal.nMasses]) + 0j
 
     # Project the matter power spectrum for two-halo terms
@@ -1414,7 +1395,7 @@ def tsZ_auto_itgrnds_each_z(i, ells_out, fftlog_way, get_secondary_bispec_bias, 
     for j, m in enumerate(hm_minimal.ms):
         if m > exp_minimal.massCut: continue
         y = exp_minimal.tsz_filter * tls.pkToPell(hm_minimal.comoving_radial_distance[i], hm_minimal.ks, hm_minimal.pk_profiles['y'][i, j],
-                                           ellmax=hm_minimal.lmax_out)
+                                           ellmax=exp_minimal.lmax)
         kap = tls.pkToPell(hm_minimal.comoving_radial_distance[i],
                            hm_minimal.ks, hm_minimal.uk_profiles['nfw'][i, j], ellmax=hm_minimal.lmax_out)
 
@@ -1440,9 +1421,7 @@ def tsZ_auto_itgrnds_each_z(i, ells_out, fftlog_way, get_secondary_bispec_bias, 
                                           exp_minimal.lmax, exp_minimal.cltt_tot, exp_minimal.ls, exp_minimal.cl_len.cltt,
                                           exp_minimal.qest_lib, exp_minimal.ivf_lib, y_damp)
         else:
-            y_damp = y;
-            kfft_damp = kfft;
-            phicfft_damp = phicfft
+            y_damp = y; kfft_damp = kfft; phicfft_damp = phicfft
 
         # Accumulate the itgnds
         itgnd_1h_cross[..., j] = phicfft_damp * np.conjugate(kfft_damp) * hm_minimal.nzm[i, j]
@@ -1455,7 +1434,7 @@ def tsZ_auto_itgrnds_each_z(i, ells_out, fftlog_way, get_secondary_bispec_bias, 
         if get_secondary_bispec_bias:
             # Temporary secondary bispectrum bias stuff
             # The part with the nested lensing reconstructions
-            exp_param_dict = {'lmax': exp_minimal.lmax, 'nx':exp_minimal.nx, 'dx_arcmin': exp_minimal.dx * 60. * 180. / np.pi}
+            exp_param_dict = {'lmax': exp_minimal.lmax, 'nx':nx, 'dx_arcmin': exp_minimal.dx * 60. * 180. / np.pi}
             # Get the kappa map, up to lmax rather than lmax_out as was needed in other terms
             if damp_1h_prof:
                 kap_secbispec = tls.pkToPell(hm_minimal.comoving_radial_distance[i], hm_minimal.ks,
@@ -1482,3 +1461,73 @@ def tsZ_auto_itgrnds_each_z(i, ells_out, fftlog_way, get_secondary_bispec_bias, 
     tmpCorr = np.trapz(itgnd_2h_1g, hm_minimal.ms, axis=-1)
     twoH_cross_at_i = np.trapz(itgnd_2h_2g, hm_minimal.ms, axis=-1) * (tmpCorr + hm_minimal.m_consistency[i]) * pk_of_L
     return oneH_4pt_at_i, oneH_cross_at_i, twoH_2_2_at_i, twoH_1_3_at_i, twoH_cross_at_i, oneH_second_bispec_at_i
+
+def tsZ_cross_itgrnds_each_z(i, ells_out, fftlog_way, damp_1h_prof, exp_minimal, hm_minimal, survey_name):
+    """
+    Obtain the integrand at the i-th redshift by doing the integrals over mass and the QE reconstructions.
+    Input:
+        * i = int. Index of the ith redshift in the halo model calculation
+        * fftlog_way = Boolean. If true, use 1D fftlog reconstructions, otherwise use 2D quicklens
+        * damp_1h_prof = Bool. Default is False. Whether to damp the profiles at low k in 1h terms
+        * exp_minimal = instance of qest.exp_minimal(exp)
+        * hm_minimal = instance of biases.hm_minimal(hm_framework)
+    """
+    print(f'Now in parallel loop {i}')
+    nx = hm_minimal.lmax_out + 1 if fftlog_way else exp_minimal.pix.nx
+    # Temporary storage
+    itgnd_1h_cross = np.zeros([nx, hm_minimal.nMasses]) + 0j if fftlog_way else np.zeros([nx, nx, hm_minimal.nMasses]) + 0j
+    itgnd_2h_2g = np.zeros([nx, hm_minimal.nMasses]) + 0j if fftlog_way else np.zeros([nx, nx, hm_minimal.nMasses]) + 0j
+    itgnd_2h_1g = np.zeros([nx, hm_minimal.nMasses]) + 0j if fftlog_way else np.zeros([nx, nx, hm_minimal.nMasses]) + 0j
+
+    # M integral.
+    for j, m in enumerate(hm_minimal.ms):
+        if m > exp_minimal.massCut: continue
+        y = exp_minimal.tsz_filter * tls.pkToPell(hm_minimal.comoving_radial_distance[i], hm_minimal.ks,
+                                      hm_minimal.pk_profiles['y'][i, j], ellmax=exp_minimal.lmax)
+        # Get the galaxy map --- analogous to kappa in the auto-biases. Note that we need a factor of
+        # H dividing the galaxy window function to translate the hmvec convention to e.g. Ferraro & Hill 18 #TODO: why do you say that?
+        gal = tls.pkToPell(hm_minimal.comoving_radial_distance[i],
+                           hm_minimal.ks, hm_minimal.uk_profiles['nfw'][i, j], ellmax=hm_minimal.lmax_out)
+        # TODO: should ngal in denominator depend on z? ms_rescaled doesn't
+        galfft = gal / hm_minimal.hods[survey_name]['ngal'][i] if fftlog_way else ql.spec.cl2cfft(gal, exp_minimal.pix).fft / \
+                                                                            hm_minimal.hods[survey_name]['ngal'][i]
+        phicfft = qest.get_TT_qe(fftlog_way, ells_out, y, exp_minimal.qe_norm, exp_minimal.pix,
+                                          exp_minimal.lmax, exp_minimal.cltt_tot, exp_minimal.ls, exp_minimal.cl_len.cltt,
+                                          exp_minimal.qest_lib, exp_minimal.ivf_lib, y)
+
+        # Consider damping the profiles at low k in 1h terms to avoid it exceeding many-halo amplitude
+        if damp_1h_prof:
+            y_damp = exp_minimal.tsz_filter \
+                     * tls.pkToPell(hm_minimal.comoving_radial_distance[i], hm_minimal.ks,
+                                    hm_minimal.pk_profiles['y'][i, j]
+                                    * (1 - np.exp(-(hm_minimal.ks / hm_minimal.p['kstar_damping']))), ellmax=exp_minimal.lmax)
+            gal_damp = tls.pkToPell(hm_minimal.comoving_radial_distance[i], hm_minimal.ks,
+                                    hm_minimal.uk_profiles['nfw'][i, j]
+                                    * (1 - np.exp(-(hm_minimal.ks / hm_minimal.p['kstar_damping']))), ellmax=hm_minimal.lmax_out)
+            galfft_damp = gal_damp / hm_minimal.hods[survey_name]['ngal'][i] if fftlog_way else ql.spec.cl2cfft(gal_damp,
+                                                                                                          exp_minimal.pix).fft / \
+                                                                                          hm_minimal.hods[survey_name][
+                                                                                              'ngal'][i]
+            phicfft_damp = qest.get_TT_qe(fftlog_way, ells_out, y_damp, exp_minimal.qe_norm, exp_minimal.pix,
+                                          exp_minimal.lmax, exp_minimal.cltt_tot, exp_minimal.ls, exp_minimal.cl_len.cltt,
+                                          exp_minimal.qest_lib, exp_minimal.ivf_lib, y_damp)
+        else:
+            y_damp = y; gal_damp = gal; galfft_damp = galfft; phicfft_damp = phicfft
+
+        # Accumulate the itgnds
+        mean_Ngal = hm_minimal.hods[survey_name]['Nc'][i, j] + hm_minimal.hods[survey_name]['Ns'][i, j]
+        itgnd_1h_cross[..., j] = mean_Ngal * phicfft_damp * np.conjugate(galfft_damp) * hm_minimal.nzm[i, j]
+        itgnd_2h_1g[..., j] = mean_Ngal * np.conjugate(galfft) * hm_minimal.nzm[i, j] * hm_minimal.bh_ofM[i, j]
+        itgnd_2h_2g[..., j] = phicfft * hm_minimal.nzm[i, j] * hm_minimal.bh_ofM[i, j]
+
+    # Perform the m integrals
+    oneH_cross_at_i = np.trapz(itgnd_1h_cross, hm_minimal.ms, axis=-1)
+
+    # This is the two halo term. P_k times the M integrals
+    pk = tls.pkToPell(hm_minimal.comoving_radial_distance[i], hm_minimal.ks, hm_minimal.Pzk[i], ellmax=hm_minimal.lmax_out)
+    if not fftlog_way:
+        pk = ql.spec.cl2cfft(pk, exp_minimal.pix).fft
+
+    tmpCorr = np.trapz(itgnd_2h_1g, hm_minimal.ms, axis=-1)
+    twoH_cross_at_i = np.trapz(itgnd_2h_2g, hm_minimal.ms, axis=-1) * (tmpCorr + hm_minimal.g_consistency[i]) * pk
+    return oneH_cross_at_i, twoH_cross_at_i
