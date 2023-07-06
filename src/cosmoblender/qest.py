@@ -17,9 +17,10 @@ class Exp_minimal:
             * exp = an instance of the experiment() class
     """
     def __init__(self, exp):
-        dict = {"cltt_tot": exp.cltt_tot, "qe_norm_1D": exp.qe_norm_1D, "lmax": exp.lmax, "nx": exp.nx, "dx": exp.dx,
-                "pix": exp.pix, "tsz_filter": exp.tsz_filter, "massCut": exp.massCut, "ls":exp.ls,
-                "cl_len":exp.cl_len, "qest_lib":exp.qest_lib, "ivf_lib":exp.ivf_lib, "qe_norm":exp.qe_norm}
+        dict = {"cltt_tot": exp.cltt_tot, "qe_norm_at_lbins_sec_bispec": exp.qe_norm_at_lbins_sec_bispec,
+                "lmax": exp.lmax, "nx": exp.nx, "dx": exp.dx, "pix": exp.pix, "tsz_filter": exp.tsz_filter,
+                "massCut": exp.massCut, "ls":exp.ls, "cl_len":exp.cl_len, "qest_lib":exp.qest_lib,
+                "ivf_lib":exp.ivf_lib, "qe_norm":exp.qe_norm_compressed}
         self.__dict__ = dict
 
 class experiment:
@@ -273,7 +274,8 @@ def get_TT_qe(fftlog_way, ell_out, profile_leg1, qe_norm, pix, lmax, cltt_tot=No
         * fftlog_way = Bool. If true, use fftlog reconstruction. Otherwise use quicklens.
         * ell_out = 1D numpy array with the multipoles at which the reconstruction is wanted.
         * profile_leg1 = 1D numpy array. Projected, spherically-symmetric emission profile. Truncated at lmax.
-        * qe_norm = experiment.qe_norm() instance. Contains normalization of QE
+        * qe_norm = if fftlog_way=True, an experiment.qe_norm() instance.
+                    otherwise, a 1D array containg the normalization of the TT QE at ell_out
         * pix = ql.maps.cfft() object. Contains numerical hyperparameters nx and dx
         * lmax = int. Maximum multipole used in the reconstruction
         * (optional) cltt_tot = 1d numpy array. Total power in observed TT fields. Needed if fftlog_way=1
@@ -302,13 +304,9 @@ def get_TT_qe(fftlog_way, ell_out, profile_leg1, qe_norm, pix, lmax, cltt_tot=No
         al_F_1, al_F_2 = get_filtered_profiles_fftlog(profile_leg1, cltt_tot, ls, cltt_len, profile_leg2)
         # Calculate unnormalised QE
         unnorm_TT_qe = unnorm_TT_qe_fftlog(al_F_1, al_F_2, N_l, lmin, alpha, lmax)(ell_out)
-        # Project the QE normalisation to 1D
-        lbins = np.arange(lmin, lmax, norm_bin_width)
-        qe_norm_1D = qe_norm.get_ml(lbins)
-
         # Apply a convention correction to match Quicklens
         conv_corr = 1/(2*np.pi)
-        return conv_corr * np.nan_to_num( unnorm_TT_qe / np.interp(ell_out, qe_norm_1D.ls, qe_norm_1D.specs['cl']) )
+        return conv_corr * np.nan_to_num( unnorm_TT_qe / qe_norm )
     else:
         assert(ivf_lib is not None and qest_lib is not None)
         tft1 = ql.spec.cl2cfft(profile_leg1, pix)

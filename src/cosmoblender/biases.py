@@ -219,11 +219,17 @@ class hm_framework:
 
         lbins_sec_bispec_bias = np.arange(10, self.lmax_out + 1, bin_width_out_second_bispec_bias)
         oneH_second_bispec = np.zeros([len(lbins_sec_bispec_bias), self.nZs]) + 0j
-        if get_secondary_bispec_bias:
-            # Get QE normalisation
-            exp.qe_norm_1D = exp.qe_norm.get_ml(np.arange(10, self.lmax_out, 40))
+        # Get QE normalisation at required multipole bins for secondary bispec bias calculation
+        exp.qe_norm_at_lbins_sec_bispec = exp.qe_norm.get_ml(lbins_sec_bispec_bias).specs['cl']
+
+        # If using FFTLog, we can compress the normalization to 1D
+        if fftlog_way:
+            norm_bin_width = 40  # These are somewhat arbitrary
+            lmin = 1  # These are somewhat arbitrary
+            lbins = np.arange(lmin, exp.lmax, norm_bin_width)
+            exp.qe_norm_compressed = np.interp(ells_out, exp.qe_norm.get_ml(lbins).ls, exp.qe_norm.get_ml(lbins).specs['cl'])
         else:
-            exp.qe_norm_1D = 0
+            exp.qe_norm_compressed = exp.qe_norm
 
         # Run in parallel
         print('Launching parallel processes...')
@@ -307,6 +313,15 @@ class hm_framework:
         # Dimensions depend on method
         oneH_cross = np.zeros([nx,self.nZs])+0j if fftlog_way else np.zeros([nx,nx,self.nZs])+0j
         twoH_cross = np.zeros([nx,self.nZs])+0j if fftlog_way else np.zeros([nx,nx,self.nZs])+0j
+
+        # If using FFTLog, we can compress the normalization to 1D
+        if fftlog_way:
+            norm_bin_width = 40  # These are somewhat arbitrary
+            lmin = 1  # These are somewhat arbitrary
+            lbins = np.arange(lmin, exp.lmax, norm_bin_width)
+            exp.qe_norm_compressed = np.interp(ells_out, exp.qe_norm.get_ml(lbins).ls, exp.qe_norm.get_ml(lbins).specs['cl'])
+        else:
+            exp.qe_norm_compressed = exp.qe_norm
 
         # Run in parallel
         print('Launching parallel processes...')
@@ -521,11 +536,17 @@ class hm_framework:
         # TODO: choose an Lmin that makes sense given Limber
         lbins_sec_bispec_bias = np.arange(10, self.lmax_out + 1, bin_width_out_second_bispec_bias)
         oneH_second_bispec = np.zeros([len(lbins_sec_bispec_bias), self.nZs]) + 0j
-        if get_secondary_bispec_bias:
-            # Get QE normalisation
-            exp.qe_norm_1D = exp.qe_norm.get_ml(np.arange(10, self.lmax_out, 40))
+        # Get QE normalisation at required multipole bins for secondary bispec bias calculation
+        exp.qe_norm_at_lbins_sec_bispec = exp.qe_norm.get_ml(lbins_sec_bispec_bias).specs['cl']
+
+        # If using FFTLog, we can compress the normalization to 1D
+        if fftlog_way:
+            norm_bin_width = 40  # These are somewhat arbitrary
+            lmin = 1  # These are somewhat arbitrary
+            lbins = np.arange(lmin, exp.lmax, norm_bin_width)
+            exp.qe_norm_compressed = np.interp(ells_out, exp.qe_norm.get_ml(lbins).ls, exp.qe_norm.get_ml(lbins).specs['cl'])
         else:
-            exp.qe_norm_1D = 0
+            exp.qe_norm_compressed = exp.qe_norm
 
         # Run in parallel
         print('Launching parallel processes...')
@@ -606,6 +627,15 @@ class hm_framework:
         # The one and two halo bias terms -- these store the itgnd to be integrated over z
         oneH_cross = np.zeros([nx,self.nZs])+0j if fftlog_way else np.zeros([nx,nx,self.nZs])+0j;
         twoH_cross = oneH_cross.copy()
+
+        # If using FFTLog, we can compress the normalization to 1D
+        if fftlog_way:
+            norm_bin_width = 40  # These are somewhat arbitrary
+            lmin = 1  # These are somewhat arbitrary
+            lbins = np.arange(lmin, exp.lmax, norm_bin_width)
+            exp.qe_norm_compressed = np.interp(ells_out, exp.qe_norm.get_ml(lbins).ls, exp.qe_norm.get_ml(lbins).specs['cl'])
+        else:
+            exp.qe_norm_compressed = exp.qe_norm
 
         # Run in parallel
         print('Launching parallel processes...')
@@ -733,7 +763,7 @@ class hm_framework:
             self.I_consistency = np.zeros_like(self.I_consistency)
 
         # Get frequency scaling of tSZ, possibly including harmonic ILC cleaning
-        tsz_filter = exp.get_tsz_filter()
+        exp.tsz_filter = exp.get_tsz_filter()
         # Compute effective CIB weights, including f_cen and f_sat factors as well as possibly fg cleaning
         self.get_CIB_filters(exp)
 
@@ -754,11 +784,17 @@ class hm_framework:
         # TODO: choose an Lmin that makes sense given Limber
         lbins_sec_bispec_bias = np.arange(10, self.lmax_out + 1, bin_width_out_second_bispec_bias)
         oneH_second_bispec = np.zeros([len(lbins_sec_bispec_bias), self.nZs]) + 0j
-        if get_secondary_bispec_bias:
-            # Get QE normalisation
-            exp.qe_norm_1D = exp.qe_norm.get_ml(np.arange(10, self.lmax_out, 40))
+        # Get QE normalisation at required multipole bins for secondary bispec bias calculation
+        exp.qe_norm_at_lbins_sec_bispec = exp.qe_norm.get_ml(lbins_sec_bispec_bias).specs['cl']
+
+        # If using FFTLog, we can compress the normalization to 1D
+        if fftlog_way:
+            norm_bin_width = 40  # These are somewhat arbitrary
+            lmin = 1  # These are somewhat arbitrary
+            lbins = np.arange(lmin, exp.lmax, norm_bin_width)
+            exp.qe_norm_compressed = np.interp(ells_out, exp.qe_norm.get_ml(lbins).ls, exp.qe_norm.get_ml(lbins).specs['cl'])
         else:
-            exp.qe_norm_1D = 0
+            exp.qe_norm_compressed = exp.qe_norm
 
         # Run in parallel
         print('Launching parallel processes...')
@@ -836,7 +872,7 @@ class hm_framework:
         # Compute effective CIB weights, including f_cen and f_sat factors as well as possibly fg cleaning
         self.get_CIB_filters(exp)
         # Get frequency scaling of tSZ, possibly including harmonic ILC cleaning
-        tsz_filter = exp.get_tsz_filter()
+        exp.tsz_filter = exp.get_tsz_filter()
 
         # Output ells
         ells_out = np.arange(self.lmax_out+1)
@@ -848,6 +884,15 @@ class hm_framework:
         # The one and two halo bias terms -- these store the itgnd to be integrated over z
         oneH_cross = np.zeros([nx,self.nZs])+0j if fftlog_way else np.zeros([nx,nx,self.nZs])+0j;
         twoH_cross = oneH_cross.copy()
+
+        # If using FFTLog, we can compress the normalization to 1D
+        if fftlog_way:
+            norm_bin_width = 40  # These are somewhat arbitrary
+            lmin = 1  # These are somewhat arbitrary
+            lbins = np.arange(lmin, exp.lmax, norm_bin_width)
+            exp.qe_norm_compressed = np.interp(ells_out, exp.qe_norm.get_ml(lbins).ls, exp.qe_norm.get_ml(lbins).specs['cl'])
+        else:
+            exp.qe_norm_compressed = exp.qe_norm
 
         # Run in parallel
         print('Launching parallel processes...')
@@ -1058,7 +1103,7 @@ def tsZ_auto_itgrnds_each_z(i, ells_out, fftlog_way, get_secondary_bispec_bias, 
                                              hm_minimal.uk_profiles['nfw'][i, j]
                                              * (1 - np.exp(-(hm_minimal.ks / hm_minimal.p['kstar_damping']))),
                                              ellmax=exp_minimal.lmax)
-            sec_bispec_rec = sbbs.get_sec_bispec_bias(lbins_sec_bispec_bias, exp_minimal.qe_norm_1D,
+            sec_bispec_rec = sbbs.get_sec_bispec_bias(lbins_sec_bispec_bias, exp_minimal.qe_norm_at_lbins_sec_bispec,
                                                       exp_param_dict, exp_minimal.cltt_tot,
                                                       y_damp, kap_secbispec * hm_minimal.ms_rescaled[j],
                                                       parallelise=parallelise_secondbispec)
@@ -1303,12 +1348,12 @@ def cib_auto_itgrnds_each_z(i, ells_out, fftlog_way, get_secondary_bispec_bias, 
                 kap_secbispec = tls.pkToPell(hm_minimal.comoving_radial_distance[i], hm_minimal.ks,
                                              hm_minimal.uk_profiles['nfw'][i, j],
                                              ellmax=exp_minimal.lmax)
-            sec_bispec_rec = 2 * sbbs.get_sec_bispec_bias(lbins_sec_bispec_bias, exp_minimal.qe_norm_1D,
+            sec_bispec_rec = 2 * sbbs.get_sec_bispec_bias(lbins_sec_bispec_bias, exp_minimal.qe_norm_at_lbins_sec_bispec,
                                                           exp_param_dict, exp_minimal.cltt_tot, u_cen,
                                                           kap_secbispec * hm_minimal.ms_rescaled[j],
                                                           projected_fg_profile_2=u_sat_damp,
                                                           parallelise=parallelise_secondbispec) \
-                             + sbbs.get_sec_bispec_bias(lbins_sec_bispec_bias, exp_minimal.qe_norm_1D, exp_param_dict,
+                             + sbbs.get_sec_bispec_bias(lbins_sec_bispec_bias, exp_minimal.qe_norm_at_lbins_sec_bispec, exp_param_dict,
                                                         exp_minimal.cltt_tot, u_sat_damp,
                                                         kap_secbispec * hm_minimal.ms_rescaled[j],
                                                         projected_fg_profile_2=u_sat_damp,
@@ -1432,7 +1477,7 @@ def mixed_auto_itgrnds_each_z(i, ells_out, fftlog_way, get_secondary_bispec_bias
     itgnd_1h_cross = np.zeros([nx, hm_minimal.nMasses]) + 0j if fftlog_way else np.zeros([nx, nx, hm_minimal.nMasses]) + 0j
     itgnd_1h_Iyyy = itgnd_1h_cross.copy(); itgnd_1h_IIyy = itgnd_1h_cross.copy(); itgnd_1h_yIII = itgnd_1h_cross.copy();
     itgnd_2h_k = itgnd_1h_cross.copy(); itgnd_2h_Iy = itgnd_1h_cross.copy(); itgnd_1h_IyIy = itgnd_1h_cross.copy()
-    integ_1h_I_for_2htrispec=np.zeros([nx, hm_minimal.nMasses]) if fftlog_way else np.zeros([nx,nx, hm_minimal.nMasses])
+    integ_1h_I_for_2htrispec=np.zeros([exp_minimal.lmax + 1, hm_minimal.nMasses]) if fftlog_way else np.zeros([nx,nx, hm_minimal.nMasses])
     integ_1h_y_for_2htrispec = integ_1h_I_for_2htrispec.copy(); itgnd_2h_Iyyy = itgnd_1h_cross.copy();
     itgnd_2h_IIyy = itgnd_1h_cross.copy(); itgnd_2h_IyIy = itgnd_1h_cross.copy();
     itgnd_2h_yIII = itgnd_1h_cross.copy(); itgnd_2h_Iy = itgnd_1h_cross.copy();
@@ -1579,13 +1624,13 @@ def mixed_auto_itgrnds_each_z(i, ells_out, fftlog_way, get_secondary_bispec_bias
             else:
                 kap_secbispec = tls.pkToPell(hm_minimal.comoving_radial_distance[i], hm_minimal.ks,
                                              hm_minimal.uk_profiles['nfw'][i, j], ellmax=exp_minimal.lmax)
-            sec_bispec_rec = sbbs.get_sec_bispec_bias(lbins_sec_bispec_bias, exp_minimal.qe_norm_1D,
+            sec_bispec_rec = sbbs.get_sec_bispec_bias(lbins_sec_bispec_bias, exp_minimal.qe_norm_at_lbins_sec_bispec,
                                                       exp_param_dict, exp_minimal.cltt_tot, u_cen,
                                                       kap_secbispec * hm_minimal.ms_rescaled[j],
                                                       projected_fg_profile_2=y_damp,
                                                       parallelise=parallelise_secondbispec) \
-                             + sbbs.get_sec_bispec_bias(lbins_sec_bispec_bias, exp_minimal.qe_norm_1D, exp_param_dict,
-                                                        exp_minimal.cltt_tot, u_sat_damp,
+                             + sbbs.get_sec_bispec_bias(lbins_sec_bispec_bias, exp_minimal.qe_norm_at_lbins_sec_bispec,
+                                                        exp_param_dict, exp_minimal.cltt_tot, u_sat_damp,
                                                         kap_secbispec * hm_minimal.ms_rescaled[j],
                                                         projected_fg_profile_2=y_damp,
                                                         parallelise=parallelise_secondbispec)

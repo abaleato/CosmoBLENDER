@@ -13,7 +13,7 @@ def get_sec_bispec_bias(lbins, qe_norm_1D, exp_param_dict, cltt_tot, projected_f
     Calculate contributions to secondary bispectrum bias from given profiles, either serially or via multiple processes
     Input:
         * lbins = np array. bins centres at which to evaluate the secondary bispec bias
-        * qe_norm_1D = ql.spec.bcl object containgin normalisation of the QE
+        * qe_norm_1D = 1D arraycontaining normalisation of the QE at lbins centers
         * exp_param_dict = dict of kwargs to initialise a bare-bones 'exp' experiment object with
         * cltt_tot = 1D np array. Total TT power, possibly after fg cleaning
         * projected_fg_profile_1 = 1D numpy array. Project y/density profile.
@@ -44,9 +44,7 @@ def get_sec_bispec_bias(lbins, qe_norm_1D, exp_param_dict, cltt_tot, projected_f
             second_bispec_bias[i] = get_sec_bispec_bias_at_L(projected_fg_profile_1, projected_fg_profile_2, \
                                                                    projected_kappa_profile, exp_param_dict, cltt_tot, L)
     # Finally, normalise the reconstruction
-    # TODO: We're interpolating the norm for every M and z. Should be able to do this just once
-    qe_norm_at_L = np.interp(lbins, qe_norm_1D.ls, qe_norm_1D.specs['cl'])
-    return second_bispec_bias / (qe_norm_at_L ** 2)
+    return second_bispec_bias / (qe_norm_1D ** 2)
 
 def get_sec_bispec_bias_at_L(projected_fg_profile_1, projected_fg_profile_2, projected_kappa_profile,\
                                    exp_param_dict, cltt_tot, L):
