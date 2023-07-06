@@ -71,6 +71,8 @@ class experiment:
         self.ivf_lib = None
         self.qest_lib = None
 
+        self.tsz_filter = None
+
         #TODO: Calculate W_E in the multifrequency case
         #self.nlee = (np.pi / 180. / 60. * self.nlev_p) ** 2 / self.bl ** 2
         #self.W_E = np.nan_to_num(self.cl_len.clee / (self.cl_len.clee + self.nlee))
@@ -408,7 +410,6 @@ def get_filtered_profiles_fftlog(profile_leg1, cltt_tot, ls, cltt_len, profile_l
     """
     if profile_leg2 is None:
         profile_leg2 = profile_leg1
-
     F_1_of_l = np.nan_to_num(profile_leg1 / cltt_tot)
     F_2_of_l = np.nan_to_num(cltt_len * profile_leg2/ cltt_tot)
 
