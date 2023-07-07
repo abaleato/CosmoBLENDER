@@ -1039,6 +1039,7 @@ def tsZ_auto_itgrnds_each_z(i, ells_out, fftlog_way, get_secondary_bispec_bias, 
     itgnd_2h_2g = itgnd_1h_4pt.copy();
     integ_1h_for_2htrispec = np.zeros([exp_minimal.lmax + 1, hm_minimal.nMasses]) if fftlog_way else np.zeros([nx, nx, hm_minimal.nMasses]) # TODO: not sure what to do here with nx for QL
     itgnd_1h_second_bispec = np.zeros([len(lbins_sec_bispec_bias), hm_minimal.nMasses]) + 0j
+    itgnd_2h_ky_y = itgnd_1h_cross.copy();
 
     # To keep QE calls tidy, define
     QE = lambda prof_1, prof_2 : qest.get_TT_qe(fftlog_way, ells_out, prof_1, exp_minimal.qe_norm,
@@ -1095,6 +1096,8 @@ def tsZ_auto_itgrnds_each_z(i, ells_out, fftlog_way, get_secondary_bispec_bias, 
         itgnd_2h_2g[..., j] = phicfft * hm_minimal.nzm[i, j] * hm_minimal.bh_ofM[i, j]
         itgnd_2h_1_3_trispec[..., j] = phicfft * np.conjugate(phicfft_mixed) * hm_minimal.nzm[i, j] * hm_minimal.bh_ofM[i, j]
         itgnd_2h_2_2_trispec[..., j] = phicfft * hm_minimal.nzm[i, j] * hm_minimal.bh_ofM[i, j]
+        itgnd_2h_ky_y[..., j] = np.conjugate(kfft) * phicfft_mixed\
+                                * hm_minimal.nzm[i, j] * hm_minimal.bh_ofM[i, j]
 
         if get_secondary_bispec_bias:
             # Temporary secondary bispectrum bias stuff
@@ -1124,7 +1127,8 @@ def tsZ_auto_itgrnds_each_z(i, ells_out, fftlog_way, get_secondary_bispec_bias, 
     twoH_2_2_at_i = 2 * np.trapz(itgnd_2h_2_2_trispec, hm_minimal.ms, axis=-1) ** 2 * pk_of_L
     twoH_1_3_at_i = 4 * np.trapz(itgnd_2h_1_3_trispec, hm_minimal.ms, axis=-1)
     tmpCorr = np.trapz(itgnd_2h_1g, hm_minimal.ms, axis=-1)
-    twoH_cross_at_i = np.trapz(itgnd_2h_2g, hm_minimal.ms, axis=-1) * (tmpCorr + hm_minimal.m_consistency[i]) * pk_of_L
+    twoH_cross_at_i = np.trapz(itgnd_2h_2g, hm_minimal.ms, axis=-1) * (tmpCorr + hm_minimal.m_consistency[i]) * pk_of_L \
+                      + np.trapz(2*itgnd_2h_ky_y, hm_minimal.ms, axis=-1)
     return oneH_4pt_at_i, oneH_cross_at_i, twoH_2_2_at_i, twoH_1_3_at_i, twoH_cross_at_i, oneH_second_bispec_at_i
 
 def tsZ_cross_itgrnds_each_z(i, ells_out, fftlog_way, damp_1h_prof, exp_minimal, hm_minimal, survey_name):
@@ -1270,6 +1274,7 @@ def cib_auto_itgrnds_each_z(i, ells_out, fftlog_way, get_secondary_bispec_bias, 
     itgnd_2h_k = itgnd_1h_cross.copy()
     itgnd_2h_II = itgnd_1h_cross.copy();
     itgnd_2h_IintIII = itgnd_1h_cross.copy()
+    itgnd_2h_kI_I= itgnd_1h_cross.copy();
     integ_1h_for_2htrispec = np.zeros([exp_minimal.lmax + 1, hm_minimal.nMasses]) if fftlog_way else np.zeros( [nx, nx, hm_minimal.nMasses])
     itgnd_1h_second_bispec = np.zeros([len(lbins_sec_bispec_bias), hm_minimal.nMasses]) + 0j
 
@@ -1356,6 +1361,8 @@ def cib_auto_itgrnds_each_z(i, ells_out, fftlog_way, get_secondary_bispec_bias, 
                                    * (phicfft_Iint_ucen * np.conjugate(phicfft_usat_usat)
                                       + phicfft_Iint_usat * np.conjugate(2 * phicfft_ucen_usat + phicfft_usat_usat))
         itgnd_2h_II[..., j] = hm_minimal.nzm[i, j] * hm_minimal.bh_ofM[i, j] * (phicfft_usat_usat + 2 * phicfft_ucen_usat)
+        itgnd_2h_kI_I[..., j] = np.conjugate(kfft) * (phicfft_Iint_ucen + phicfft_Iint_usat)\
+                                * hm_minimal.nzm[i, j] * hm_minimal.bh_ofM[i, j]
 
         if get_secondary_bispec_bias:
             # Temporary secondary bispectrum bias stuff
@@ -1396,7 +1403,9 @@ def cib_auto_itgrnds_each_z(i, ells_out, fftlog_way, get_secondary_bispec_bias, 
 
     tmpCorr = np.trapz(itgnd_2h_k, hm_minimal.ms, axis=-1)
     twoH_cross_at_i = np.trapz(itgnd_2h_II, hm_minimal.ms, axis=-1) \
-                         * (tmpCorr + hm_minimal.m_consistency[i]) * pk_of_L
+                         * (tmpCorr + hm_minimal.m_consistency[i]) * pk_of_L \
+                      + np.trapz(2*itgnd_2h_kI_I, hm_minimal.ms, axis=-1)
+    # TODO: save memory by return 1-3 and 2-2 trispectra together. This will also be more consistent w what you do for primary bispectra
     return IIII_1h_at_i, oneH_cross_at_i, IIII_2h_2_2_at_i, IIII_2h_1_3_at_i, twoH_cross_at_i, oneH_second_bispec_at_i
 
 def cib_cross_itgrnds_each_z(i, ells_out, fftlog_way, damp_1h_prof, exp_minimal, hm_minimal, survey_name):
@@ -1527,6 +1536,7 @@ def mixed_auto_itgrnds_each_z(i, ells_out, fftlog_way, get_secondary_bispec_bias
     itgnd_2h_yIII = itgnd_1h_cross.copy(); itgnd_2h_Iy = itgnd_1h_cross.copy();
     itgnd_2h_yy = itgnd_1h_cross.copy(); itgnd_2h_II = itgnd_1h_cross.copy();
     itgnd_1h_second_bispec = np.zeros([len(lbins_sec_bispec_bias), hm_minimal.nMasses]) + 0j
+    itgnd_2h_kinHaloWfg = itgnd_1h_cross.copy();
 
     # To keep QE calls tidy, define
     QE = lambda prof_1, prof_2 : qest.get_TT_qe(fftlog_way, ells_out, prof_1, exp_minimal.qe_norm,
@@ -1654,6 +1664,8 @@ def mixed_auto_itgrnds_each_z(i, ells_out, fftlog_way, get_secondary_bispec_bias
                                                                       + 2 * phicfft_Iint_ucen * phicfft_usat_y
                                                                       + 2 * phicfft_Iint_usat * (phicfft_ucen_y
                                                                                                  + phicfft_usat_y))
+        itgnd_2h_kinHaloWfg[..., j] = np.conjugate(kfft) * ( phicfft_yint_usat + phicfft_yint_usat + phicfft_Iint_y)\
+                                * hm_minimal.nzm[i, j] * hm_minimal.bh_ofM[i, j]
 
         if get_secondary_bispec_bias:
             # Temporary secondary bispectrum bias stuff
@@ -1706,7 +1718,8 @@ def mixed_auto_itgrnds_each_z(i, ells_out, fftlog_way, get_secondary_bispec_bias
                           * np.trapz(itgnd_2h_II, hm_minimal.ms, axis=-1) * pk_of_L
 
     tmpCorr = np.trapz(itgnd_2h_k, hm_minimal.ms, axis=-1)
-    twoH_cross_at_i = np.trapz(itgnd_2h_Iy, hm_minimal.ms, axis=-1) * (tmpCorr + hm_minimal.m_consistency[i]) * pk_of_L
+    twoH_cross_at_i = np.trapz(itgnd_2h_Iy, hm_minimal.ms, axis=-1) * (tmpCorr + hm_minimal.m_consistency[i]) * pk_of_L \
+                      + np.trapz(itgnd_2h_kinHaloWfg, hm_minimal.ms, axis=-1)
     return Iyyy_1h_at_i, IIyy_1h_at_i, IyIy_1h_at_i, yIII_1h_at_i, oneH_cross_at_i, oneH_second_bispec_at_i,\
            Iyyy_2h_1_3_at_i, IIyy_2h_1_3_at_i, IyIy_2h_1_3_at_i, yIII_2h_1_3_at_i, Iyyy_2h_2_2_at_i, IIyy_2h_2_2_at_i,\
            IyIy_2h_2_2_at_i, yIII_2h_2_2_at_i, twoH_cross_at_i
