@@ -79,9 +79,9 @@ class hm_framework:
         self.ms_rescaled = self.hcos.ms[...]/self.hcos.rho_matter_z(0)
 
         self.m_consistency = np.zeros((len(self.hcos.zs)))
-        self.y_consistency = np.zeros((len(self.hcos.zs), self.lmax_out + 1))
-        self.g_consistency = np.zeros((len(self.hcos.zs), self.lmax_out + 1))
-        self.I_consistency = np.zeros((len(self.hcos.zs), self.lmax_out + 1))
+        self.y_consistency = np.zeros((len(self.hcos.zs), self.lmax + 1))
+        self.g_consistency = np.zeros((len(self.hcos.zs), self.lmax + 1))
+        self.I_consistency = np.zeros((len(self.hcos.zs), self.lmax + 1))
 
         self.CIB_central_filter = None
         self.CIB_satellite_filter = None
@@ -278,7 +278,7 @@ class hm_framework:
             return
 
     def get_tsz_cross_biases(self, exp, gzs, gdndz, fftlog_way=True, bin_width_out=30, survey_name='LSST',
-                             damp_1h_prof=True, gal_consistency=False):
+                             damp_1h_prof=True, gal_consistency=False, tsz_consistency=False):
         """
         Calculate the tsz biases to the cross-correlation of CMB lensing with a galaxy survey, (C^{g\phi}_L)
         given an "experiment" object (defined in qest.py)
@@ -295,6 +295,9 @@ class hm_framework:
                               low mass halos in integrals a la Schmidt 15. Typically not needed
         """
         hcos = self.hcos
+        self.get_tsz_consistency(exp, lmax_proj=exp.lmax)
+        if not tsz_consistency:
+            self.y_consistency = np.zeros_like(self.y_consistency)
         self.get_galaxy_consistency(exp, survey_name)
         if not gal_consistency:
             self.g_consistency = np.zeros_like(self.g_consistency)
@@ -594,7 +597,7 @@ class hm_framework:
             return
 
     def get_cib_cross_biases(self, exp, gzs, gdndz, fftlog_way=True, bin_width_out=30, survey_name='LSST',
-                             damp_1h_prof=True, gal_consistency=False):
+                             damp_1h_prof=True, gal_consistency=False, cib_consistency=False):
         """
         Calculate the CIB biases to the cross-correlation of CMB lensing with a galaxy survey, (C^{g\phi}_L)
         given an "experiment" object (defined in qest.py)
@@ -613,6 +616,9 @@ class hm_framework:
         self.get_galaxy_consistency(exp, survey_name)
         if not gal_consistency:
             self.g_consistency = np.zeros_like(self.g_consistency)
+        self.get_cib_consistency(exp, lmax_proj=exp.lmax)
+        if not cib_consistency:
+            self.I_consistency = np.zeros_like(self.I_consistency)
 
         # Compute effective CIB weights, including f_cen and f_sat factors as well as possibly fg cleaning
         self.get_CIB_filters(exp)
@@ -1137,11 +1143,29 @@ def tsZ_cross_itgrnds_each_z(i, ells_out, fftlog_way, damp_1h_prof, exp_minimal,
     itgnd_1h_cross = np.zeros([nx, hm_minimal.nMasses]) + 0j if fftlog_way else np.zeros([nx, nx, hm_minimal.nMasses]) + 0j
     itgnd_2h_2g = np.zeros([nx, hm_minimal.nMasses]) + 0j if fftlog_way else np.zeros([nx, nx, hm_minimal.nMasses]) + 0j
     itgnd_2h_1g = np.zeros([nx, hm_minimal.nMasses]) + 0j if fftlog_way else np.zeros([nx, nx, hm_minimal.nMasses]) + 0j
+    itgnd_2h_ky_y = itgnd_1h_cross.copy();
+    itgnd_y_for_2hbispec = np.zeros([exp_minimal.lmax + 1, hm_minimal.nMasses]) if fftlog_way else np.zeros([nx, nx, hm_minimal.nMasses]) # TODO: not sure what to do here with nx for QL
 
     # To keep QE calls tidy, define
     QE = lambda prof_1, prof_2 : qest.get_TT_qe(fftlog_way, ells_out, prof_1, exp_minimal.qe_norm,
                                            exp_minimal.pix, exp_minimal.lmax, exp_minimal.cltt_tot, exp_minimal.ls,
                                            exp_minimal.cl_len.cltt, exp_minimal.qest_lib, exp_minimal.ivf_lib, prof_2)
+
+    # Project the matter power spectrum for two-halo terms
+    pk_of_l = tls.pkToPell(hm_minimal.comoving_radial_distance[i], hm_minimal.ks, hm_minimal.Pzk[i], ellmax=exp_minimal.lmax)
+    pk_of_L = tls.pkToPell(hm_minimal.comoving_radial_distance[i], hm_minimal.ks, hm_minimal.Pzk[i], ellmax=hm_minimal.lmax_out)
+    if not fftlog_way:
+        pk_of_l = ql.spec.cl2cfft(pk_of_l, exp_minimal.pix).fft
+        pk_of_L = ql.spec.cl2cfft(pk_of_L, exp_minimal.pix).fft
+
+    # Integral over M for 2halo trispectrum. This will later go into a QE
+    for j, m in enumerate(hm_minimal.ms):
+        if m > exp_minimal.massCut: continue
+        y = exp_minimal.tsz_filter * tls.pkToPell(hm_minimal.comoving_radial_distance[i], hm_minimal.ks,
+                                      hm_minimal.pk_profiles['y'][i, j], ellmax=exp_minimal.lmax)
+        itgnd_y_for_2hbispec[..., j] = y * hm_minimal.nzm[i, j] * hm_minimal.bh_ofM[i, j]
+
+    int_over_M_of_y = pk_of_l * (np.trapz(itgnd_y_for_2hbispec, hm_minimal.ms, axis=-1) + hm_minimal.y_consistency[i])
 
     # M integral.
     for j, m in enumerate(hm_minimal.ms):
@@ -1156,6 +1180,7 @@ def tsZ_cross_itgrnds_each_z(i, ells_out, fftlog_way, damp_1h_prof, exp_minimal,
         galfft = gal / hm_minimal.hods[survey_name]['ngal'][i] if fftlog_way else ql.spec.cl2cfft(gal, exp_minimal.pix).fft / \
                                                                             hm_minimal.hods[survey_name]['ngal'][i]
         phicfft = QE(y, y)
+        phicfft_y_intofy = QE(y, int_over_M_of_y)
 
         # Consider damping the profiles at low k in 1h terms to avoid it exceeding many-halo amplitude
         if damp_1h_prof:
@@ -1179,17 +1204,15 @@ def tsZ_cross_itgrnds_each_z(i, ells_out, fftlog_way, damp_1h_prof, exp_minimal,
         itgnd_1h_cross[..., j] = mean_Ngal * phicfft_damp * np.conjugate(galfft_damp) * hm_minimal.nzm[i, j]
         itgnd_2h_1g[..., j] = mean_Ngal * np.conjugate(galfft) * hm_minimal.nzm[i, j] * hm_minimal.bh_ofM[i, j]
         itgnd_2h_2g[..., j] = phicfft * hm_minimal.nzm[i, j] * hm_minimal.bh_ofM[i, j]
+        itgnd_2h_ky_y[..., j] = mean_Ngal * np.conjugate(galfft) * phicfft_y_intofy\
+                                * hm_minimal.nzm[i, j] * hm_minimal.bh_ofM[i, j]
 
     # Perform the m integrals
     oneH_cross_at_i = np.trapz(itgnd_1h_cross, hm_minimal.ms, axis=-1)
 
-    # This is the two halo term. P_k times the M integrals
-    pk = tls.pkToPell(hm_minimal.comoving_radial_distance[i], hm_minimal.ks, hm_minimal.Pzk[i], ellmax=hm_minimal.lmax_out)
-    if not fftlog_way:
-        pk = ql.spec.cl2cfft(pk, exp_minimal.pix).fft
-
     tmpCorr = np.trapz(itgnd_2h_1g, hm_minimal.ms, axis=-1)
-    twoH_cross_at_i = np.trapz(itgnd_2h_2g, hm_minimal.ms, axis=-1) * (tmpCorr + hm_minimal.g_consistency[i]) * pk
+    twoH_cross_at_i = np.trapz(itgnd_2h_2g, hm_minimal.ms, axis=-1) * (tmpCorr + hm_minimal.g_consistency[i]) * pk_of_L \
+                      + np.trapz(2*itgnd_2h_ky_y, hm_minimal.ms, axis=-1)
     return oneH_cross_at_i, twoH_cross_at_i
 
 def tsZ_ps_itgrnds_each_z(i, ells_out, damp_1h_prof, exp_minimal, hm_minimal):
@@ -1392,11 +1415,33 @@ def cib_cross_itgrnds_each_z(i, ells_out, fftlog_way, damp_1h_prof, exp_minimal,
     itgnd_1h_cross = np.zeros([nx, hm_minimal.nMasses]) + 0j if fftlog_way else np.zeros([nx, nx, hm_minimal.nMasses]) + 0j;
     itgnd_2h_k = itgnd_1h_cross.copy();
     itgnd_2h_II = itgnd_1h_cross.copy()
+    itgnd_2h_kI_I= itgnd_1h_cross.copy();
+    itgnd_I_for_2hbispec = np.zeros([exp_minimal.lmax + 1, hm_minimal.nMasses]) if fftlog_way else np.zeros([nx, nx, hm_minimal.nMasses]) # TODO: not sure what to do here with nx for QL
 
     # To keep QE calls tidy, define
     QE = lambda prof_1, prof_2 : qest.get_TT_qe(fftlog_way, ells_out, prof_1, exp_minimal.qe_norm,
                                            exp_minimal.pix, exp_minimal.lmax, exp_minimal.cltt_tot, exp_minimal.ls,
                                            exp_minimal.cl_len.cltt, exp_minimal.qest_lib, exp_minimal.ivf_lib, prof_2)
+
+    # Project the matter power spectrum for two-halo terms
+    pk_of_l = tls.pkToPell(hm_minimal.comoving_radial_distance[i], hm_minimal.ks, hm_minimal.Pzk[i], ellmax=exp_minimal.lmax)
+    pk_of_L = tls.pkToPell(hm_minimal.comoving_radial_distance[i], hm_minimal.ks, hm_minimal.Pzk[i], ellmax=hm_minimal.lmax_out)
+    if not fftlog_way:
+        pk_of_l = ql.spec.cl2cfft(pk_of_l, exp_minimal.pix).fft
+        pk_of_L = ql.spec.cl2cfft(pk_of_L, exp_minimal.pix).fft
+
+    # Integral over M for 2halo trispectrum. This will later go into a QE
+    for j, m in enumerate(hm_minimal.ms):
+        if m > exp_minimal.massCut: continue
+        # project the galaxy profiles
+        u = tls.pkToPell(hm_minimal.comoving_radial_distance[i], hm_minimal.ks,
+                         hm_minimal.uk_profiles['nfw'][i, j], ellmax=exp_minimal.lmax)
+        u_cen = hm_minimal.CIB_central_filter[:, i, j]  # Centrals come with a factor of u^0
+        u_sat = hm_minimal.CIB_satellite_filter[:, i, j] * u
+
+        itgnd_I_for_2hbispec[..., j] = hm_minimal.nzm[i, j] * hm_minimal.bh_ofM[i, j] * (u_cen + u_sat)
+
+    int_over_M_of_I = pk_of_l * (np.trapz(itgnd_I_for_2hbispec, hm_minimal.ms, axis=-1) + hm_minimal.I_consistency[i])
 
     # M integral.
     for j, m in enumerate(hm_minimal.ms):
@@ -1416,6 +1461,7 @@ def cib_cross_itgrnds_each_z(i, ells_out, fftlog_way, damp_1h_prof, exp_minimal,
 
         phicfft_ucen_usat = QE(u_cen, u_sat)
         phicfft_usat_usat = QE(u_sat, u_sat)
+        phicfft_I_intofI = QE(u_cen + u_sat, int_over_M_of_I)
 
         if damp_1h_prof:
             u_damp = tls.pkToPell(hm_minimal.comoving_radial_distance[i], hm_minimal.ks,
@@ -1445,16 +1491,14 @@ def cib_cross_itgrnds_each_z(i, ells_out, fftlog_way, damp_1h_prof, exp_minimal,
         itgnd_2h_k[..., j] = mean_Ngal * np.conjugate(galfft) * hm_minimal.nzm[i, j] * hm_minimal.bh_ofM[i, j]
         itgnd_2h_II[..., j] = hm_minimal.nzm[i, j] * hm_minimal.bh_ofM[i, j] \
                               * ((phicfft_usat_usat + 2 * phicfft_ucen_usat))
+        itgnd_2h_kI_I[..., j] = mean_Ngal * np.conjugate(galfft) * phicfft_I_intofI\
+                                * hm_minimal.nzm[i, j] * hm_minimal.bh_ofM[i, j]
 
     oneH_cross_at_i = np.trapz(itgnd_1h_cross, hm_minimal.ms, axis=-1)
 
-    # This is the two halo term. P_k times the M integrals
-    pk = tls.pkToPell(hm_minimal.comoving_radial_distance[i], hm_minimal.ks, hm_minimal.Pzk[i], ellmax=hm_minimal.lmax_out)
-    if not fftlog_way:
-        pk = ql.spec.cl2cfft(pk, exp_minimal.pix).fft
-
     tmpCorr = np.trapz(itgnd_2h_k, hm_minimal.ms, axis=-1)
-    twoH_cross_at_i = np.trapz(itgnd_2h_II, hm_minimal.ms, axis=-1) * (tmpCorr + hm_minimal.g_consistency[i]) * pk
+    twoH_cross_at_i = np.trapz(itgnd_2h_II, hm_minimal.ms, axis=-1) * (tmpCorr + hm_minimal.g_consistency[i]) * pk_of_L\
+                      + np.trapz(2*itgnd_2h_kI_I, hm_minimal.ms, axis=-1)
     return oneH_cross_at_i, twoH_cross_at_i
 
 def mixed_auto_itgrnds_each_z(i, ells_out, fftlog_way, get_secondary_bispec_bias, parallelise_secondbispec,
@@ -1681,13 +1725,40 @@ def mixed_cross_itgrnds_each_z(i, ells_out, fftlog_way, damp_1h_prof, exp_minima
     nx = hm_minimal.lmax_out + 1 if fftlog_way else exp_minimal.pix.nx
     # Temporary storage
     itgnd_1h_cross = np.zeros([nx, hm_minimal.nMasses]) + 0j if fftlog_way else np.zeros([nx, nx, hm_minimal.nMasses]) + 0j;
-    itgnd_2h_k = itgnd_1h_cross.copy();
-    itgnd_2h_II = itgnd_1h_cross.copy()
+    itgnd_2h_k = itgnd_1h_cross.copy(); itgnd_2h_II = itgnd_1h_cross.copy()
+    itgnd_2h_kinHaloWfg = itgnd_1h_cross.copy();
+    itgnd_I_for_2hbispec = np.zeros([exp_minimal.lmax + 1, hm_minimal.nMasses]) if fftlog_way else np.zeros([nx, nx, hm_minimal.nMasses]) # TODO: not sure what to do here with nx for QL
+    itgnd_y_for_2hbispec = np.zeros([exp_minimal.lmax + 1, hm_minimal.nMasses]) if fftlog_way else np.zeros([nx, nx, hm_minimal.nMasses]) # TODO: not sure what to do here with nx for QL
+
 
     # To keep QE calls tidy, define
     QE = lambda prof_1, prof_2 : qest.get_TT_qe(fftlog_way, ells_out, prof_1, exp_minimal.qe_norm,
                                            exp_minimal.pix, exp_minimal.lmax, exp_minimal.cltt_tot, exp_minimal.ls,
                                            exp_minimal.cl_len.cltt, exp_minimal.qest_lib, exp_minimal.ivf_lib, prof_2)
+
+    # Project the matter power spectrum for two-halo terms
+    pk_of_l = tls.pkToPell(hm_minimal.comoving_radial_distance[i], hm_minimal.ks, hm_minimal.Pzk[i], ellmax=exp_minimal.lmax)
+    pk_of_L = tls.pkToPell(hm_minimal.comoving_radial_distance[i], hm_minimal.ks, hm_minimal.Pzk[i], ellmax=hm_minimal.lmax_out)
+    if not fftlog_way:
+        pk_of_l = ql.spec.cl2cfft(pk_of_l, exp_minimal.pix).fft
+        pk_of_L = ql.spec.cl2cfft(pk_of_L, exp_minimal.pix).fft
+
+    # Integral over M for 2halo trispectrum. This will later go into a QE
+    for j, m in enumerate(hm_minimal.ms):
+        if m > exp_minimal.massCut: continue
+        # project the profiles
+        y = exp_minimal.tsz_filter * tls.pkToPell(hm_minimal.comoving_radial_distance[i], hm_minimal.ks,
+                                      hm_minimal.pk_profiles['y'][i, j], ellmax=exp_minimal.lmax)
+        u = tls.pkToPell(hm_minimal.comoving_radial_distance[i], hm_minimal.ks,
+                         hm_minimal.uk_profiles['nfw'][i, j], ellmax=exp_minimal.lmax)
+        u_cen = hm_minimal.CIB_central_filter[:, i, j]  # Centrals come with a factor of u^0
+        u_sat = hm_minimal.CIB_satellite_filter[:, i, j] * u
+
+        itgnd_I_for_2hbispec[..., j] = (u_cen + u_sat) * hm_minimal.nzm[i, j] * hm_minimal.bh_ofM[i, j]
+        itgnd_y_for_2hbispec[..., j] = y * hm_minimal.nzm[i, j] * hm_minimal.bh_ofM[i, j]
+
+    int_over_M_of_I = pk_of_l * (np.trapz(itgnd_I_for_2hbispec, hm_minimal.ms, axis=-1) + hm_minimal.I_consistency[i])
+    int_over_M_of_y = pk_of_l * (np.trapz(itgnd_y_for_2hbispec, hm_minimal.ms, axis=-1) + hm_minimal.y_consistency[i])
 
     # M integral.
     for j, m in enumerate(hm_minimal.ms):
@@ -1708,6 +1779,8 @@ def mixed_cross_itgrnds_each_z(i, ells_out, fftlog_way, damp_1h_prof, exp_minima
 
         phicfft_ucen_y = QE(u_cen, y)
         phicfft_usat_y = QE(u_sat, y)
+        phicfft_I_intofy = QE(u_cen + u_sat, int_over_M_of_y)
+        phicfft_y_intofI = QE(y, int_over_M_of_I)
 
         if damp_1h_prof:
             y_damp = exp_minimal.tsz_filter * tls.pkToPell(hm_minimal.comoving_radial_distance[i],
@@ -1739,14 +1812,12 @@ def mixed_cross_itgrnds_each_z(i, ells_out, fftlog_way, damp_1h_prof, exp_minima
         itgnd_2h_k[..., j] = mean_Ngal * np.conjugate(galfft) * hm_minimal.nzm[i, j] * hm_minimal.bh_ofM[i, j]
         itgnd_2h_II[..., j] = hm_minimal.nzm[i, j] * hm_minimal.bh_ofM[i, j] \
                               * (phicfft_ucen_y + phicfft_usat_y)
+        itgnd_2h_kinHaloWfg[..., j] = mean_Ngal * np.conjugate(galfft) * ( phicfft_I_intofy + phicfft_y_intofI)\
+                                * hm_minimal.nzm[i, j] * hm_minimal.bh_ofM[i, j]
 
     oneH_cross_at_i = np.trapz(itgnd_1h_cross, hm_minimal.ms, axis=-1)
 
-    # This is the two halo term. P_k times the M integrals
-    pk = tls.pkToPell(hm_minimal.comoving_radial_distance[i], hm_minimal.ks, hm_minimal.Pzk[i], ellmax=hm_minimal.lmax_out)
-    if not fftlog_way:
-        pk = ql.spec.cl2cfft(pk, exp_minimal.pix).fft
-
     tmpCorr = np.trapz(itgnd_2h_k, hm_minimal.ms, axis=-1)
-    twoH_cross_at_i = np.trapz(itgnd_2h_II, hm_minimal.ms, axis=-1) * (tmpCorr + hm_minimal.g_consistency[i]) * pk
+    twoH_cross_at_i = np.trapz(itgnd_2h_II, hm_minimal.ms, axis=-1) * (tmpCorr + hm_minimal.g_consistency[i]) * pk_of_L \
+                      + np.trapz(itgnd_2h_kinHaloWfg, hm_minimal.ms, axis=-1)
     return oneH_cross_at_i, twoH_cross_at_i
