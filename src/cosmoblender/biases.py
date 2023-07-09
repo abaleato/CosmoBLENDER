@@ -78,10 +78,10 @@ class hm_framework:
 
         self.ms_rescaled = self.hcos.ms[...]/self.hcos.rho_matter_z(0)
 
-        self.m_consistency = np.zeros((len(self.hcos.zs)))
-        self.y_consistency = np.zeros((len(self.hcos.zs), self.lmax + 1))
-        self.g_consistency = np.zeros((len(self.hcos.zs), self.lmax + 1))
-        self.I_consistency = np.zeros((len(self.hcos.zs), self.lmax + 1))
+        self.m_consistency = np.zeros(len(self.hcos.zs))
+        self.y_consistency = np.zeros(len(self.hcos.zs))
+        self.g_consistency = np.zeros(len(self.hcos.zs))
+        self.I_consistency = np.zeros(len(self.hcos.zs))
 
         self.CIB_central_filter = None
         self.CIB_satellite_filter = None
@@ -197,9 +197,8 @@ class hm_framework:
         """
         hcos = self.hcos
         self.get_matter_consistency(exp)
-        self.get_tsz_consistency(exp, lmax_proj=exp.lmax)
-        if not tsz_consistency:
-            self.y_consistency = np.zeros_like(self.y_consistency)
+        if tsz_consistency:
+            self.get_tsz_consistency(exp, lmax_proj=exp.lmax)
 
         # Output ells
         ells_out = np.arange(self.lmax_out+1)
@@ -295,12 +294,10 @@ class hm_framework:
                               low mass halos in integrals a la Schmidt 15. Typically not needed
         """
         hcos = self.hcos
-        self.get_tsz_consistency(exp, lmax_proj=exp.lmax)
-        if not tsz_consistency:
-            self.y_consistency = np.zeros_like(self.y_consistency)
-        self.get_galaxy_consistency(exp, survey_name)
-        if not gal_consistency:
-            self.g_consistency = np.zeros_like(self.g_consistency)
+        if tsz_consistency:
+            self.get_tsz_consistency(exp, lmax_proj=exp.lmax)
+        if gal_consistency:
+            self.get_galaxy_consistency(exp, survey_name)
 
         # Output ells
         ells_out = np.arange(self.lmax_out+1)
@@ -398,9 +395,8 @@ class hm_framework:
                               low mass halos in integrals a la Schmidt 15. Typically not needed
         """
         hcos = self.hcos
-        self.get_galaxy_consistency(exp, survey_name)
-        if not gal_consistency:
-            self.g_consistency = np.zeros_like(self.g_consistency)
+        if gal_consistency:
+            self.get_galaxy_consistency(exp, survey_name)
         self.get_matter_consistency(exp)
 
         # Output ells
@@ -518,9 +514,8 @@ class hm_framework:
 
         # Pre-calculate consistency for 2h integrals
         self.get_matter_consistency(exp)
-        self.get_cib_consistency(exp, lmax_proj=exp.lmax)
-        if not cib_consistency:
-            self.I_consistency = np.zeros_like(self.I_consistency)
+        if cib_consistency:
+            self.get_cib_consistency(exp, lmax_proj=exp.lmax)
 
         # Compute effective CIB weights, including f_cen and f_sat factors as well as possibly fg cleaning
         self.get_CIB_filters(exp)
@@ -613,12 +608,11 @@ class hm_framework:
                               low mass halos in integrals a la Schmidt 15. Typically not needed
         """
         hcos = self.hcos
-        self.get_galaxy_consistency(exp, survey_name)
-        if not gal_consistency:
-            self.g_consistency = np.zeros_like(self.g_consistency)
-        self.get_cib_consistency(exp, lmax_proj=exp.lmax)
-        if not cib_consistency:
-            self.I_consistency = np.zeros_like(self.I_consistency)
+
+        if gal_consistency:
+            self.get_galaxy_consistency(exp, survey_name)
+        if cib_consistency:
+            self.get_cib_consistency(exp, lmax_proj=exp.lmax)
 
         # Compute effective CIB weights, including f_cen and f_sat factors as well as possibly fg cleaning
         self.get_CIB_filters(exp)
@@ -690,11 +684,10 @@ class hm_framework:
         # Compute effective CIB weights, including f_cen and f_sat factors as well as possibly fg cleaning
         self.get_CIB_filters(exp)
         # Compute consistency relation for 2h term
-        self.get_cib_consistency(exp)
-        if not cib_consistency:
-            self.I_consistency = np.zeros_like(self.I_consistency)
+        if cib_consistency:
+            self.get_cib_consistency(exp)
 
-        nx = self.lmax_out+1
+        nx = exp.lmax+1
 
         # The one and two halo bias terms -- these store the itgnd to be integrated over z
         oneH_ps = np.zeros([nx,self.nZs])+0j
@@ -729,9 +722,8 @@ class hm_framework:
                 # Perform the m integrals
             oneH_ps[:, i] = np.trapz(itgnd_1h_ps, hcos.ms, axis=-1)
             # This is the two halo term. P_k times the M integrals
-            pk = tls.pkToPell(hcos.comoving_radial_distance(hcos.zs[i]), hcos.ks, hcos.Pzk[i], ellmax=self.lmax_out)
+            pk = tls.pkToPell(hcos.comoving_radial_distance(hcos.zs[i]), hcos.ks, hcos.Pzk[i], ellmax=exp.lmax)
             twoH_ps[:, i] = (np.trapz(itgnd_2h_1g, hcos.ms, axis=-1) +self.I_consistency[i])** 2 * pk
-
 
         # Integrate over z
         II_itgrnd = tls.limber_itgrnd_kernel(hcos, 2) * tls.CIB_window(hcos) ** 2
@@ -761,12 +753,10 @@ class hm_framework:
         hcos = self.hcos
         # Get consistency conditions for 2h terms
         self.get_matter_consistency(exp)
-        self.get_tsz_consistency(exp, lmax_proj=exp.lmax)
-        self.get_cib_consistency(exp, lmax_proj=exp.lmax)
-        if not tsz_consistency:
-            self.y_consistency = np.zeros_like(self.y_consistency)
-        if not cib_consistency:
-            self.I_consistency = np.zeros_like(self.I_consistency)
+        if tsz_consistency:
+            self.get_tsz_consistency(exp, lmax_proj=exp.lmax)
+        if cib_consistency:
+            self.get_cib_consistency(exp, lmax_proj=exp.lmax)
 
         # Get frequency scaling of tSZ, possibly including harmonic ILC cleaning
         exp.tsz_filter = exp.get_tsz_filter()
@@ -872,9 +862,8 @@ class hm_framework:
                               low mass halos in integrals a la Schmidt 15. Typically not needed
         """
         hcos = self.hcos
-        self.get_galaxy_consistency(exp, survey_name)
-        if not gal_consistency:
-            self.g_consistency = np.zeros_like(self.g_consistency)
+        if gal_consistency:
+            self.get_galaxy_consistency(exp, survey_name)
         # Compute effective CIB weights, including f_cen and f_sat factors as well as possibly fg cleaning
         self.get_CIB_filters(exp)
         # Get frequency scaling of tSZ, possibly including harmonic ILC cleaning
