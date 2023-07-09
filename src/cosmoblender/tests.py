@@ -18,6 +18,18 @@ def test_clbb_bias(hm_calc, exp):
 
 def test_cib_ps(hm_object, exp_object, damp_1h_prof=True, cib_consistency=False):
     """ Check the CIB power spectrum"""
+    # Shot noise to be added to compare to Planck data (or Websky)
+    if int(exp_object.freq_GHz) == 353:
+        shot_noise = 262 # see https://github.com/CLASS-SZ/notebooks/blob/main/class_sz_CIB_websky.ipynb
+    elif int(exp_object.freq_GHz) == 217:
+        shot_noise = 21 # see https://github.com/CLASS-SZ/notebooks/blob/main/class_sz_CIB_websky.ipynb
+    elif int(exp_object.freq_GHz) == 545:
+        shot_noise = 1690
+    else:
+        shot_noise = 0
+        print('Assuming shot noise is zero!')
+
+
     # Our calculation
     clCIBCIB_oneHalo_ps, clCIBCIB_twoHalo_ps = hm_object.get_cib_ps(exp_object, damp_1h_prof=damp_1h_prof,
                                                                     cib_consistency=cib_consistency)
@@ -29,10 +41,10 @@ def test_cib_ps(hm_object, exp_object, damp_1h_prof=True, cib_consistency=False)
     clCIBCIB_1h_yogesh = hm_calc.hcos.C_ii(ells, hm_object.hcos.zs, hm_object.hcos.ks, PII_yogesh_1h, dcdzflag=False)
     clCIBCIB_2h_yogesh = hm_calc.hcos.C_ii(ells, hm_object.hcos.zs, hm_object.hcos.ks, PII_yogesh_2h, dcdzflag=False)
 
-    plt.loglog(clCIBCIB_oneHalo_ps + clCIBCIB_twoHalo_ps, label='total', color='r')
-    plt.loglog(clCIBCIB_oneHalo_ps, label='1 halo term', color='g')
-    plt.loglog(clCIBCIB_twoHalo_ps, label='2 halo term', color='b')
-    plt.loglog(ells, clCIBCIB_1h_yogesh + clCIBCIB_2h_yogesh, label="Yogesh tot", color='k', ls='-')
+    plt.loglog(tls.from_Jypersr_to_uK(exp_object.freq_GHz)**-2 * (clCIBCIB_oneHalo_ps + clCIBCIB_twoHalo_ps) + shot_noise, label='total', color='r')
+    plt.loglog(tls.from_Jypersr_to_uK(exp_object.freq_GHz)**-2 * clCIBCIB_oneHalo_ps, label='1 halo term', color='g')
+    plt.loglog(tls.from_Jypersr_to_uK(exp_object.freq_GHz)**-2 * clCIBCIB_twoHalo_ps, label='2 halo term', color='b')
+    plt.loglog(ells, clCIBCIB_1h_yogesh + clCIBCIB_2h_yogesh + shot_noise, label="Yogesh tot", color='k', ls='-')
     plt.loglog(ells, clCIBCIB_1h_yogesh, label="Yogesh 1h", color='k', ls=':')
     plt.loglog(ells, clCIBCIB_2h_yogesh, label="Yogesh 2h", color='k', ls='--')
 
@@ -197,7 +209,7 @@ def test_tsz_bias(hm_object, experiment):
     plt.loglog(experiment.biases['ells'], -experiment.biases['tsz']['trispec']['2h'], ls='--')
 
 if __name__ == '__main__':
-    which_test = 'test_gal_cross_lensing' # 'test_CIB' or 'test_tSZ' or 'test_clbb_bias' or 'test_gal_cross_lensing'
+    which_test = 'test_CIB' # 'test_CIB' or 'test_tSZ' or 'test_clbb_bias' or 'test_gal_cross_lensing'
 
     # Initialise the experiment and halo model object for which to run the tests
     # This should roughly match the cosmology in Nick's tSZ papers
@@ -253,24 +265,26 @@ if __name__ == '__main__':
         plt.show()
 
     elif which_test == 'test_CIB':
+        ''' A comparison of the CIB power spectrum against Fig 7 of the Websky paper'''
+
         # Foreground cleaning? Only relevant if many frequencies are provided
-        MV_ILC_bool = True
+        MV_ILC_bool = False
         deproject_CIB = False
         deproject_tSZ = False
         fg_cleaning_dict = {'MV_ILC_bool': MV_ILC_bool, 'deproject_CIB': deproject_CIB, 'deproject_tSZ': deproject_tSZ}
 
         SPT_properties = {'nlev_t': np.array([18.]),
                           'beam_size': np.array([1.]),
-                          'freq_GHz': np.array([545.])}
+                          'freq_GHz': np.array([217.])}
 
         # Initialise experiments with various different mass cuts
-        SPT_5e15 = qest.experiment(lmax=3000, massCut_Mvir=5e15, **SPT_properties, **fg_cleaning_dict)
+        SPT_5e15 = qest.experiment(lmax=10000, massCut_Mvir=3.5e15, **SPT_properties, **fg_cleaning_dict)
 
         # Initialise a halo model object for the CIB PS calculation, using mostly default parameters
         nZs = 30  # 30
-        nMasses = 30  # 30
+        nMasses = 40  # 30
         z_max = 4
-        hm_calc = biases.hm_framework(m_min=1e12/0.7, cosmoParams=cosmoParams, nZs=nZs, nMasses=nMasses, z_max=z_max)
+        hm_calc = biases.hm_framework(m_min=1e8, cosmoParams=cosmoParams, nZs=nZs, nMasses=nMasses, z_max=z_max)
         # Check CIB power spectrum
         test_cib_ps(hm_calc, SPT_5e15, damp_1h_prof=True, cib_consistency=False)
         plt.show()
