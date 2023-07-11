@@ -33,7 +33,7 @@ class Hm_minimal:
 
 class hm_framework:
     """ Set the halo model parameters """
-    def __init__(self, lmax_out=3000, m_min=1e12, m_max=5e16, nMasses=30, z_min=0.07, z_max=3, nZs=30, k_min = 1e-4,\
+    def __init__(self, lmax_out=3000, m_min=1e10, m_max=5e15, nMasses=30, z_min=0.07, z_max=3, nZs=30, k_min = 1e-4,\
                  k_max=10, nks=1001, mass_function='sheth-torman', mdef='vir', cib_model='planck13', cosmoParams=None
                  , xmax=5, nxs=40000):
         """ Inputs:
