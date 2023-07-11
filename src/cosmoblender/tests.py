@@ -41,10 +41,10 @@ def test_cib_ps(hm_object, exp_object, damp_1h_prof=True, cib_consistency=False)
     clCIBCIB_1h_yogesh = hm_calc.hcos.C_ii(ells, hm_object.hcos.zs, hm_object.hcos.ks, PII_yogesh_1h, dcdzflag=False)
     clCIBCIB_2h_yogesh = hm_calc.hcos.C_ii(ells, hm_object.hcos.zs, hm_object.hcos.ks, PII_yogesh_2h, dcdzflag=False)
 
-    plt.loglog(tls.from_Jypersr_to_uK(exp_object.freq_GHz)**-2 * (clCIBCIB_oneHalo_ps + clCIBCIB_twoHalo_ps) + shot_noise, label='total', color='r')
+    plt.loglog(tls.from_Jypersr_to_uK(exp_object.freq_GHz)**-2 * (clCIBCIB_oneHalo_ps + clCIBCIB_twoHalo_ps) + shot_noise, label=r'total, {}\,GHz'.format(exp_object.freq_GHz[0]), color='r')
     plt.loglog(tls.from_Jypersr_to_uK(exp_object.freq_GHz)**-2 * clCIBCIB_oneHalo_ps, label='1 halo term', color='g')
     plt.loglog(tls.from_Jypersr_to_uK(exp_object.freq_GHz)**-2 * clCIBCIB_twoHalo_ps, label='2 halo term', color='b')
-    plt.loglog(ells, clCIBCIB_1h_yogesh + clCIBCIB_2h_yogesh + shot_noise, label="Yogesh tot", color='k', ls='-')
+    plt.loglog(ells, clCIBCIB_1h_yogesh + clCIBCIB_2h_yogesh + shot_noise, label=r'Hmvec tot, {}\,GHz'.format(exp_object.freq_GHz[0]), color='k', ls='-')
     plt.loglog(ells, clCIBCIB_1h_yogesh, label="Yogesh 1h", color='k', ls=':')
     plt.loglog(ells, clCIBCIB_2h_yogesh, label="Yogesh 2h", color='k', ls='--')
 
@@ -212,9 +212,13 @@ if __name__ == '__main__':
     which_test = 'test_CIB' # 'test_CIB' or 'test_tSZ' or 'test_clbb_bias' or 'test_gal_cross_lensing'
 
     # Initialise the experiment and halo model object for which to run the tests
+    # You can specify a cosmological model -- in this case, match Websky
+    H0 = 68.
+    cosmoParams = {'As': 2.08e-9, 'ns': .965, 'omch2': (0.31 - 0.049) * (H0 / 100.) ** 2,
+                   'ombh2': 0.049 * (H0 / 100.) ** 2, 'tau': 0.055, 'H0': H0}
+
     # This should roughly match the cosmology in Nick's tSZ papers
-    cosmoParams = {'As': 2.4667392631170437e-09, 'ns': .96, 'omch2': (0.25 - .043) * .7 ** 2, 'ombh2': 0.044 * .7 ** 2,
-                   'H0': 70.}
+    #cosmoParams = {} #{'As': 2.4667392631170437e-09, 'ns': .96, 'omch2': (0.25 - .043) * .7 ** 2, 'ombh2': 0.044 * .7 ** 2, 'H0': 70.}
 
     if which_test == 'test_tsz_bias':
         # These give good results for the tSZ
@@ -273,20 +277,36 @@ if __name__ == '__main__':
         deproject_tSZ = False
         fg_cleaning_dict = {'MV_ILC_bool': MV_ILC_bool, 'deproject_CIB': deproject_CIB, 'deproject_tSZ': deproject_tSZ}
 
-        SPT_properties = {'nlev_t': np.array([18.]),
+        SPT_217_properties = {'nlev_t': np.array([18.]),
                           'beam_size': np.array([1.]),
                           'freq_GHz': np.array([217.])}
+        SPT_353_properties = {'nlev_t': np.array([18.]),
+                          'beam_size': np.array([1.]),
+                          'freq_GHz': np.array([353.])}
+        SPT_545_properties = {'nlev_t': np.array([18.]),
+                          'beam_size': np.array([1.]),
+                          'freq_GHz': np.array([545.])}
 
         # Initialise experiments with various different mass cuts
-        SPT_5e15 = qest.experiment(lmax=10000, massCut_Mvir=3.5e15, **SPT_properties, **fg_cleaning_dict)
+        SPT_217 = qest.experiment(lmax=10000, massCut_Mvir=3.5e15, **SPT_217_properties, **fg_cleaning_dict)
+        SPT_353 = qest.experiment(lmax=10000, massCut_Mvir=3.5e15, **SPT_353_properties, **fg_cleaning_dict)
+        SPT_545 = qest.experiment(lmax=10000, massCut_Mvir=3.5e15, **SPT_545_properties, **fg_cleaning_dict)
 
         # Initialise a halo model object for the CIB PS calculation, using mostly default parameters
         nZs = 30  # 30
-        nMasses = 40  # 30
-        z_max = 4
-        hm_calc = biases.hm_framework(m_min=1e8, cosmoParams=cosmoParams, nZs=nZs, nMasses=nMasses, z_max=z_max)
+        nMasses = 30  # 30
+        z_max = 3
+        k_max = 10
+        k_min = 1e-4
+        cib_model = 'planck13'
+
+        hm_calc = biases.hm_framework(m_min=1e8, cosmoParams=cosmoParams, nZs=nZs, nMasses=nMasses, z_max=z_max,
+                                      k_max=k_max, k_min=k_min, cib_model=cib_model)
         # Check CIB power spectrum
-        test_cib_ps(hm_calc, SPT_5e15, damp_1h_prof=True, cib_consistency=False)
+        test_cib_ps(hm_calc, SPT_217, damp_1h_prof=True, cib_consistency=False)
+        test_cib_ps(hm_calc, SPT_353, damp_1h_prof=True, cib_consistency=False)
+        test_cib_ps(hm_calc, SPT_545, damp_1h_prof=True, cib_consistency=False)
+
         plt.show()
 
     elif which_test == 'test_gal_cross_lensing':
@@ -307,7 +327,9 @@ if __name__ == '__main__':
         nZs = 20  # 30
         nMasses = 20  # 30
         z_max = 3
-        hm_calc = biases.hm_framework(m_min=1e10/0.7, cosmoParams=cosmoParams, nZs=nZs, nMasses=nMasses, z_max=z_max)
+        cib_model = 'viero'
+        hm_calc = biases.hm_framework(m_min=1e10/0.7, cosmoParams=cosmoParams, nZs=nZs, nMasses=nMasses, z_max=z_max,
+                                      cib_model=cib_model)
         # Check CIB power spectrum
         test_gal_cross_lensing(hm_calc, SPT_5e15, damp_1h_prof=True)
         plt.show()
