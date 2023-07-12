@@ -17,30 +17,31 @@ if __name__ == '__main__':
     t0 = time.time() # Time the run
     which_bias = 'tsz' #'tsz' or 'cib'
     lmax = 3000  # Maximum ell for the reconstruction
-    nx = 256
-    dx_arcmin = 1.0 * 2
+    nx_secbispec = 256
+    dx_arcmin_secbispec = 1.0
 
     # Foreground cleaning? Only relevant if many frequencies are provided
     MV_ILC_bool = False
     deproject_CIB = False
     deproject_tSZ = False
     fg_cleaning_dict = {'MV_ILC_bool': MV_ILC_bool, 'deproject_CIB': deproject_CIB, 'deproject_tSZ': deproject_tSZ}
-    SPT_properties = {'nlev_t': np.array([18.]),
-                      'beam_size': np.array([1.]),
-                      'freq_GHz': np.array([150.])}
+    SPT_properties = {'nlev_t': np.array([18.]), 'beam_size': np.array([1.]), 'freq_GHz': np.array([150.]),
+                      'dx_arcmin_secbispec':dx_arcmin_secbispec, 'nx_secbispec':nx_secbispec}
     # Initialise experiments with various different mass cuts
     experiment = qest.experiment(lmax=lmax, massCut_Mvir=5e15, **SPT_properties, **fg_cleaning_dict)
 
     # Set CIB halo model
     cib_model = 'planck13'  # 'vierro'
-    # This should roughly match the cosmology in Nick's tSZ papers
-    cosmoParams = {'As': 2.4667392631170437e-09, 'ns': .96, 'omch2': (0.25 - .043) * .7 ** 2, 'ombh2': 0.044 * .7 ** 2,
-                   'H0': 70.}  # Note that for now there is still cosmology dpendence in the cls defined within the experiment class
+    # You can specify a cosmological model -- in this case, match Websky
+    H0 = 68.
+    cosmoParams = {'As': 2.08e-9, 'ns': .965, 'omch2': (0.31 - 0.049) * (H0 / 100.) ** 2,
+                   'ombh2': 0.049 * (H0 / 100.) ** 2, 'tau': 0.055, 'H0': H0}
 
-    nZs = 5
-    nMasses = 5
-    bin_width_out_second_bispec_bias = 250
-    parallelise_secondbispec = True
+    nZs = 20
+    nMasses = 20
+    bin_width_out_second_bispec_bias = 100
+    parallelise_secondbispec = False
+    max_workers = None # Force serial for now
 
     # Initialise a halo model object for the calculation, using mostly default parameters
     hm_calc = biases.hm_framework(cosmoParams=cosmoParams, nZs=nZs, nMasses=nMasses, cib_model=cib_model)
@@ -48,15 +49,15 @@ if __name__ == '__main__':
     if which_bias=='tsz':
         hm_calc.get_tsz_auto_biases(experiment, get_secondary_bispec_bias=True, \
                              bin_width_out_second_bispec_bias=bin_width_out_second_bispec_bias,
-                                    parallelise_secondbispec=parallelise_secondbispec)
+                                    parallelise_secondbispec=parallelise_secondbispec, max_workers=max_workers)
     elif which_bias=='cib':
         hm_calc.get_cib_auto_biases(experiment, get_secondary_bispec_bias=True, \
                              bin_width_out_second_bispec_bias=bin_width_out_second_bispec_bias,
-                                    parallelise_secondbispec=parallelise_secondbispec)
+                                    parallelise_secondbispec=parallelise_secondbispec, max_workers=max_workers)
     elif which_bias=='mixed':
         hm_calc.get_mixed_auto_biases(experiment, get_secondary_bispec_bias=True, \
                              bin_width_out_second_bispec_bias=bin_width_out_second_bispec_bias,
-                                    parallelise_secondbispec=parallelise_secondbispec)
+                                    parallelise_secondbispec=parallelise_secondbispec, max_workers=max_workers)
 
     # Save a dictionary with the bias we calculated to file
     experiment.save_biases()

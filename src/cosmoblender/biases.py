@@ -179,7 +179,7 @@ class hm_framework:
 
     def get_tsz_auto_biases(self, exp, fftlog_way=True, get_secondary_bispec_bias=False, bin_width_out=30, \
                      bin_width_out_second_bispec_bias=250, parallelise_secondbispec=True, damp_1h_prof=True,
-                     tsz_consistency=False):
+                     tsz_consistency=False, max_workers=None):
         """
         Calculate the tsz biases to the CMB lensing auto-spectrum (C^{\phi\phi}_L)
         given an "experiment" object (defined in qest.py).
@@ -194,6 +194,7 @@ class hm_framework:
             * (optional) damp_1h_prof = Bool. Default is False. Whether to damp the profiles at low k in 1h terms
             * (optional) tsz_consistency = Bool. Whether to impose consistency condition on g to correct for missing
                   low mass halos in integrals a la Schmidt 15. Typically not needed
+            * (optional) max_workers = int. Max number of parallel workers to launch. Default is # the machine has
         """
         hcos = self.hcos
         self.get_matter_consistency(exp)
@@ -217,9 +218,10 @@ class hm_framework:
         twoH_cross = oneH_4pt.copy();
 
         lbins_sec_bispec_bias = np.arange(10, self.lmax_out + 1, bin_width_out_second_bispec_bias)
-        oneH_second_bispec = np.zeros([len(lbins_sec_bispec_bias), self.nZs]) + 0j
         # Get QE normalisation at required multipole bins for secondary bispec bias calculation
         exp.qe_norm_at_lbins_sec_bispec = exp.qe_norm.get_ml(lbins_sec_bispec_bias).specs['cl']
+        L_array_sec_bispec_bias = exp.qe_norm.get_ml(lbins_sec_bispec_bias).ls
+        oneH_second_bispec = np.zeros([len(L_array_sec_bispec_bias), self.nZs]) + 0j
 
         # If using FFTLog, we can compress the normalization to 1D
         if fftlog_way:
@@ -234,11 +236,11 @@ class hm_framework:
         print('Launching parallel processes...')
         hm_minimal = Hm_minimal(self)
         exp_minimal = qest.Exp_minimal(exp)
-        with concurrent.futures.ProcessPoolExecutor() as executor:
+        with concurrent.futures.ProcessPoolExecutor(max_workers=max_workers) as executor:
             n = len(hcos.zs)
             outputs = executor.map(tsZ_auto_itgrnds_each_z, np.arange(n), n * [ells_out], n * [fftlog_way],
                                    n * [get_secondary_bispec_bias], n * [parallelise_secondbispec], n * [damp_1h_prof],
-                                   n * [lbins_sec_bispec_bias], n * [exp_minimal], n * [hm_minimal])
+                                   n * [L_array_sec_bispec_bias], n * [exp_minimal], n * [hm_minimal])
 
             for idx, itgnds_at_i in enumerate(outputs):
                 oneH_4pt[...,idx], oneH_cross[...,idx], twoH_2_2[...,idx], twoH_1_3[...,idx], twoH_cross[...,idx], oneH_second_bispec[...,idx] = itgnds_at_i
@@ -263,7 +265,7 @@ class hm_framework:
             # TODO: does this give the correct permutation factor of 4?
             exp.biases['tsz']['second_bispec']['1h'] = 2 * np.trapz( oneH_second_bispec * kyy_bispec_intgrnd,
                                                                        hcos.zs, axis=-1)
-            exp.biases['second_bispec_bias_ells'] = lbins_sec_bispec_bias
+            exp.biases['second_bispec_bias_ells'] = L_array_sec_bispec_bias
 
         if fftlog_way:
             exp.biases['ells'] = np.arange(self.lmax_out+1)
@@ -277,7 +279,7 @@ class hm_framework:
             return
 
     def get_tsz_cross_biases(self, exp, gzs, gdndz, fftlog_way=True, bin_width_out=30, survey_name='LSST',
-                             damp_1h_prof=True, gal_consistency=False, tsz_consistency=False):
+                             damp_1h_prof=True, gal_consistency=False, tsz_consistency=False, max_workers=None):
         """
         Calculate the tsz biases to the cross-correlation of CMB lensing with a galaxy survey, (C^{g\phi}_L)
         given an "experiment" object (defined in qest.py)
@@ -292,6 +294,7 @@ class hm_framework:
             * (optional) damp_1h_prof = Bool. Default is False. Whether to damp the profiles at low k in 1h terms
             * (optional) gal_consistency = Bool. Whether to impose consistency condition on g to correct for missing
                               low mass halos in integrals a la Schmidt 15. Typically not needed
+            * (optional) max_workers = int. Max number of parallel workers to launch. Default is # the machine has
         """
         hcos = self.hcos
         if tsz_consistency:
@@ -327,7 +330,7 @@ class hm_framework:
         print('Launching parallel processes...')
         hm_minimal = Hm_minimal(self)
         exp_minimal = qest.Exp_minimal(exp)
-        with concurrent.futures.ProcessPoolExecutor() as executor:
+        with concurrent.futures.ProcessPoolExecutor(max_workers=max_workers) as executor:
             n = len(hcos.zs)
             outputs = executor.map(tsZ_cross_itgrnds_each_z, np.arange(n), n * [ells_out], n * [fftlog_way],
                                    n * [damp_1h_prof], n * [exp_minimal], n * [hm_minimal], n * [survey_name])
@@ -349,7 +352,7 @@ class hm_framework:
             exp.biases['tsz']['cross_w_gals']['2h'] = ql.maps.cfft(exp.nx,exp.dx,fft=exp.biases['tsz']['cross_w_gals']['2h']).get_ml(lbins).specs['cl']
             return
 
-    def get_tsz_ps(self, exp, damp_1h_prof=True):
+    def get_tsz_ps(self, exp, damp_1h_prof=True, max_workers=None):
         """
         Calculate the tSZ power spectrum
         Input:
@@ -366,7 +369,7 @@ class hm_framework:
         print('Launching parallel processes...')
         hm_minimal = Hm_minimal(self)
         exp_minimal = qest.Exp_minimal(exp)
-        with concurrent.futures.ProcessPoolExecutor() as executor:
+        with concurrent.futures.ProcessPoolExecutor(max_workers=max_workers) as executor:
             n = len(hcos.zs)
             outputs = executor.map(tsZ_ps_itgrnds_each_z, np.arange(n), n * [damp_1h_prof], n * [exp_minimal], n * [hm_minimal])
 
@@ -495,7 +498,7 @@ class hm_framework:
 
     def get_cib_auto_biases(self, exp, fftlog_way=True, get_secondary_bispec_bias=False, bin_width_out=30, \
                      bin_width_out_second_bispec_bias=250, parallelise_secondbispec=True, damp_1h_prof=True,
-                     cib_consistency=False):
+                     cib_consistency=False, max_workers=None):
         """
         Calculate the CIB biases to the CMB lensing auto-spectrum (C^{\phi\phi}_L)
         given an "experiment" object (defined in qest.py)
@@ -509,6 +512,7 @@ class hm_framework:
             * (optional) damp_1h_prof = Bool. Default is False. Whether to damp the profiles at low k in 1h terms
             * (optional) cib_consistency = Bool. Whether to impose consistency condition on CIB to correct for missing
                                           low mass halos in integrals a la Schmidt 15. Typically not needed
+            * (optional) max_workers = int. Max number of parallel workers to launch. Default is # the machine has
         """
         hcos = self.hcos
 
@@ -533,9 +537,10 @@ class hm_framework:
 
         # TODO: choose an Lmin that makes sense given Limber
         lbins_sec_bispec_bias = np.arange(10, self.lmax_out + 1, bin_width_out_second_bispec_bias)
-        oneH_second_bispec = np.zeros([len(lbins_sec_bispec_bias), self.nZs]) + 0j
         # Get QE normalisation at required multipole bins for secondary bispec bias calculation
         exp.qe_norm_at_lbins_sec_bispec = exp.qe_norm.get_ml(lbins_sec_bispec_bias).specs['cl']
+        L_array_sec_bispec_bias = exp.qe_norm.get_ml(lbins_sec_bispec_bias).ls
+        oneH_second_bispec = np.zeros([len(L_array_sec_bispec_bias), self.nZs]) + 0j
 
         # If using FFTLog, we can compress the normalization to 1D
         if fftlog_way:
@@ -550,11 +555,11 @@ class hm_framework:
         print('Launching parallel processes...')
         hm_minimal = Hm_minimal(self)
         exp_minimal = qest.Exp_minimal(exp)
-        with concurrent.futures.ProcessPoolExecutor() as executor:
+        with concurrent.futures.ProcessPoolExecutor(max_workers=max_workers) as executor:
             n = len(hcos.zs)
             outputs = executor.map(cib_auto_itgrnds_each_z, np.arange(n), n * [ells_out], n * [fftlog_way],
                                    n * [get_secondary_bispec_bias], n * [parallelise_secondbispec], n * [damp_1h_prof],
-                                   n * [lbins_sec_bispec_bias], n * [exp_minimal], n * [hm_minimal])
+                                   n * [L_array_sec_bispec_bias], n * [exp_minimal], n * [hm_minimal])
 
             for idx, itgnds_at_i in enumerate(outputs):
                 IIII_1h[...,idx], oneH_cross[...,idx], IIII_2h_2_2[...,idx], IIII_2h_1_3[...,idx], twoH_cross[...,idx], oneH_second_bispec[...,idx] = itgnds_at_i
@@ -578,7 +583,7 @@ class hm_framework:
         if get_secondary_bispec_bias:
             # Perm factors implemented in the get_secondary_bispec_bias_at_L() function
             exp.biases['cib']['second_bispec']['1h'] = np.trapz( oneH_second_bispec * kII_itgnd, hcos.zs, axis=-1)
-            exp.biases['second_bispec_bias_ells'] = lbins_sec_bispec_bias
+            exp.biases['second_bispec_bias_ells'] = L_array_sec_bispec_bias
 
         if fftlog_way:
             exp.biases['ells'] = np.arange(self.lmax_out+1)
@@ -592,7 +597,7 @@ class hm_framework:
             return
 
     def get_cib_cross_biases(self, exp, gzs, gdndz, fftlog_way=True, bin_width_out=30, survey_name='LSST',
-                             damp_1h_prof=True, gal_consistency=False, cib_consistency=False):
+                             damp_1h_prof=True, gal_consistency=False, cib_consistency=False, max_workers=None):
         """
         Calculate the CIB biases to the cross-correlation of CMB lensing with a galaxy survey, (C^{g\phi}_L)
         given an "experiment" object (defined in qest.py)
@@ -606,6 +611,7 @@ class hm_framework:
             * (optional) damp_1h_prof = Bool. Default is False. Whether to damp the profiles at low k in 1h terms
             * (optional) gal_consistency = Bool. Whether to impose consistency condition on g to correct for missing
                               low mass halos in integrals a la Schmidt 15. Typically not needed
+            * (optional) max_workers = int. Max number of parallel workers to launch. Default is # the machine has
         """
         hcos = self.hcos
 
@@ -641,7 +647,7 @@ class hm_framework:
         print('Launching parallel processes...')
         hm_minimal = Hm_minimal(self)
         exp_minimal = qest.Exp_minimal(exp)
-        with concurrent.futures.ProcessPoolExecutor() as executor:
+        with concurrent.futures.ProcessPoolExecutor(max_workers=max_workers) as executor:
             n = len(hcos.zs)
             outputs = executor.map(cib_cross_itgrnds_each_z, np.arange(n), n * [ells_out], n * [fftlog_way],
                                    n * [damp_1h_prof], n * [exp_minimal], n * [hm_minimal], n * [survey_name])
@@ -733,7 +739,7 @@ class hm_framework:
 
     def get_mixed_auto_biases(self, exp, fftlog_way=True, get_secondary_bispec_bias=False, bin_width_out=30, \
                          bin_width_out_second_bispec_bias=250, parallelise_secondbispec=True, damp_1h_prof=True,
-                         tsz_consistency=False, cib_consistency=False):
+                         tsz_consistency=False, cib_consistency=False, max_workers=None):
         """
         Calculate biases to the CMB lensing auto-spectrum (C^{\phi\phi}_L) from both CIB and tSZ
         given an "experiment" object (defined in qest.py)
@@ -749,6 +755,7 @@ class hm_framework:
                               low mass halos in integrals a la Schmidt 15. Typically not needed
             * (optional) cib_consistency = Bool. Whether to impose consistency condition on CIB to correct for missing
                               low mass halos in integrals a la Schmidt 15. Typically not needed
+            * (optional) max_workers = int. Max number of parallel workers to launch. Default is # the machine has
         """
         hcos = self.hcos
         # Get consistency conditions for 2h terms
@@ -779,9 +786,10 @@ class hm_framework:
 
         # TODO: choose an Lmin that makes sense given Limber
         lbins_sec_bispec_bias = np.arange(10, self.lmax_out + 1, bin_width_out_second_bispec_bias)
-        oneH_second_bispec = np.zeros([len(lbins_sec_bispec_bias), self.nZs]) + 0j
         # Get QE normalisation at required multipole bins for secondary bispec bias calculation
         exp.qe_norm_at_lbins_sec_bispec = exp.qe_norm.get_ml(lbins_sec_bispec_bias).specs['cl']
+        L_array_sec_bispec_bias = exp.qe_norm.get_ml(lbins_sec_bispec_bias).ls
+        oneH_second_bispec = np.zeros([len(L_array_sec_bispec_bias), self.nZs]) + 0j
 
         # If using FFTLog, we can compress the normalization to 1D
         if fftlog_way:
@@ -796,11 +804,11 @@ class hm_framework:
         print('Launching parallel processes...')
         hm_minimal = Hm_minimal(self)
         exp_minimal = qest.Exp_minimal(exp)
-        with concurrent.futures.ProcessPoolExecutor() as executor:
+        with concurrent.futures.ProcessPoolExecutor(max_workers=max_workers) as executor:
             n = len(hcos.zs)
             outputs = executor.map(mixed_auto_itgrnds_each_z, np.arange(n), n * [ells_out], n * [fftlog_way],
                                    n * [get_secondary_bispec_bias], n * [parallelise_secondbispec], n * [damp_1h_prof],
-                                   n * [lbins_sec_bispec_bias], n * [exp_minimal], n * [hm_minimal])
+                                   n * [L_array_sec_bispec_bias], n * [exp_minimal], n * [hm_minimal])
 
             for idx, itgnds_at_i in enumerate(outputs):
                 Iyyy_1h[...,idx], IIyy_1h[...,idx], IyIy_1h[...,idx], yIII_1h[...,idx], oneH_cross[...,idx], \
@@ -832,7 +840,7 @@ class hm_framework:
         if get_secondary_bispec_bias:
             # Perm factor of 4 implemented in the get_secondary_bispec_bias_at_L() function
             exp.biases['mixed']['second_bispec']['1h'] = np.trapz( oneH_second_bispec * kIy_itgnd, hcos.zs, axis=-1)
-            exp.biases['second_bispec_bias_ells'] = lbins_sec_bispec_bias
+            exp.biases['second_bispec_bias_ells'] = L_array_sec_bispec_bias
 
         if fftlog_way:
             exp.biases['ells'] = np.arange(self.lmax_out+1)
@@ -846,7 +854,7 @@ class hm_framework:
             return
 
     def get_mixed_cross_biases(self, exp, gzs, gdndz, fftlog_way=True, bin_width_out=30, survey_name='LSST',
-                               damp_1h_prof=True, gal_consistency=False):
+                               damp_1h_prof=True, gal_consistency=False, max_workers=None):
         """
         Calculate the mixed tsz-cib  biases to the cross-correlation of CMB lensing with a galaxy survey, (C^{g\phi}_L)
         given an "experiment" object (defined in qest.py)
@@ -860,6 +868,7 @@ class hm_framework:
             * (optional) damp_1h_prof = Bool. Default is False. Whether to damp the profiles at low k in 1h terms
             * (optional) gal_consistency = Bool. Whether to impose consistency condition on g to correct for missing
                               low mass halos in integrals a la Schmidt 15. Typically not needed
+            * (optional) max_workers = int. Max number of parallel workers to launch. Default is # the machine has
         """
         hcos = self.hcos
         if gal_consistency:
@@ -893,7 +902,7 @@ class hm_framework:
         print('Launching parallel processes...')
         hm_minimal = Hm_minimal(self)
         exp_minimal = qest.Exp_minimal(exp)
-        with concurrent.futures.ProcessPoolExecutor() as executor:
+        with concurrent.futures.ProcessPoolExecutor(max_workers=max_workers) as executor:
             n = len(hcos.zs)
             outputs = executor.map(mixed_cross_itgrnds_each_z, np.arange(n), n * [ells_out], n * [fftlog_way],
                                    n * [damp_1h_prof], n * [exp_minimal], n * [hm_minimal], n * [survey_name])
@@ -1004,7 +1013,7 @@ class hm_framework:
 #
 
 def tsZ_auto_itgrnds_each_z(i, ells_out, fftlog_way, get_secondary_bispec_bias, parallelise_secondbispec,
-                            damp_1h_prof, lbins_sec_bispec_bias, exp_minimal, hm_minimal):
+                            damp_1h_prof, L_array_sec_bispec_bias, exp_minimal, hm_minimal):
     """
     Obtain the integrand at the i-th redshift by doing the integrals over mass and the QE reconstructions.
     Input:
@@ -1013,13 +1022,14 @@ def tsZ_auto_itgrnds_each_z(i, ells_out, fftlog_way, get_secondary_bispec_bias, 
         * get_secondary_bispec_bias = False. Compute and return the secondary bispectrum bias (slow)
         * parallelise_secondbispec = bool.
         * damp_1h_prof = Bool. Default is False. Whether to damp the profiles at low k in 1h terms
-        * lbins_sec_bispec_bias = 1D np array. Bins to be used in the secondary bispec bias calculation
+        * L_array_sec_bispec_bias = 1D np array. Ls to be used in the secondary bispec bias calculation
         * exp_minimal = instance of qest.exp_minimal(exp)
         * hm_minimal = instance of biases.hm_minimal(hm_framework)
     """
     print(f'Now in parallel loop {i}')
     nx = hm_minimal.lmax_out + 1 if fftlog_way else exp_minimal.pix.nx
     # Temporary storage
+    # TODO: do these arrays need to be complex?
     itgnd_1h_4pt = np.zeros([nx, hm_minimal.nMasses]) + 0j if fftlog_way else np.zeros([nx, nx, hm_minimal.nMasses]) + 0j
     itgnd_1h_cross = itgnd_1h_4pt.copy();
     itgnd_2h_1_3_trispec = itgnd_1h_4pt.copy();
@@ -1027,7 +1037,7 @@ def tsZ_auto_itgrnds_each_z(i, ells_out, fftlog_way, get_secondary_bispec_bias, 
     itgnd_2h_1g = itgnd_1h_4pt.copy();
     itgnd_2h_2g = itgnd_1h_4pt.copy();
     integ_1h_for_2htrispec = np.zeros([exp_minimal.lmax + 1, hm_minimal.nMasses]) if fftlog_way else np.zeros([nx, nx, hm_minimal.nMasses]) # TODO: not sure what to do here with nx for QL
-    itgnd_1h_second_bispec = np.zeros([len(lbins_sec_bispec_bias), hm_minimal.nMasses]) + 0j
+    itgnd_1h_second_bispec = np.zeros([len(L_array_sec_bispec_bias), hm_minimal.nMasses]) + 0j
     itgnd_2h_ky_y = itgnd_1h_cross.copy();
 
     # To keep QE calls tidy, define
@@ -1091,7 +1101,7 @@ def tsZ_auto_itgrnds_each_z(i, ells_out, fftlog_way, get_secondary_bispec_bias, 
         if get_secondary_bispec_bias:
             # Temporary secondary bispectrum bias stuff
             # The part with the nested lensing reconstructions
-            exp_param_dict = {'lmax': exp_minimal.lmax, 'nx':nx, 'dx_arcmin': exp_minimal.dx * 60. * 180. / np.pi}
+            exp_param_dict = {'lmax': exp_minimal.lmax, 'nx':exp_minimal.nx_secbispec, 'dx_arcmin': exp_minimal.dx_secbispec * 60. * 180. / np.pi}
             # Get the kappa map, up to lmax rather than lmax_out as was needed in other terms
             if damp_1h_prof:
                 kap_secbispec = tls.pkToPell(hm_minimal.comoving_radial_distance[i], hm_minimal.ks,
@@ -1101,7 +1111,7 @@ def tsZ_auto_itgrnds_each_z(i, ells_out, fftlog_way, get_secondary_bispec_bias, 
                                              hm_minimal.uk_profiles['nfw'][i, j]
                                              * (1 - np.exp(-(hm_minimal.ks / hm_minimal.p['kstar_damping']))),
                                              ellmax=exp_minimal.lmax)
-            sec_bispec_rec = sbbs.get_sec_bispec_bias(lbins_sec_bispec_bias, exp_minimal.qe_norm_at_lbins_sec_bispec,
+            sec_bispec_rec = sbbs.get_sec_bispec_bias(L_array_sec_bispec_bias, exp_minimal.qe_norm_at_lbins_sec_bispec,
                                                       exp_param_dict, exp_minimal.cltt_tot,
                                                       y_damp, kap_secbispec * hm_minimal.ms_rescaled[j],
                                                       parallelise=parallelise_secondbispec)
@@ -1242,7 +1252,7 @@ def tsZ_ps_itgrnds_each_z(i, ells_out, damp_1h_prof, exp_minimal, hm_minimal):
 
 
 def cib_auto_itgrnds_each_z(i, ells_out, fftlog_way, get_secondary_bispec_bias, parallelise_secondbispec,
-                            damp_1h_prof, lbins_sec_bispec_bias, exp_minimal, hm_minimal):
+                            damp_1h_prof, L_array_sec_bispec_bias, exp_minimal, hm_minimal):
     """
     Obtain the integrand at the i-th redshift by doing the integrals over mass and the QE reconstructions.
     Input:
@@ -1251,7 +1261,7 @@ def cib_auto_itgrnds_each_z(i, ells_out, fftlog_way, get_secondary_bispec_bias, 
         * get_secondary_bispec_bias = False. Compute and return the secondary bispectrum bias (slow)
         * parallelise_secondbispec = bool.
         * damp_1h_prof = Bool. Default is False. Whether to damp the profiles at low k in 1h terms
-        * lbins_sec_bispec_bias = 1D np array. Bins to be used in the secondary bispec bias calculation
+        * L_array_sec_bispec_bias = 1D np array. Ls to be used in the secondary bispec bias calculation
         * exp_minimal = instance of qest.exp_minimal(exp)
         * hm_minimal = instance of biases.hm_minimal(hm_framework)
     """
@@ -1265,7 +1275,7 @@ def cib_auto_itgrnds_each_z(i, ells_out, fftlog_way, get_secondary_bispec_bias, 
     itgnd_2h_IintIII = itgnd_1h_cross.copy()
     itgnd_2h_kI_I= itgnd_1h_cross.copy();
     integ_1h_for_2htrispec = np.zeros([exp_minimal.lmax + 1, hm_minimal.nMasses]) if fftlog_way else np.zeros( [nx, nx, hm_minimal.nMasses])
-    itgnd_1h_second_bispec = np.zeros([len(lbins_sec_bispec_bias), hm_minimal.nMasses]) + 0j
+    itgnd_1h_second_bispec = np.zeros([len(L_array_sec_bispec_bias), hm_minimal.nMasses]) + 0j
 
     # To keep QE calls tidy, define
     QE = lambda prof_1, prof_2 : qest.get_TT_qe(fftlog_way, ells_out, prof_1, exp_minimal.qe_norm,
@@ -1367,12 +1377,12 @@ def cib_auto_itgrnds_each_z(i, ells_out, fftlog_way, get_secondary_bispec_bias, 
                 kap_secbispec = tls.pkToPell(hm_minimal.comoving_radial_distance[i], hm_minimal.ks,
                                              hm_minimal.uk_profiles['nfw'][i, j],
                                              ellmax=exp_minimal.lmax)
-            sec_bispec_rec = 2 * sbbs.get_sec_bispec_bias(lbins_sec_bispec_bias, exp_minimal.qe_norm_at_lbins_sec_bispec,
+            sec_bispec_rec = 2 * sbbs.get_sec_bispec_bias(L_array_sec_bispec_bias, exp_minimal.qe_norm_at_lbins_sec_bispec,
                                                           exp_param_dict, exp_minimal.cltt_tot, u_cen,
                                                           kap_secbispec * hm_minimal.ms_rescaled[j],
                                                           projected_fg_profile_2=u_sat_damp,
                                                           parallelise=parallelise_secondbispec) \
-                             + sbbs.get_sec_bispec_bias(lbins_sec_bispec_bias, exp_minimal.qe_norm_at_lbins_sec_bispec, exp_param_dict,
+                             + sbbs.get_sec_bispec_bias(L_array_sec_bispec_bias, exp_minimal.qe_norm_at_lbins_sec_bispec, exp_param_dict,
                                                         exp_minimal.cltt_tot, u_sat_damp,
                                                         kap_secbispec * hm_minimal.ms_rescaled[j],
                                                         projected_fg_profile_2=u_sat_damp,
@@ -1500,7 +1510,7 @@ def cib_cross_itgrnds_each_z(i, ells_out, fftlog_way, damp_1h_prof, exp_minimal,
     return oneH_cross_at_i, twoH_cross_at_i
 
 def mixed_auto_itgrnds_each_z(i, ells_out, fftlog_way, get_secondary_bispec_bias, parallelise_secondbispec,
-                            damp_1h_prof, lbins_sec_bispec_bias, exp_minimal, hm_minimal):
+                            damp_1h_prof, L_array_sec_bispec_bias, exp_minimal, hm_minimal):
     """
     Obtain the integrand at the i-th redshift by doing the integrals over mass and the QE reconstructions.
     Input:
@@ -1509,7 +1519,7 @@ def mixed_auto_itgrnds_each_z(i, ells_out, fftlog_way, get_secondary_bispec_bias
         * get_secondary_bispec_bias = False. Compute and return the secondary bispectrum bias (slow)
         * parallelise_secondbispec = bool.
         * damp_1h_prof = Bool. Default is False. Whether to damp the profiles at low k in 1h terms
-        * lbins_sec_bispec_bias = 1D np array. Bins to be used in the secondary bispec bias calculation
+        * L_array_sec_bispec_bias = 1D np array. Ls to be used in the secondary bispec bias calculation
         * exp_minimal = instance of qest.exp_minimal(exp)
         * hm_minimal = instance of biases.hm_minimal(hm_framework)
     """
@@ -1524,7 +1534,7 @@ def mixed_auto_itgrnds_each_z(i, ells_out, fftlog_way, get_secondary_bispec_bias
     itgnd_2h_IIyy = itgnd_1h_cross.copy(); itgnd_2h_IyIy = itgnd_1h_cross.copy();
     itgnd_2h_yIII = itgnd_1h_cross.copy(); itgnd_2h_Iy = itgnd_1h_cross.copy();
     itgnd_2h_yy = itgnd_1h_cross.copy(); itgnd_2h_II = itgnd_1h_cross.copy();
-    itgnd_1h_second_bispec = np.zeros([len(lbins_sec_bispec_bias), hm_minimal.nMasses]) + 0j
+    itgnd_1h_second_bispec = np.zeros([len(L_array_sec_bispec_bias), hm_minimal.nMasses]) + 0j
     itgnd_2h_kinHaloWfg = itgnd_1h_cross.copy();
 
     # To keep QE calls tidy, define
@@ -1669,12 +1679,12 @@ def mixed_auto_itgrnds_each_z(i, ells_out, fftlog_way, get_secondary_bispec_bias
             else:
                 kap_secbispec = tls.pkToPell(hm_minimal.comoving_radial_distance[i], hm_minimal.ks,
                                              hm_minimal.uk_profiles['nfw'][i, j], ellmax=exp_minimal.lmax)
-            sec_bispec_rec = sbbs.get_sec_bispec_bias(lbins_sec_bispec_bias, exp_minimal.qe_norm_at_lbins_sec_bispec,
+            sec_bispec_rec = sbbs.get_sec_bispec_bias(L_array_sec_bispec_bias, exp_minimal.qe_norm_at_lbins_sec_bispec,
                                                       exp_param_dict, exp_minimal.cltt_tot, u_cen,
                                                       kap_secbispec * hm_minimal.ms_rescaled[j],
                                                       projected_fg_profile_2=y_damp,
                                                       parallelise=parallelise_secondbispec) \
-                             + sbbs.get_sec_bispec_bias(lbins_sec_bispec_bias, exp_minimal.qe_norm_at_lbins_sec_bispec,
+                             + sbbs.get_sec_bispec_bias(L_array_sec_bispec_bias, exp_minimal.qe_norm_at_lbins_sec_bispec,
                                                         exp_param_dict, exp_minimal.cltt_tot, u_sat_damp,
                                                         kap_secbispec * hm_minimal.ms_rescaled[j],
                                                         projected_fg_profile_2=y_damp,

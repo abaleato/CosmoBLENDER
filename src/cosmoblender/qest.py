@@ -20,12 +20,13 @@ class Exp_minimal:
         dict = {"cltt_tot": exp.cltt_tot, "qe_norm_at_lbins_sec_bispec": exp.qe_norm_at_lbins_sec_bispec,
                 "lmax": exp.lmax, "nx": exp.nx, "dx": exp.dx, "pix": exp.pix, "tsz_filter": exp.tsz_filter,
                 "massCut": exp.massCut, "ls":exp.ls, "cl_len":exp.cl_len, "qest_lib":exp.qest_lib,
-                "ivf_lib":exp.ivf_lib, "qe_norm":exp.qe_norm_compressed}
+                "ivf_lib":exp.ivf_lib, "qe_norm":exp.qe_norm_compressed, "nx_secbispec":exp.nx_secbispec,
+                "dx_secbispec":exp.dx_secbispec}
         self.__dict__ = dict
 
 class experiment:
     def __init__(self, nlev_t=np.array([5.]), beam_size=np.array([1.]), lmax=3500, massCut_Mvir = np.inf, nx=1024,
-                 dx_arcmin=1.0, fname_scalar=None, fname_lensed=None, freq_GHz=np.array([150.]), atm_fg=True,
+                 dx_arcmin=1.0, nx_secbispec=256, dx_arcmin_secbispec=1.0, fname_scalar=None, fname_lensed=None, freq_GHz=np.array([150.]), atm_fg=True,
                  MV_ILC_bool=False, deproject_tSZ=False, deproject_CIB=False, bare_bones=False):
         """ Initialise a cosmology and experimental charactierstics
             - Inputs:
@@ -37,6 +38,8 @@ class experiment:
                 * (optional) fname_lensed = CAMB files for lensed CMB
                 * (otional) nx = int. Width in number of pixels of grid used in quicklens computations
                 * (optional) dx = float. Pixel width in arcmin for quicklens computations
+                * (otional) nx_secbispec = int. Same as nx, but for secondary bispectrum bias calculation
+                * (optional) dx_arcmin_secbispec = float. Same as dx, but for secondary bispectrum bias calculation
                 * (optional) freq_GHz =np array of one or many floats. Frequency of observqtion (in GHZ). If array,
                                         frequencies that get combined as ILC using ILC_weights as weights
                 * (optional) atm_fg = Whether or not to include atmospheric fg power in inverse-variance filter
@@ -68,6 +71,8 @@ class experiment:
         # Set up grid for Quicklens calculations
         self.nx = nx
         self.dx = dx_arcmin/60./180.*np.pi # pixel width in radians.
+        self.nx_secbispec = nx_secbispec
+        self.dx_secbispec = dx_arcmin_secbispec/60./180.*np.pi # pixel width in radians.
         self.pix = ql.maps.cfft(self.nx, self.dx)
         self.ivf_lib = None
         self.qest_lib = None
