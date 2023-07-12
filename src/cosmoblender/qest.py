@@ -19,7 +19,7 @@ class Exp_minimal:
     def __init__(self, exp):
         dict = {"cltt_tot": exp.cltt_tot, "qe_norm_at_lbins_sec_bispec": exp.qe_norm_at_lbins_sec_bispec,
                 "lmax": exp.lmax, "nx": exp.nx, "dx": exp.dx, "pix": exp.pix, "tsz_filter": exp.tsz_filter,
-                "massCut": exp.massCut, "ls":exp.ls, "cl_len":exp.cl_len, "qest_lib":exp.qest_lib,
+                "massCut": exp.massCut, "ls":exp.ls, "cl_len":exp.cl_len, "cl_unl":exp.cl_unl, "qest_lib":exp.qest_lib,
                 "ivf_lib":exp.ivf_lib, "qe_norm":exp.qe_norm_compressed, "nx_secbispec":exp.nx_secbispec,
                 "dx_secbispec":exp.dx_secbispec}
         self.__dict__ = dict

@@ -582,7 +582,7 @@ class hm_framework:
 
         if get_secondary_bispec_bias:
             # Perm factors implemented in the get_secondary_bispec_bias_at_L() function
-            exp.biases['cib']['second_bispec']['1h'] = np.trapz( oneH_second_bispec * kII_itgnd, hcos.zs, axis=-1)
+            exp.biases['cib']['second_bispec']['1h'] = 2 * np.trapz( oneH_second_bispec * kII_itgnd, hcos.zs, axis=-1)
             exp.biases['second_bispec_bias_ells'] = L_array_sec_bispec_bias
 
         if fftlog_way:
@@ -839,7 +839,7 @@ class hm_framework:
 
         if get_secondary_bispec_bias:
             # Perm factor of 4 implemented in the get_secondary_bispec_bias_at_L() function
-            exp.biases['mixed']['second_bispec']['1h'] = np.trapz( oneH_second_bispec * kIy_itgnd, hcos.zs, axis=-1)
+            exp.biases['mixed']['second_bispec']['1h'] = 2 * np.trapz( oneH_second_bispec * kIy_itgnd, hcos.zs, axis=-1)
             exp.biases['second_bispec_bias_ells'] = L_array_sec_bispec_bias
 
         if fftlog_way:
@@ -1028,6 +1028,8 @@ def tsZ_auto_itgrnds_each_z(i, ells_out, fftlog_way, get_secondary_bispec_bias, 
     """
     print(f'Now in parallel loop {i}')
     nx = hm_minimal.lmax_out + 1 if fftlog_way else exp_minimal.pix.nx
+    pix_sbbs = ql.maps.cfft(exp_minimal.nx_secbispec, exp_minimal.dx_secbispec)
+
     # Temporary storage
     # TODO: do these arrays need to be complex?
     itgnd_1h_4pt = np.zeros([nx, hm_minimal.nMasses]) + 0j if fftlog_way else np.zeros([nx, nx, hm_minimal.nMasses]) + 0j
@@ -1100,8 +1102,6 @@ def tsZ_auto_itgrnds_each_z(i, ells_out, fftlog_way, get_secondary_bispec_bias, 
 
         if get_secondary_bispec_bias:
             # Temporary secondary bispectrum bias stuff
-            # The part with the nested lensing reconstructions
-            exp_param_dict = {'lmax': exp_minimal.lmax, 'nx':exp_minimal.nx_secbispec, 'dx_arcmin': exp_minimal.dx_secbispec * 60. * 180. / np.pi}
             # Get the kappa map, up to lmax rather than lmax_out as was needed in other terms
             if damp_1h_prof:
                 kap_secbispec = tls.pkToPell(hm_minimal.comoving_radial_distance[i], hm_minimal.ks,
@@ -1112,7 +1112,7 @@ def tsZ_auto_itgrnds_each_z(i, ells_out, fftlog_way, get_secondary_bispec_bias, 
                                              * (1 - np.exp(-(hm_minimal.ks / hm_minimal.p['kstar_damping']))),
                                              ellmax=exp_minimal.lmax)
             sec_bispec_rec = sbbs.get_sec_bispec_bias(L_array_sec_bispec_bias, exp_minimal.qe_norm_at_lbins_sec_bispec,
-                                                      exp_param_dict, exp_minimal.cltt_tot,
+                                                      pix_sbbs, exp_minimal.cl_len, exp_minimal.cl_unl, exp_minimal.cltt_tot,
                                                       y_damp, kap_secbispec * hm_minimal.ms_rescaled[j],
                                                       parallelise=parallelise_secondbispec)
             itgnd_1h_second_bispec[..., j] = hm_minimal.nzm[i, j] * sec_bispec_rec
@@ -1267,6 +1267,8 @@ def cib_auto_itgrnds_each_z(i, ells_out, fftlog_way, get_secondary_bispec_bias, 
     """
     print(f'Now in parallel loop {i}')
     nx = hm_minimal.lmax_out + 1 if fftlog_way else exp_minimal.pix.nx
+    pix_sbbs = ql.maps.cfft(exp_minimal.nx_secbispec, exp_minimal.dx_secbispec)
+
     # Temporary storage
     itgnd_1h_cross = np.zeros([nx, hm_minimal.nMasses]) + 0j if fftlog_way else np.zeros([nx, nx, hm_minimal.nMasses]) + 0j
     itgnd_1h_IIII = itgnd_1h_cross.copy();
@@ -1365,8 +1367,6 @@ def cib_auto_itgrnds_each_z(i, ells_out, fftlog_way, get_secondary_bispec_bias, 
 
         if get_secondary_bispec_bias:
             # Temporary secondary bispectrum bias stuff
-            # The part with the nested lensing reconstructions
-            exp_param_dict = {'lmax': exp_minimal.lmax, 'nx': exp_minimal.nx, 'dx_arcmin': exp_minimal.dx * 60. * 180. / np.pi}
             # Get the kappa map, up to lmax rather than lmax_out as was needed in other terms
             if damp_1h_prof:
                 kap_secbispec = tls.pkToPell(hm_minimal.comoving_radial_distance[i], hm_minimal.ks,
@@ -1378,11 +1378,13 @@ def cib_auto_itgrnds_each_z(i, ells_out, fftlog_way, get_secondary_bispec_bias, 
                                              hm_minimal.uk_profiles['nfw'][i, j],
                                              ellmax=exp_minimal.lmax)
             sec_bispec_rec = 2 * sbbs.get_sec_bispec_bias(L_array_sec_bispec_bias, exp_minimal.qe_norm_at_lbins_sec_bispec,
-                                                          exp_param_dict, exp_minimal.cltt_tot, u_cen,
+                                                          pix_sbbs, exp_minimal.cl_len, exp_minimal.cl_unl,
+                                                          exp_minimal.cltt_tot, u_cen,
                                                           kap_secbispec * hm_minimal.ms_rescaled[j],
                                                           projected_fg_profile_2=u_sat_damp,
                                                           parallelise=parallelise_secondbispec) \
-                             + sbbs.get_sec_bispec_bias(L_array_sec_bispec_bias, exp_minimal.qe_norm_at_lbins_sec_bispec, exp_param_dict,
+                             + sbbs.get_sec_bispec_bias(L_array_sec_bispec_bias,exp_minimal.qe_norm_at_lbins_sec_bispec,
+                                                        pix_sbbs, exp_minimal.cl_len, exp_minimal.cl_unl,
                                                         exp_minimal.cltt_tot, u_sat_damp,
                                                         kap_secbispec * hm_minimal.ms_rescaled[j],
                                                         projected_fg_profile_2=u_sat_damp,
@@ -1525,6 +1527,8 @@ def mixed_auto_itgrnds_each_z(i, ells_out, fftlog_way, get_secondary_bispec_bias
     """
     print(f'Now in parallel loop {i}')
     nx = hm_minimal.lmax_out + 1 if fftlog_way else exp_minimal.pix.nx
+    pix_sbbs = ql.maps.cfft(exp_minimal.nx_secbispec, exp_minimal.dx_secbispec)
+
     # Temporary storage
     itgnd_1h_cross = np.zeros([nx, hm_minimal.nMasses]) + 0j if fftlog_way else np.zeros([nx, nx, hm_minimal.nMasses]) + 0j
     itgnd_1h_Iyyy = itgnd_1h_cross.copy(); itgnd_1h_IIyy = itgnd_1h_cross.copy(); itgnd_1h_yIII = itgnd_1h_cross.copy();
@@ -1668,8 +1672,7 @@ def mixed_auto_itgrnds_each_z(i, ells_out, fftlog_way, get_secondary_bispec_bias
 
         if get_secondary_bispec_bias:
             # Temporary secondary bispectrum bias stuff
-            # The part with the nested lensing reconstructions
-            exp_param_dict = {'lmax': exp_minimal.lmax, 'nx': exp_minimal.nx, 'dx_arcmin': exp_minimal.dx * 60. * 180. / np.pi}
+
             # Get the kappa map, up to lmax rather than lmax_out as was needed in other terms
             if damp_1h_prof:
                 kap_secbispec = tls.pkToPell(hm_minimal.comoving_radial_distance[i], hm_minimal.ks,
@@ -1680,17 +1683,18 @@ def mixed_auto_itgrnds_each_z(i, ells_out, fftlog_way, get_secondary_bispec_bias
                 kap_secbispec = tls.pkToPell(hm_minimal.comoving_radial_distance[i], hm_minimal.ks,
                                              hm_minimal.uk_profiles['nfw'][i, j], ellmax=exp_minimal.lmax)
             sec_bispec_rec = sbbs.get_sec_bispec_bias(L_array_sec_bispec_bias, exp_minimal.qe_norm_at_lbins_sec_bispec,
-                                                      exp_param_dict, exp_minimal.cltt_tot, u_cen,
+                                                      pix_sbbs, exp_minimal.cl_len, exp_minimal.cl_unl,
+                                                      exp_minimal.cltt_tot, u_cen,
                                                       kap_secbispec * hm_minimal.ms_rescaled[j],
                                                       projected_fg_profile_2=y_damp,
                                                       parallelise=parallelise_secondbispec) \
                              + sbbs.get_sec_bispec_bias(L_array_sec_bispec_bias, exp_minimal.qe_norm_at_lbins_sec_bispec,
-                                                        exp_param_dict, exp_minimal.cltt_tot, u_sat_damp,
+                                                        pix_sbbs, exp_minimal.cl_len, exp_minimal.cl_unl,
+                                                        exp_minimal.cltt_tot, u_sat_damp,
                                                         kap_secbispec * hm_minimal.ms_rescaled[j],
                                                         projected_fg_profile_2=y_damp,
                                                         parallelise=parallelise_secondbispec)
-            # TODO: I deleted the function definining hod_fact_1gal! Restore it
-            itgnd_1h_second_bispec[..., j] = hod_fact_1gal[i, j] * hm_minimal.nzm[i, j] * sec_bispec_rec
+            itgnd_1h_second_bispec[..., j] = hm_minimal.nzm[i, j] * sec_bispec_rec
 
     # Perform the m integrals
     Iyyy_1h_at_i = np.trapz(itgnd_1h_Iyyy, hm_minimal.ms, axis=-1)
