@@ -1,12 +1,8 @@
-# Temporary file storing the functions needed to evaluate thesecondary bispectrum bias. The idea is to use this as a
-# test bed, and then move all this functionality into other files which already exist.
-
 import numpy as np
 import quicklens as ql
 from . import qest
 import multiprocessing
 from functools import partial
-import time
 
 def get_sec_bispec_bias(L_array, qe_norm_1D, pix, cl_len, cl_unl, cltt_tot, projected_fg_profile_1, \
                               projected_kappa_profile, projected_fg_profile_2=None, parallelise=False):
@@ -29,22 +25,17 @@ def get_sec_bispec_bias(L_array, qe_norm_1D, pix, cl_len, cl_unl, cltt_tot, proj
     if projected_fg_profile_2 is None:
         projected_fg_profile_2 = projected_fg_profile_1
 
-    t0 = time.time()
     # Precompute some useful quantities
-    t1 = time.time()
-
     W_T = ql.spec.cl2cfft(cl_len.cltt / cltt_tot, pix).fft.real
     cltt_filters = ql.spec.cl2cfft(cl_unl.cltt * cl_len.cltt / cltt_tot, pix).fft.real
     # Convert kappa to phi and paste onto grid
     phi_gridded = ql.spec.cl2cfft(np.nan_to_num(projected_kappa_profile / (0.5 * cl_unl.ls *
                                         (cl_unl.ls + 1))), pix).fft.real
-    t2 = time.time()
 
     ret = ql.maps.cfft(nx=pix.nx, dx=pix.dx, ny=pix.ny, dy=pix.dy)
     lx, ly = ret.get_lxly()
     lxly_tuple = [lx, ly]
     l_phi_ifft_tuple = [np.fft.ifft2(lx * phi_gridded), np.fft.ifft2(ly * phi_gridded)]
-    t3 = time.time()
 
     if parallelise:
         # TODO: there's probably better ways than to count explicitly the number of cores
@@ -63,8 +54,6 @@ def get_sec_bispec_bias(L_array, qe_norm_1D, pix, cl_len, cl_unl, cltt_tot, proj
                                                              pix, cltt_tot, W_T, cltt_filters, phi_gridded,
                                                              lxly_tuple, l_phi_ifft_tuple, L)
     # Finally, normalise the reconstruction
-    t4 = time.time()
-    #print('exp init {}, pasting {}, preffts {}, recs {}'.format(t1 - t0, t2 - t1, t3-t2, t4-t3))
     return second_bispec_bias / (qe_norm_1D ** 2)
 
 def get_sec_bispec_bias_at_L(projected_fg_profile_1, projected_fg_profile_2, pix, cltt_tot, W_T,
@@ -86,15 +75,12 @@ def get_sec_bispec_bias_at_L(projected_fg_profile_1, projected_fg_profile_2, pix
     """
     lx, ly = lxly_tuple
 
-    t0 = time.time()
     # The factors that depend on |\vec{L} - \vec{l}''|. Assume \vec{L} points along x axis.
     T_fg_filtered_shifted_1 = shift_array(projected_fg_profile_1 / cltt_tot, pix, lxly_tuple, L).fft.real
     T_fg_filtered_shifted_2 = shift_array(projected_fg_profile_2 / cltt_tot, pix, lxly_tuple, L).fft.real
-    t1 = time.time()
 
     # Calculate the inner reconstruction
     inner_rec = get_inner_reconstruction(pix, T_fg_filtered_shifted_1, phi_gridded, cltt_filters, l_phi_ifft_tuple).fft.real
-    t2 = time.time()
 
     # Carry out the 2D integral over x and y
     # Note that the \vec{L} \cdot \vec{l} simplifies because we assume that L is aligned with x-axis
@@ -106,9 +92,6 @@ def get_sec_bispec_bias_at_L(projected_fg_profile_1, projected_fg_profile_2, pix
 
     # TODO: implement experiment.ny in addition to experiment.nx
     integral_over_y = np.trapz( integral_over_x, np.roll(ly[:, 0], pix.nx//2, axis=0), axis=-1)
-    t3 = time.time()
-
-    #print('filtering {}, rec {}, rest {}'.format(t1 - t0, t2 - t1, t3 - t2))
     return (-2) / (2*np.pi)**3 * L**2 * integral_over_y
 
 def shift_array(array_to_paste, pix, lxly_tuple, lx_shift, ly_shift=0):
