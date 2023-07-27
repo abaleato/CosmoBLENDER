@@ -991,12 +991,9 @@ class hm_framework:
             for which_coupling in which_coupling_list:
                 if which_coupling=='second_bispec':
                     ells = exp.biases['second_bispec_bias_ells']
-                    which_term_list = ['1h']
-                    # TODO: Implement 2h term for sec bispec bias and incorporate into delensing bias calculation
-                    print('2halo term not yet implemented for secondary bispectrum bias!')
                 else:
                     ells = exp.biases['ells']
-                    which_term_list = ['1h', '2h']
+                which_term_list = ['1h', '2h']
 
                 for which_term in which_term_list:
                     clkk_bias_tot += np.nan_to_num(np.interp(np.arange(lmax_clkk+1), ells,
