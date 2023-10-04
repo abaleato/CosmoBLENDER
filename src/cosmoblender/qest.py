@@ -30,7 +30,7 @@ class experiment:
     def __init__(self, nlev_t=np.array([5.]), beam_size=np.array([1.]), lmax=3500, massCut_Mvir = np.inf, nx=1024,
                  dx_arcmin=1., nx_secbispec=256, dx_arcmin_secbispec=1.0, fname_scalar=None, fname_lensed=None, freq_GHz=np.array([150.]), fg=True, atm_fg=True,
                  MV_ILC_bool=False, deproject_tSZ=False, deproject_CIB=False, bare_bones=False, nlee=None,
-                 gauss_order=30):
+                 gauss_order=1000):
         """ Initialise a cosmology and experimental charactierstics
             - Inputs:
                 * nlev_t = np array. Temperature noise level, in uK.arcmin. Either single value or one for each freq
@@ -278,7 +278,7 @@ class experiment:
         '''
         Calculate the matrix to be used in the QE integration, i.e.,
         H(L). This is derived from
-        W(L, l, l') \equiv \Delta(l,l',L) l l' \left(\frac{L^2 + l'^2 - l^2}{2Ll'} \right)\left[1 - \left( \frac{L^2 +l'^2 -l^2}{2Ll'}\right)\right]^{-\frac{1}{2}}
+        W(L, l, l') \equiv -\Delta(l,l',L) l l' \left(\frac{L^2 + l'^2 - l^2}{2Ll'} \right)\left[1 - \left( \frac{L^2 +l'^2 -l^2}{2Ll'}\right)\right]^{-\frac{1}{2}}
 
         by sampling at the quadrature nodes in l and l' and  multiplying rows and columns by the quadrature weights w_i.
 
@@ -294,7 +294,7 @@ class experiment:
     def ell_dependence(self, L, l, lp):
         '''
         Sample the kernel
-        W(L, l, l') \equiv \Delta(l,l',L) l l' \left(\frac{L^2 + l'^2 - l^2}{2Ll'} \right)\left[1 - \left( \frac{L^2 +l'^2 -l^2}{2Ll'}\right)\right]^{-\frac{1}{2}}
+        W(L, l, l') \equiv -\Delta(l,l',L) l l' \left(\frac{L^2 + l'^2 - l^2}{2Ll'} \right)\left[1 - \left( \frac{L^2 +l'^2 -l^2}{2Ll'}\right)\right]^{-\frac{1}{2}}
 
         Inputs:
             - L = int. The L at which we are evaluating the QE reconstruction
@@ -308,7 +308,7 @@ class experiment:
         result = np.zeros_like(l, dtype=float)  # Initialize result array with appropriate dtype
 
         valid_indices = np.where(condition & ~singular_condition)
-        result[valid_indices] = 2 * lp[valid_indices] * l[valid_indices] * (
+        result[valid_indices] = -2 * lp[valid_indices] * l[valid_indices] * (
                     (L ** 2 + lp[valid_indices] ** 2 - l[valid_indices] ** 2) / (2 * L * lp[valid_indices])) * (1 - (
                     (L ** 2 + lp[valid_indices] ** 2 - l[valid_indices] ** 2) / (2 * L * lp[valid_indices])) ** 2) ** (
                                     -0.5)
@@ -493,11 +493,11 @@ def QE_via_quad(F_1_array, F_2_array, weights_mat):
     '''
     Unnormalized TT quadratic estimator
 
-    \hat{\phi}(\vL) = - 2 \int \frac{dl\,dl'}{2\pi} F_1(l) F_2(l') W(L, l, l')
+    \hat{\phi}(\vL) = 2 \int \frac{dl\,dl'}{2\pi} F_1(l) F_2(l') W(L, l, l')
 
     where
 
-     W(L, l, l') \equiv \Delta(l,l',L) l l' \left(\frac{L^2 + l'^2 - l^2}{2Ll'} \right)\left[1 - \left( \frac{L^2 +l'^2 -l^2}{2Ll'}\right)\right]^{-\frac{1}{2}}
+     W(L, l, l') \equiv - \Delta(l,l',L) l l' \left(\frac{L^2 + l'^2 - l^2}{2Ll'} \right)\left[1 - \left( \frac{L^2 +l'^2 -l^2}{2Ll'}\right)\right]^{-\frac{1}{2}}
 
     and \Delta(l,l',L) is the triangle condition. The double integral is calculated using Gaussian quadratures
     implemented in the form of matrix multiplication to harness the speed of numpy's BLAS library:
@@ -516,7 +516,7 @@ def QE_via_quad(F_1_array, F_2_array, weights_mat):
     Returns:
         - The unnormalized lensing reconstruction at L
     '''
-    return np.dot(np.matmul(F_1_array, weights_mat), F_2_array)
+    return np.dot(np.matmul(F_2_array, weights_mat), F_1_array)/(2*np.pi)
 
 def unnorm_TT_qe_fftlog(al_F_1, al_F_2, N_l, lmin, alpha, lmax):
     """

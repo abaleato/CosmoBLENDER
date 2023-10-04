@@ -202,7 +202,7 @@ class hm_framework:
             self.get_tsz_consistency(exp, lmax_proj=exp.lmax)
 
         # Output ells
-        ells_out = np.logspace(np.log10(2), np.log10(self.lmax_out))
+        ells_out = np.linspace(1, self.lmax_out) #np.logspace(np.log10(2), np.log10(self.lmax_out))
         # Get the nodes, weights and matrices needed for Gaussian quadrature of QE integral
         exp.get_weights_mat_total(ells_out)
         if not fftlog_way:
@@ -241,17 +241,7 @@ class hm_framework:
         hm_minimal = Hm_minimal(self)
         exp_minimal = qest.Exp_minimal(exp)
 
-
-        n = len(hcos.zs)
-        outputs = map(tsZ_auto_itgrnds_each_z, np.arange(n), n * [ells_out], n * [fftlog_way],
-                               n * [get_secondary_bispec_bias], n * [parallelise_secondbispec], n * [damp_1h_prof],
-                               n * [L_array_sec_bispec_bias], n * [exp_minimal], n * [hm_minimal])
-
-        for idx, itgnds_at_i in enumerate(outputs):
-            oneH_4pt[...,idx], oneH_cross[...,idx], twoH_2_2[...,idx], twoH_1_3[...,idx], twoH_cross[...,idx],\
-            oneH_second_bispec[...,idx], twoH_second_bispec[...,idx] = itgnds_at_i
-        '''
-/*        with concurrent.futures.ProcessPoolExecutor(max_workers=max_workers) as executor:
+        with concurrent.futures.ProcessPoolExecutor(max_workers=max_workers) as executor:
             n = len(hcos.zs)
             outputs = executor.map(tsZ_auto_itgrnds_each_z, np.arange(n), n * [ells_out], n * [fftlog_way],
                                    n * [get_secondary_bispec_bias], n * [parallelise_secondbispec], n * [damp_1h_prof],
@@ -259,8 +249,8 @@ class hm_framework:
 
             for idx, itgnds_at_i in enumerate(outputs):
                 oneH_4pt[...,idx], oneH_cross[...,idx], twoH_2_2[...,idx], twoH_1_3[...,idx], twoH_cross[...,idx],\
-                oneH_second_bispec[...,idx], twoH_second_bispec[...,idx] = itgnds_at_i*/
-        '''
+                oneH_second_bispec[...,idx], twoH_second_bispec[...,idx] = itgnds_at_i
+
         # Convert the NFW profile in the cross bias from kappa to phi
         conversion_factor = np.nan_to_num(1 / (0.5 * ells_out*(ells_out+1) )) if fftlog_way else ql.spec.cl2cfft(np.nan_to_num(1 / (0.5 * np.arange(self.lmax_out+1)*(np.arange(self.lmax_out+1)+1) )),exp.pix).fft
 
@@ -1063,6 +1053,7 @@ def tsZ_auto_itgrnds_each_z(i, ells_out, fftlog_way, get_secondary_bispec_bias, 
     print(f'Now in parallel loop {i}')
     #nx = hm_minimal.lmax_out + 1 if fftlog_way else exp_minimal.pix.nx
     nx = len(ells_out) if fftlog_way else exp_minimal.pix.nx
+    ells_in = np.arange(0,exp_minimal.lmax+1)
     pix_sbbs = ql.maps.cfft(exp_minimal.nx_secbispec, exp_minimal.dx_secbispec)
 
     # Temporary storage
@@ -1086,8 +1077,8 @@ def tsZ_auto_itgrnds_each_z(i, ells_out, fftlog_way, get_secondary_bispec_bias, 
                                            weights_mat_total=exp_minimal.weights_mat_total, nodes=exp_minimal.nodes)
 
     # Project the matter power spectrum for two-halo terms
-    pk_of_l = tls.pkToPell(hm_minimal.comoving_radial_distance[i], hm_minimal.ks, hm_minimal.Pzk[i], ellmax=exp_minimal.lmax)
-    pk_of_L = tls.pkToPell(hm_minimal.comoving_radial_distance[i], hm_minimal.ks, hm_minimal.Pzk[i], ellmax=hm_minimal.lmax_out)
+    pk_of_l = tls.pkToPell(hm_minimal.comoving_radial_distance[i], hm_minimal.ks, hm_minimal.Pzk[i])(ells_in)
+    pk_of_L = tls.pkToPell(hm_minimal.comoving_radial_distance[i], hm_minimal.ks, hm_minimal.Pzk[i])(ells_out)
     if not fftlog_way:
         pk_of_l = ql.spec.cl2cfft(pk_of_l, exp_minimal.pix).fft
         pk_of_L = ql.spec.cl2cfft(pk_of_L, exp_minimal.pix).fft
@@ -1095,12 +1086,12 @@ def tsZ_auto_itgrnds_each_z(i, ells_out, fftlog_way, get_secondary_bispec_bias, 
     # Integral over M for 2halo trispectrum. This will later go into a QE
     for j, m in enumerate(hm_minimal.ms):
         kap = tls.pkToPell(hm_minimal.comoving_radial_distance[i],
-                           hm_minimal.ks, hm_minimal.uk_profiles['nfw'][i, j], ellmax=exp_minimal.lmax)
+                           hm_minimal.ks, hm_minimal.uk_profiles['nfw'][i, j])(ells_in)
         integ_k_second_bispec[..., j] = kap * hm_minimal.ms_rescaled[j] * hm_minimal.nzm[i, j] * hm_minimal.bh_ofM[i, j]
 
         if m < exp_minimal.massCut:
             y = exp_minimal.tsz_filter * tls.pkToPell(hm_minimal.comoving_radial_distance[i], hm_minimal.ks,
-                                          hm_minimal.pk_profiles['y'][i, j], ellmax=exp_minimal.lmax)
+                                          hm_minimal.pk_profiles['y'][i, j])(ells_in)
             integ_1h_for_2htrispec[..., j] = y * hm_minimal.nzm[i, j] * hm_minimal.bh_ofM[i, j]
 
     # Integrals over single profile in 2h (for 1-3 trispec and 2h bispec biases)
@@ -1110,10 +1101,9 @@ def tsZ_auto_itgrnds_each_z(i, ells_out, fftlog_way, get_secondary_bispec_bias, 
     # M integral
     for j, m in enumerate(hm_minimal.ms):
         if m > exp_minimal.massCut: continue
-        y = exp_minimal.tsz_filter * tls.pkToPell(hm_minimal.comoving_radial_distance[i], hm_minimal.ks, hm_minimal.pk_profiles['y'][i, j],
-                                           ellmax=exp_minimal.lmax)
+        y = exp_minimal.tsz_filter * tls.pkToPell(hm_minimal.comoving_radial_distance[i], hm_minimal.ks, hm_minimal.pk_profiles['y'][i, j])(ells_in)
         kap = tls.pkToPell(hm_minimal.comoving_radial_distance[i],
-                           hm_minimal.ks, hm_minimal.uk_profiles['nfw'][i, j], ellmax=hm_minimal.lmax_out)
+                           hm_minimal.ks, hm_minimal.uk_profiles['nfw'][i, j])(ells_out)
 
         kfft = kap * hm_minimal.ms_rescaled[j] if fftlog_way else ql.spec.cl2cfft(kap, exp_minimal.pix).fft * hm_minimal.ms_rescaled[j]
 
@@ -1123,12 +1113,10 @@ def tsZ_auto_itgrnds_each_z(i, ells_out, fftlog_way, get_secondary_bispec_bias, 
         if damp_1h_prof:
             y_damp = exp_minimal.tsz_filter * \
                      tls.pkToPell(hm_minimal.comoving_radial_distance[i], hm_minimal.ks, hm_minimal.pk_profiles['y'][i, j]
-                                  * (1 - np.exp(-(hm_minimal.ks / hm_minimal.p['kstar_damping']))),
-                                  ellmax=exp_minimal.lmax)
+                                  * (1 - np.exp(-(hm_minimal.ks / hm_minimal.p['kstar_damping']))))(ells_in)
             kap_damp = tls.pkToPell(hm_minimal.comoving_radial_distance[i],
                                     hm_minimal.ks, hm_minimal.uk_profiles['nfw'][i, j]
-                                    * (1 - np.exp(-(hm_minimal.ks / hm_minimal.p['kstar_damping']))),
-                                    ellmax=hm_minimal.lmax_out)
+                                    * (1 - np.exp(-(hm_minimal.ks / hm_minimal.p['kstar_damping']))))(ells_out)
             kfft_damp = kap_damp * hm_minimal.ms_rescaled[j] if fftlog_way else ql.spec.cl2cfft(kap_damp, exp_minimal.pix).fft * \
                                                                           hm_minimal.ms_rescaled[j]
             phicfft_damp = QE(y_damp, y_damp)
@@ -1156,13 +1144,11 @@ def tsZ_auto_itgrnds_each_z(i, ells_out, fftlog_way, get_secondary_bispec_bias, 
 
             # Get the kappa map, up to lmax rather than lmax_out as was needed in other terms
             kap_secbispec = tls.pkToPell(hm_minimal.comoving_radial_distance[i], hm_minimal.ks,
-                                         hm_minimal.uk_profiles['nfw'][i, j],
-                                         ellmax=exp_minimal.lmax)
+                                         hm_minimal.uk_profiles['nfw'][i, j])(ells_in)
             if damp_1h_prof:
                 kap_secbispec_damp = tls.pkToPell(hm_minimal.comoving_radial_distance[i], hm_minimal.ks,
                                              hm_minimal.uk_profiles['nfw'][i, j]
-                                             * (1 - np.exp(-(hm_minimal.ks / hm_minimal.p['kstar_damping']))),
-                                             ellmax=exp_minimal.lmax)
+                                             * (1 - np.exp(-(hm_minimal.ks / hm_minimal.p['kstar_damping']))))(ells_in)
             else:
                 kap_secbispec_damp = kap_secbispec
 
