@@ -202,11 +202,14 @@ class hm_framework:
             self.get_tsz_consistency(exp, lmax_proj=exp.lmax)
 
         # Output ells
-        ells_out = np.arange(self.lmax_out+1)
+        ells_out = np.logspace(np.log10(2), np.log10(self.lmax_out))
+        # Get the nodes, weights and matrices needed for Gaussian quadrature of QE integral
+        exp.get_weights_mat_total(ells_out)
         if not fftlog_way:
             lbins = np.arange(1,self.lmax_out+1,bin_width_out)
 
-        nx = self.lmax_out + 1 if fftlog_way else exp.pix.nx
+        #nx = self.lmax_out + 1 if fftlog_way else exp.pix.nx
+        nx = len(ells_out) if fftlog_way else exp.pix.nx
 
         # Get frequency scaling of tSZ, possibly including harmonic ILC cleaning
         exp.tsz_filter = exp.get_tsz_filter()
@@ -237,7 +240,18 @@ class hm_framework:
         print('Launching parallel processes...')
         hm_minimal = Hm_minimal(self)
         exp_minimal = qest.Exp_minimal(exp)
-        with concurrent.futures.ProcessPoolExecutor(max_workers=max_workers) as executor:
+
+
+        n = len(hcos.zs)
+        outputs = map(tsZ_auto_itgrnds_each_z, np.arange(n), n * [ells_out], n * [fftlog_way],
+                               n * [get_secondary_bispec_bias], n * [parallelise_secondbispec], n * [damp_1h_prof],
+                               n * [L_array_sec_bispec_bias], n * [exp_minimal], n * [hm_minimal])
+
+        for idx, itgnds_at_i in enumerate(outputs):
+            oneH_4pt[...,idx], oneH_cross[...,idx], twoH_2_2[...,idx], twoH_1_3[...,idx], twoH_cross[...,idx],\
+            oneH_second_bispec[...,idx], twoH_second_bispec[...,idx] = itgnds_at_i
+        '''
+/*        with concurrent.futures.ProcessPoolExecutor(max_workers=max_workers) as executor:
             n = len(hcos.zs)
             outputs = executor.map(tsZ_auto_itgrnds_each_z, np.arange(n), n * [ells_out], n * [fftlog_way],
                                    n * [get_secondary_bispec_bias], n * [parallelise_secondbispec], n * [damp_1h_prof],
@@ -245,8 +259,8 @@ class hm_framework:
 
             for idx, itgnds_at_i in enumerate(outputs):
                 oneH_4pt[...,idx], oneH_cross[...,idx], twoH_2_2[...,idx], twoH_1_3[...,idx], twoH_cross[...,idx],\
-                oneH_second_bispec[...,idx], twoH_second_bispec[...,idx] = itgnds_at_i
-
+                oneH_second_bispec[...,idx], twoH_second_bispec[...,idx] = itgnds_at_i*/
+        '''
         # Convert the NFW profile in the cross bias from kappa to phi
         conversion_factor = np.nan_to_num(1 / (0.5 * ells_out*(ells_out+1) )) if fftlog_way else ql.spec.cl2cfft(np.nan_to_num(1 / (0.5 * np.arange(self.lmax_out+1)*(np.arange(self.lmax_out+1)+1) )),exp.pix).fft
 
@@ -272,8 +286,7 @@ class hm_framework:
             exp.biases['second_bispec_bias_ells'] = L_array_sec_bispec_bias
 
         if fftlog_way:
-            exp.biases['ells'] = np.arange(self.lmax_out+1)
-            return
+            exp.biases['ells'] = ells_out
         else:
             exp.biases['ells'] = ql.maps.cfft(exp.nx,exp.dx,fft=exp.biases['tsz']['trispec']['1h']).get_ml(lbins).ls
             exp.biases['tsz']['trispec']['1h'] = ql.maps.cfft(exp.nx,exp.dx,fft=exp.biases['tsz']['trispec']['1h']).get_ml(lbins).specs['cl']
@@ -307,7 +320,9 @@ class hm_framework:
             self.get_galaxy_consistency(exp, survey_name)
 
         # Output ells
-        ells_out = np.arange(self.lmax_out+1)
+        ells_out = np.logspace(np.log10(2), np.log10(self.lmax_out))
+        # Get the nodes, weights and matrices needed for Gaussian quadrature of QE integral
+        exp.get_weights_mat_total(ells_out)
         if not fftlog_way:
             lbins = np.arange(1,self.lmax_out+1,bin_width_out)
 
@@ -348,7 +363,7 @@ class hm_framework:
         exp.biases['tsz']['cross_w_gals']['1h'] = np.trapz(oneH_cross * gyy_intgrnd, hcos.zs, axis=-1)
         exp.biases['tsz']['cross_w_gals']['2h'] = np.trapz(twoH_cross * gyy_intgrnd, hcos.zs, axis=-1)
         if fftlog_way:
-            exp.biases['ells'] = np.arange(self.lmax_out+1)
+            exp.biases['ells'] = ells_out
             return
         else:
             exp.biases['ells'] = ql.maps.cfft(exp.nx,exp.dx,fft=exp.biases['tsz']['trispec']['1h']).get_ml(lbins).ls
@@ -407,7 +422,9 @@ class hm_framework:
         self.get_matter_consistency(exp)
 
         # Output ells
-        ells_out = np.arange(self.lmax_out+1)
+        ells_out = np.logspace(np.log10(2), np.log10(self.lmax_out))
+        # Get the nodes, weights and matrices needed for Gaussian quadrature of QE integral
+        exp.get_weights_mat_total(ells_out)
 
         nx = self.lmax_out+1
 
@@ -529,7 +546,9 @@ class hm_framework:
         self.get_CIB_filters(exp)
 
         # Output ells
-        ells_out = np.arange(self.lmax_out+1)
+        ells_out = np.logspace(np.log10(2), np.log10(self.lmax_out))
+        # Get the nodes, weights and matrices needed for Gaussian quadrature of QE integral
+        exp.get_weights_mat_total(ells_out)
         if not fftlog_way:
             lbins = np.arange(1,self.lmax_out+1,bin_width_out)
         nx = self.lmax_out+1 if fftlog_way else exp.nx
@@ -593,7 +612,7 @@ class hm_framework:
             exp.biases['second_bispec_bias_ells'] = L_array_sec_bispec_bias
 
         if fftlog_way:
-            exp.biases['ells'] = np.arange(self.lmax_out+1)
+            exp.biases['ells'] = ells_out
             return
         else:
             exp.biases['ells'] = ql.maps.cfft(exp.nx,exp.dx,fft=exp.biases['cib']['trispec']['1h']).get_ml(lbins).ls
@@ -631,7 +650,9 @@ class hm_framework:
         self.get_CIB_filters(exp)
 
         # Output ells
-        ells_out = np.arange(self.lmax_out+1)
+        ells_out = np.logspace(np.log10(2), np.log10(self.lmax_out))
+        # Get the nodes, weights and matrices needed for Gaussian quadrature of QE integral
+        exp.get_weights_mat_total(ells_out)
         if not fftlog_way:
             lbins = np.arange(1,self.lmax_out+1,bin_width_out)
 
@@ -670,7 +691,7 @@ class hm_framework:
         exp.biases['cib']['cross_w_gals']['2h'] = np.trapz( twoH_cross*gII_itgnd, hcos.zs, axis=-1)
 
         if fftlog_way:
-            exp.biases['ells'] = np.arange(self.lmax_out+1)
+            exp.biases['ells'] = ells_out
             return
         else:
             exp.biases['ells'] = ql.maps.cfft(exp.nx,exp.dx,fft=exp.biases['cib']['trispec']['1h']).get_ml(lbins).ls
@@ -778,7 +799,9 @@ class hm_framework:
         self.get_CIB_filters(exp)
 
         # Output ells
-        ells_out = np.arange(self.lmax_out+1)
+        ells_out = np.logspace(np.log10(2), np.log10(self.lmax_out))
+        # Get the nodes, weights and matrices needed for Gaussian quadrature of QE integral
+        exp.get_weights_mat_total(ells_out)
         if not fftlog_way:
             lbins = np.arange(1,self.lmax_out+1,bin_width_out)
 
@@ -852,7 +875,7 @@ class hm_framework:
             exp.biases['second_bispec_bias_ells'] = L_array_sec_bispec_bias
 
         if fftlog_way:
-            exp.biases['ells'] = np.arange(self.lmax_out+1)
+            exp.biases['ells'] = ells_out
             return
         else:
             exp.biases['ells'] = ql.maps.cfft(exp.nx,exp.dx,fft=exp.biases['mixed']['trispec']['1h']).get_ml(lbins).ls
@@ -888,7 +911,9 @@ class hm_framework:
         exp.tsz_filter = exp.get_tsz_filter()
 
         # Output ells
-        ells_out = np.arange(self.lmax_out+1)
+        ells_out = np.logspace(np.log10(2), np.log10(self.lmax_out))
+        # Get the nodes, weights and matrices needed for Gaussian quadrature of QE integral
+        exp.get_weights_mat_total(ells_out)
         if not fftlog_way:
             lbins = np.arange(1,self.lmax_out+1,bin_width_out)
 
@@ -928,7 +953,7 @@ class hm_framework:
         exp.biases['mixed']['cross_w_gals']['2h'] = np.trapz(twoH_cross*gIy_itgnd, hcos.zs, axis=-1)
 
         if fftlog_way:
-            exp.biases['ells'] = np.arange(self.lmax_out+1)
+            exp.biases['ells'] = ells_out
             return
         else:
             exp.biases['ells'] = ql.maps.cfft(exp.nx,exp.dx,fft=exp.biases['cib']['trispec']['1h']).get_ml(lbins).ls
@@ -963,6 +988,8 @@ class hm_framework:
         """
         if lmax_clkk==None:
             lmax_clkk = exp.lmax
+        ells_for_clkk = np.arange(lmax_clkk + 1)
+
         # Initialize array with all biases to kappa rec auto
         clkk_bias_tot = np.zeros(lmax_clkk+1, dtype='complex128')
         # Initialize array with biases to kappa rec cross true kappa (i.e., just the primary bispectrum bias, without
@@ -978,13 +1005,13 @@ class hm_framework:
 
         which_bias_list = []
         if get_cib:
-            self.get_cib_bias(exp, get_secondary_bispec_bias=get_secondary_bispec_bias)
+            self.get_cib_auto_biases(exp, get_secondary_bispec_bias=get_secondary_bispec_bias)
             which_bias_list.append('cib')
         if get_tsz:
-            self.get_tsz_bias(exp, get_secondary_bispec_bias=get_secondary_bispec_bias)
+            self.get_tsz_auto_biases(exp, get_secondary_bispec_bias=get_secondary_bispec_bias)
             which_bias_list.append('tsz')
         if get_mixed:
-            self.get_cib_bias(exp, get_secondary_bispec_bias=get_secondary_bispec_bias)
+            self.get_mixed_auto_biases(exp, get_secondary_bispec_bias=get_secondary_bispec_bias)
             which_bias_list.append('mixed')
 
         for which_bias in which_bias_list:
@@ -993,22 +1020,23 @@ class hm_framework:
                     ells = exp.biases['second_bispec_bias_ells']
                 else:
                     ells = exp.biases['ells']
-                which_term_list = ['1h', '2h']
 
-                for which_term in which_term_list:
-                    clkk_bias_tot += np.nan_to_num(np.interp(np.arange(lmax_clkk+1), ells,
+                for which_term in ['1h', '2h']:
+                    clkk_bias_tot += np.nan_to_num(np.interp(ells_for_clkk, ells,
                                                exp.biases[which_bias][which_coupling][which_term]))
                     if which_coupling=='prim_bispec':
                         # The prim bispec bias to the recXtrueKappa is half of the prim bispec bias to the auto
-                        clkcross_bias_tot += np.nan_to_num(0.5 * np.interp(np.arange(lmax_clkk+1), ells,
+                        clkcross_bias_tot += np.nan_to_num(0.5 * np.interp(ells_for_clkk, ells,
                                                              exp.biases[which_bias][which_coupling][which_term]))
 
         # Now use clkk_bias_tot to get the bias to C_l^{B^{template}x\tilde{B}} and C_l^{B^{template}xB^{template}}
         # TODO: speed up calculate_cl_bias() by using fftlog
-        # TODO: It might be better to have W_E and W_phi provided externally rather than calculated internally
-        cl_Btemp_x_Blens_bias_bcl = tls.calculate_cl_bias(exp.pix, exp.W_E * exp.cl_unl.clee, exp.W_phi * clkcross_bias_tot, lbins)
-        cl_Btemp_x_Btemp_bias_bcl = tls.calculate_cl_bias(exp.pix, exp.W_E**2 * (exp.cl_len.clee + exp.nlpp),
-                                                          exp.W_phi**2 * clkk_bias_tot, lbins)
+        cl_Btemp_x_Blens_bias_bcl = tls.calculate_cl_bias(exp.pix,
+                                                          exp.W_E(lmax_clkk) * exp.sky.cmb[0, 0].funlensedEE(
+                                                              ells_for_clkk),
+                                                          exp.W_phi(lmax_clkk) * clkcross_bias_tot, lbins)
+        cl_Btemp_x_Btemp_bias_bcl = tls.calculate_cl_bias(exp.pix, exp.W_E(lmax_clkk) ** 2 * exp.clee_tot,
+                                                          exp.W_phi(lmax_clkk) ** 2 * clkk_bias_tot, lbins)
         cl_Bdel_x_Bdel_bias_array = - 2 * cl_Btemp_x_Blens_bias_bcl.specs['cl'] + cl_Btemp_x_Btemp_bias_bcl.specs['cl']
 
         return cl_Btemp_x_Blens_bias_bcl.ls, cl_Btemp_x_Blens_bias_bcl.specs['cl'],\
@@ -1033,7 +1061,8 @@ def tsZ_auto_itgrnds_each_z(i, ells_out, fftlog_way, get_secondary_bispec_bias, 
         * hm_minimal = instance of biases.hm_minimal(hm_framework)
     """
     print(f'Now in parallel loop {i}')
-    nx = hm_minimal.lmax_out + 1 if fftlog_way else exp_minimal.pix.nx
+    #nx = hm_minimal.lmax_out + 1 if fftlog_way else exp_minimal.pix.nx
+    nx = len(ells_out) if fftlog_way else exp_minimal.pix.nx
     pix_sbbs = ql.maps.cfft(exp_minimal.nx_secbispec, exp_minimal.dx_secbispec)
 
     # Temporary storage
@@ -1053,7 +1082,8 @@ def tsZ_auto_itgrnds_each_z(i, ells_out, fftlog_way, get_secondary_bispec_bias, 
     # To keep QE calls tidy, define
     QE = lambda prof_1, prof_2 : qest.get_TT_qe(fftlog_way, ells_out, prof_1, exp_minimal.qe_norm,
                                            exp_minimal.pix, exp_minimal.lmax, exp_minimal.cltt_tot, exp_minimal.ls,
-                                           exp_minimal.cl_len.cltt, exp_minimal.qest_lib, exp_minimal.ivf_lib, prof_2)
+                                           exp_minimal.cl_len.cltt, exp_minimal.qest_lib, exp_minimal.ivf_lib, prof_2,
+                                           weights_mat_total=exp_minimal.weights_mat_total, nodes=exp_minimal.nodes)
 
     # Project the matter power spectrum for two-halo terms
     pk_of_l = tls.pkToPell(hm_minimal.comoving_radial_distance[i], hm_minimal.ks, hm_minimal.Pzk[i], ellmax=exp_minimal.lmax)
@@ -1077,7 +1107,7 @@ def tsZ_auto_itgrnds_each_z(i, ells_out, fftlog_way, get_secondary_bispec_bias, 
     int_over_M_of_profile = pk_of_l * (np.trapz(integ_1h_for_2htrispec, hm_minimal.ms, axis=-1) + hm_minimal.y_consistency[i])
     kap_int = pk_of_l * (np.trapz(integ_k_second_bispec, hm_minimal.ms, axis=-1) + hm_minimal.m_consistency[i])
 
-    # M integral.
+    # M integral
     for j, m in enumerate(hm_minimal.ms):
         if m > exp_minimal.massCut: continue
         y = exp_minimal.tsz_filter * tls.pkToPell(hm_minimal.comoving_radial_distance[i], hm_minimal.ks, hm_minimal.pk_profiles['y'][i, j],
@@ -1180,7 +1210,8 @@ def tsZ_cross_itgrnds_each_z(i, ells_out, fftlog_way, damp_1h_prof, exp_minimal,
     # To keep QE calls tidy, define
     QE = lambda prof_1, prof_2 : qest.get_TT_qe(fftlog_way, ells_out, prof_1, exp_minimal.qe_norm,
                                            exp_minimal.pix, exp_minimal.lmax, exp_minimal.cltt_tot, exp_minimal.ls,
-                                           exp_minimal.cl_len.cltt, exp_minimal.qest_lib, exp_minimal.ivf_lib, prof_2)
+                                           exp_minimal.cl_len.cltt, exp_minimal.qest_lib, exp_minimal.ivf_lib, prof_2,
+                                           weights_mat_total=exp_minimal.weights_mat_total, nodes=exp_minimal.nodes)
 
     # Project the matter power spectrum for two-halo terms
     pk_of_l = tls.pkToPell(hm_minimal.comoving_radial_distance[i], hm_minimal.ks, hm_minimal.Pzk[i], ellmax=exp_minimal.lmax)
@@ -1312,7 +1343,8 @@ def cib_auto_itgrnds_each_z(i, ells_out, fftlog_way, get_secondary_bispec_bias, 
     # To keep QE calls tidy, define
     QE = lambda prof_1, prof_2 : qest.get_TT_qe(fftlog_way, ells_out, prof_1, exp_minimal.qe_norm,
                                            exp_minimal.pix, exp_minimal.lmax, exp_minimal.cltt_tot, exp_minimal.ls,
-                                           exp_minimal.cl_len.cltt, exp_minimal.qest_lib, exp_minimal.ivf_lib, prof_2)
+                                           exp_minimal.cl_len.cltt, exp_minimal.qest_lib, exp_minimal.ivf_lib, prof_2,
+                                           weights_mat_total=exp_minimal.weights_mat_total, nodes=exp_minimal.nodes)
 
     # Project the matter power spectrum for two-halo terms
     pk_of_l = tls.pkToPell(hm_minimal.comoving_radial_distance[i], hm_minimal.ks, hm_minimal.Pzk[i], ellmax=exp_minimal.lmax)
@@ -1471,7 +1503,8 @@ def cib_cross_itgrnds_each_z(i, ells_out, fftlog_way, damp_1h_prof, exp_minimal,
     # To keep QE calls tidy, define
     QE = lambda prof_1, prof_2 : qest.get_TT_qe(fftlog_way, ells_out, prof_1, exp_minimal.qe_norm,
                                            exp_minimal.pix, exp_minimal.lmax, exp_minimal.cltt_tot, exp_minimal.ls,
-                                           exp_minimal.cl_len.cltt, exp_minimal.qest_lib, exp_minimal.ivf_lib, prof_2)
+                                           exp_minimal.cl_len.cltt, exp_minimal.qest_lib, exp_minimal.ivf_lib, prof_2,
+                                           weights_mat_total=exp_minimal.weights_mat_total, nodes=exp_minimal.nodes)
 
     # Project the matter power spectrum for two-halo terms
     pk_of_l = tls.pkToPell(hm_minimal.comoving_radial_distance[i], hm_minimal.ks, hm_minimal.Pzk[i], ellmax=exp_minimal.lmax)
@@ -1586,7 +1619,8 @@ def mixed_auto_itgrnds_each_z(i, ells_out, fftlog_way, get_secondary_bispec_bias
     # To keep QE calls tidy, define
     QE = lambda prof_1, prof_2 : qest.get_TT_qe(fftlog_way, ells_out, prof_1, exp_minimal.qe_norm,
                                            exp_minimal.pix, exp_minimal.lmax, exp_minimal.cltt_tot, exp_minimal.ls,
-                                           exp_minimal.cl_len.cltt, exp_minimal.qest_lib, exp_minimal.ivf_lib, prof_2)
+                                           exp_minimal.cl_len.cltt, exp_minimal.qest_lib, exp_minimal.ivf_lib, prof_2,
+                                           weights_mat_total=exp_minimal.weights_mat_total, nodes=exp_minimal.nodes)
 
     # Project the matter power spectrum for two-halo terms
     pk_of_l = tls.pkToPell(hm_minimal.comoving_radial_distance[i], hm_minimal.ks, hm_minimal.Pzk[i], ellmax=exp_minimal.lmax)
@@ -1802,7 +1836,8 @@ def mixed_cross_itgrnds_each_z(i, ells_out, fftlog_way, damp_1h_prof, exp_minima
     # To keep QE calls tidy, define
     QE = lambda prof_1, prof_2 : qest.get_TT_qe(fftlog_way, ells_out, prof_1, exp_minimal.qe_norm,
                                            exp_minimal.pix, exp_minimal.lmax, exp_minimal.cltt_tot, exp_minimal.ls,
-                                           exp_minimal.cl_len.cltt, exp_minimal.qest_lib, exp_minimal.ivf_lib, prof_2)
+                                           exp_minimal.cl_len.cltt, exp_minimal.qest_lib, exp_minimal.ivf_lib, prof_2,
+                                           weights_mat_total=exp_minimal.weights_mat_total, nodes=exp_minimal.nodes)
 
     # Project the matter power spectrum for two-halo terms
     pk_of_l = tls.pkToPell(hm_minimal.comoving_radial_distance[i], hm_minimal.ks, hm_minimal.Pzk[i], ellmax=exp_minimal.lmax)

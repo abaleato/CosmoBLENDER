@@ -9,6 +9,8 @@ import sys
 # TODO: install BasicILC
 sys.path.insert(0, '/Users/antonbaleatolizancos/Software/BasicILC_py3/')
 import cmb_ilc
+import concurrent
+from scipy.special import roots_legendre
 
 class Exp_minimal:
     """ A helper class to encapsulate some essential attributes of experiment() objects to be passed to parallelized
@@ -21,13 +23,14 @@ class Exp_minimal:
                 "lmax": exp.lmax, "nx": exp.nx, "dx": exp.dx, "pix": exp.pix, "tsz_filter": exp.tsz_filter,
                 "massCut": exp.massCut, "ls":exp.ls, "cl_len":exp.cl_len, "cl_unl":exp.cl_unl, "qest_lib":exp.qest_lib,
                 "ivf_lib":exp.ivf_lib, "qe_norm":exp.qe_norm_compressed, "nx_secbispec":exp.nx_secbispec,
-                "dx_secbispec":exp.dx_secbispec}
+                "dx_secbispec":exp.dx_secbispec, "weights_mat_total":exp.weights_mat_total, "nodes":exp.nodes}
         self.__dict__ = dict
 
 class experiment:
     def __init__(self, nlev_t=np.array([5.]), beam_size=np.array([1.]), lmax=3500, massCut_Mvir = np.inf, nx=1024,
-                 dx_arcmin=1.0, nx_secbispec=256, dx_arcmin_secbispec=1.0, fname_scalar=None, fname_lensed=None, freq_GHz=np.array([150.]), atm_fg=True,
-                 MV_ILC_bool=False, deproject_tSZ=False, deproject_CIB=False, bare_bones=False):
+                 dx_arcmin=1., nx_secbispec=256, dx_arcmin_secbispec=1.0, fname_scalar=None, fname_lensed=None, freq_GHz=np.array([150.]), fg=True, atm_fg=True,
+                 MV_ILC_bool=False, deproject_tSZ=False, deproject_CIB=False, bare_bones=False, nlee=None,
+                 gauss_order=30):
         """ Initialise a cosmology and experimental charactierstics
             - Inputs:
                 * nlev_t = np array. Temperature noise level, in uK.arcmin. Either single value or one for each freq
@@ -42,11 +45,14 @@ class experiment:
                 * (optional) dx_arcmin_secbispec = float. Same as dx, but for secondary bispectrum bias calculation
                 * (optional) freq_GHz =np array of one or many floats. Frequency of observqtion (in GHZ). If array,
                                         frequencies that get combined as ILC using ILC_weights as weights
+                * (optional) fg = Whether or not to include non-atmospheric fg power in inverse-variance filter
                 * (optional) atm_fg = Whether or not to include atmospheric fg power in inverse-variance filter
                 * (optional) MV_ILC_bool = Bool. If true, form a MV ILC of freqs
                 * (optional) deproject_tSZ = Bool. If true, form ILC deprojecting tSZ and retaining unit response to CMB
                 * (optional) deproject_CIB = Bool. If true, form ILC deprojecting CIB and retaining unit response to CMB
                 * (optional) bare_bones= Bool. If True, don't run any of the costly operations at initialisation
+                * (optional) nlee = np array of size lmax+1 containing E-mode noise power for delensing template
+                * (optional) gauss_order= int. Order of the Gaussian quadrature used to compute analytic QE
         """
         if fname_scalar is None:
             fname_scalar = None#'~/Software/Quicklens-with-fixes/quicklens/data\/cl/planck_wp_highL/planck_lensing_wp_highL_bestFit_20130627_scalCls.dat'
@@ -56,10 +62,17 @@ class experiment:
         #Initialise CAMB spectra for filtering
         self.cl_unl = ql.spec.get_camb_scalcl(fname_scalar, lmax=lmax)
         self.cl_len = ql.spec.get_camb_lensedcl(fname_lensed, lmax=lmax)
+        self.nlee = nlee
         self.ls = self.cl_len.ls
         self.lmax = lmax
-        self.lmin = 2
+        self.lmin = 1
         self.freq_GHz = freq_GHz
+
+
+        # Hyperparams for analytic QE calculation
+        self.gauss_order = gauss_order
+        self.nodes, self.weights = self.get_quad_nodes_weights(gauss_order, self.lmin, self.lmax)
+        self.lnodes_grid, self.lpnodes_grid = np.meshgrid(self.nodes, self.nodes)
 
         self.massCut = massCut_Mvir #Convert from M_vir (which is what Alex uses) to M_200 (which is what the
                                     # Tinker mass function in hmvec uses) using the relation from White 01.
@@ -79,16 +92,12 @@ class experiment:
 
         self.tsz_filter = None
 
-        #TODO: Calculate W_E in the multifrequency case
-        #self.nlee = (np.pi / 180. / 60. * self.nlev_p) ** 2 / self.bl ** 2
-        #self.W_E = np.nan_to_num(self.cl_len.clee / (self.cl_len.clee + self.nlee))
-
         self.MV_ILC_bool = MV_ILC_bool
         self.deproject_tSZ = deproject_tSZ
         self.deproject_CIB = deproject_CIB
         if not bare_bones:
             #Initialise sky model
-            self.sky = cmb_ilc.CMBILC(freq_GHz*1e9, beam_size, nlev_t, atm=atm_fg, lMaxT=self.lmax)
+            self.sky = cmb_ilc.CMBILC(freq_GHz*1e9, beam_size, nlev_t, fg=fg, atm=atm_fg, lMaxT=self.lmax)
             if len(self.freq_GHz)>1:
                 # In cases where there are several, compute ILC weights for combining different channels
                 assert MV_ILC_bool or deproject_tSZ or deproject_CIB, 'Please indicate how to combine different channels'
@@ -101,8 +110,6 @@ class experiment:
             self.inverse_variance_filters()
             # Calculate QE norm
             self.get_qe_norm()
-            self.nlpp = self.get_nlpp()
-            self.W_phi = self.cl_unl.clpp / (self.cl_unl.clpp + self.nlpp)
 
         # Initialise an empty dictionary to store the biases
         empty_arr = {}
@@ -120,6 +127,27 @@ class experiment:
                                 'prim_bispec': {'1h': empty_arr, '2h': empty_arr},
                                 'second_bispec': {'1h': empty_arr, '2h': empty_arr},
                                  'cross_w_gals' : {'1h' : empty_arr, '2h' : empty_arr}} }
+
+    def get_quad_nodes_weights(self, gauss_order, a, b):
+        # Get the nodes and weights for Gaussian quadrature of chosen order
+        nodes_on_minus1to1, weights = roots_legendre(gauss_order)
+        # We must now convert the nodes to our actual integration domain
+        nodes = (b - a) / 2. * nodes_on_minus1to1 + (a + b) / 2.
+        return nodes, (b - a) / 2. * weights
+
+    def W_phi(self, lmax_clkk):
+        # TODO: might want to specify cosmo here and elsewhere for ql
+        clpp = ql.spec.get_camb_scalcl(None, lmax=lmax_clkk).clpp
+        nlpp = self.get_nlpp(lmin=30, lmax=lmax_clkk, bin_width=30)
+        return clpp / (clpp + nlpp)
+
+    def W_E(self, lmax_clee):
+        ells = np.arange(lmax_clee+1)
+        if self.nlee is not None:
+            self.clee_tot = self.sky.cmb[0, 0].flensedEE(ells) + self.nlee
+        else:
+            self.get_total_EE_power(lmax_clee)
+        return np.nan_to_num(self.sky.cmb[0, 0].flensedEE(ells) / self.clee_tot)
 
     def inverse_variance_filters(self):
         """
@@ -207,6 +235,28 @@ class experiment:
         # Avoid infinities when dividing by inverse variance
         self.cltt_tot[np.where(np.isnan(self.cltt_tot))] = np.inf
 
+    def get_total_EE_power(self, lmax):
+        """
+        Get total EE power from CMB, noise and fgs.
+        Note that if both self.deproject_tSZ=1 and self.deproject_CIB=1, both are deprojected
+        """
+        ells = np.arange(lmax+1)
+        #TODO: Why can't we get ells below 10 in cltt_tot?
+        if len(self.freq_GHz)==1:
+            self.clee_tot = self.sky.cmb[0, 0].ftotalEE(ells)
+        else:
+            nL = 201
+            L = np.logspace(np.log10(self.lmin), np.log10(lmax), nL)
+            # ToDo: sample better in L
+            # TODO: add dust/sync deprojection options-- for now only MV
+            f = lambda l: self.sky.powerIlcEE(self.sky.weightsIlcCmbEE(l), l)
+
+            #TODO: turn zeros into infinities to avoid issues when dividing by this
+            self.clee_tot = np.interp(ells, L, np.array(list(map(f, L))))
+        # Avoid infinities when dividing by inverse variance
+        #self.clee_tot[np.where(np.isnan(self.clee_tot))] = np.inf
+        self.clee_tot = np.nan_to_num(self.clee_tot)
+
     def __getstate__(self):
         # this method is called when you are
         # going to pickle the class, to know what to pickle
@@ -220,6 +270,50 @@ class experiment:
     def __setstate__(self, state):
         self.__dict__.update(state)
 
+    def get_weights_mat_total(self, ells_out):
+        ''' Get the matrices needed for Gaussian quadrature of QE integral '''
+        self.weights_mat_total = np.array([self.weights_mat_at_L(L) for L in ells_out])
+
+    def weights_mat_at_L(self, L):
+        '''
+        Calculate the matrix to be used in the QE integration, i.e.,
+        H(L). This is derived from
+        W(L, l, l') \equiv \Delta(l,l',L) l l' \left(\frac{L^2 + l'^2 - l^2}{2Ll'} \right)\left[1 - \left( \frac{L^2 +l'^2 -l^2}{2Ll'}\right)\right]^{-\frac{1}{2}}
+
+        by sampling at the quadrature nodes in l and l' and  multiplying rows and columns by the quadrature weights w_i.
+
+        We cache the outputs of this function as they are used recurrently at every mass and redshift step
+
+        Inputs:
+            - L = int. The L at which we are evaluating the QE reconstruction
+        Returns:
+            - W(L, l_i, l_j)
+        '''
+        return self.weights * self.weights[:, np.newaxis] * self.ell_dependence(L, self.lnodes_grid, self.lpnodes_grid)
+
+    def ell_dependence(self, L, l, lp):
+        '''
+        Sample the kernel
+        W(L, l, l') \equiv \Delta(l,l',L) l l' \left(\frac{L^2 + l'^2 - l^2}{2Ll'} \right)\left[1 - \left( \frac{L^2 +l'^2 -l^2}{2Ll'}\right)\right]^{-\frac{1}{2}}
+
+        Inputs:
+            - L = int. The L at which we are evaluating the QE reconstruction
+        Returns:
+            - W(L, l, lp)
+        '''
+        L = np.asarray(L, dtype=int)  # Ensure L is an integer
+        condition = (L + l >= lp) & (L + lp >= l) & (l + lp >= L)
+        singular_condition = (L + l == lp) | (L + lp == l) | (l + lp == L)
+
+        result = np.zeros_like(l, dtype=float)  # Initialize result array with appropriate dtype
+
+        valid_indices = np.where(condition & ~singular_condition)
+        result[valid_indices] = 2 * lp[valid_indices] * l[valid_indices] * (
+                    (L ** 2 + lp[valid_indices] ** 2 - l[valid_indices] ** 2) / (2 * L * lp[valid_indices])) * (1 - (
+                    (L ** 2 + lp[valid_indices] ** 2 - l[valid_indices] ** 2) / (2 * L * lp[valid_indices])) ** 2) ** (
+                                    -0.5)
+        return result
+
     def get_qe_norm(self, key='ptt'):
         """
         Calculate the QE normalisation as the reciprocal of the N^{(0)} bias
@@ -229,11 +323,15 @@ class experiment:
         self.qest_lib = ql.sims.qest.library(self.cl_unl, self.cl_len, self.ivf_lib)
         self.qe_norm = self.qest_lib.get_qr(key)
 
-    def get_nlpp(self):
+    def get_nlpp(self, lmin=30, lmax=3000, bin_width=30):
+        # TODO: adapt  the lmax of these bins to the lmax_out of hm_object
         # TODO: this N0 is not smooth. Find a better way to calculate
-        lbins = np.arange(8, 3000, 30)
+        ells = np.arange(lmax+1)
+        lbins = np.arange(lmin, lmax, bin_width)
         norm = self.qe_norm.get_ml(lbins)
-        return np.interp(self.cl_unl.ls, norm.ls, np.nan_to_num(1./norm.specs['cl']))
+        # Extrapolate in clkk, for which we expect flatness at low L
+        nlkk = np.interp(ells, norm.ls, np.nan_to_num(norm.ls**4/norm.specs['cl']))
+        return np.nan_to_num(nlkk/ells**4)
 
     def __getattr__(self, spec):
         try:
@@ -271,8 +369,8 @@ def load_dict_of_biases(filename='./dict_with_biases.pkl'):
     return experiment_object
 
 def get_TT_qe(fftlog_way, ell_out, profile_leg1, qe_norm, pix, lmax, cltt_tot=None, ls=None, cltt_len=None,
-              qest_lib=None, ivf_lib=None, profile_leg2=None, N_l=2*4096, lmin=0.000135, alpha=-1.35,
-              norm_bin_width=40, key='ptt'):
+              qest_lib=None, ivf_lib=None, profile_leg2=None, N_l=2*4096, lmin=0.000135, alpha=-1.3499,
+              norm_bin_width=40, key='ptt', use_gauss=True, weights_mat_total=None, nodes=None):
     """
     Helper function to get the TT QE reconstruction for spherically-symmetric profiles using FFTlog
     Inputs:
@@ -300,7 +398,11 @@ def get_TT_qe(fftlog_way, ell_out, profile_leg1, qe_norm, pix, lmax, cltt_tot=No
     Returns:
         * If fftlog_way=True, a 1D array with the unnormalised reconstruction at the multipoles specified in ell_out
         * (optional) key = String. The quadratic estimator key for quicklens. Default is 'ptt' for TT
-
+        * (optional) use_gauss = Bool. If True, use Gaussian quad. Otherwise pyccl FFTlog
+        * (optional) weights_mat_total = np array with dimensions (len(ells_out), len(nodes), len(nodes)). Required if
+                                        use_gauss=True
+        * (optional) nodes = 1D np array. The Gaussian-quadrature-determined ells at which to evaluate integrals. Needed
+                                        if use_gauss=True
     """
     if profile_leg2 is None:
         profile_leg2 = profile_leg1
@@ -308,7 +410,15 @@ def get_TT_qe(fftlog_way, ell_out, profile_leg1, qe_norm, pix, lmax, cltt_tot=No
         assert(cltt_tot is not None and ls is not None and cltt_len is not None)
         al_F_1, al_F_2 = get_filtered_profiles_fftlog(profile_leg1, cltt_tot, ls, cltt_len, profile_leg2)
         # Calculate unnormalised QE
-        unnorm_TT_qe = unnorm_TT_qe_fftlog(al_F_1, al_F_2, N_l, lmin, alpha, lmax)(ell_out)
+        if use_gauss==True:
+            assert(weights_mat_total is not None and nodes is not None)
+            F_1_array = al_F_1(nodes)
+            F_2_array = al_F_2(nodes)
+            unnorm_TT_qe = np.zeros_like(ell_out)
+            for i, L in enumerate(ell_out):
+                unnorm_TT_qe[i] = QE_via_quad(F_1_array, F_2_array, weights_mat_total[i,:,:])
+        else:
+            unnorm_TT_qe = unnorm_TT_qe_fftlog(al_F_1, al_F_2, N_l, lmin, alpha, lmax)(ell_out)
         # Apply a convention correction to match Quicklens
         conv_corr = 1/(2*np.pi)
         return conv_corr * np.nan_to_num( unnorm_TT_qe / qe_norm )
@@ -330,7 +440,8 @@ def get_TT_qe(fftlog_way, ell_out, profile_leg1, qe_norm, pix, lmax, cltt_tot=No
         #Normalize the reconstruction
         return np.nan_to_num(unnormalized_phi.fft[:,:] / qe_norm.fft[:,:]) /np.sqrt(A_sky)
 
-def get_brute_force_unnorm_TT_qe(ell_out, profile_leg1, cltt_tot, ls, cltt_len, lmax, profile_leg2=None):
+def get_brute_force_unnorm_TT_qe(ell_out, profile_leg1, cltt_tot, ls, cltt_len, lmax,
+                                 profile_leg2=None, max_workers=None):
     """
     Slow but sure method to calculate the 1D TT QE reconstruction.
     Scales as O(N^3), but useful as a cross-check of get_unnorm_TT_qe(fftlog_way=True)
@@ -342,6 +453,23 @@ def get_brute_force_unnorm_TT_qe(ell_out, profile_leg1, cltt_tot, ls, cltt_len, 
         * cltt_len = 1d numpy array. Lensed TT power spectrum at ls.
         * lmax = int. Maximum multipole used in the reconstruction
         * (optional) profile_leg2 = 1D numpy array. As profile_leg1, but for the other QE leg.
+        * (optional) max_workers = int. Max number of parallel workers to launch. Default is # the machine has
+    """
+    al_F_1, al_F_2 = get_filtered_profiles_fftlog(profile_leg1, cltt_tot, ls, cltt_len, profile_leg2=profile_leg2)
+    output_unnormalised_phi = np.zeros(ell_out.shape)
+
+    with concurrent.futures.ProcessPoolExecutor(max_workers=max_workers) as executor:
+        n = len(ell_out)
+        outputs = executor.map(int_func, n * [lmax], n * [ell_out], np.arange(n), n * [al_F_1], n * [al_F_2])
+
+    for idx, outs in enumerate(outputs):
+        output_unnormalised_phi[idx] = outs
+
+    return output_unnormalised_phi
+
+def int_func(lmax, ell_out, n, al_F_1, al_F_2):
+    """
+    Helper function to parallelize get_brute_force_unnorm_TT_qe()
     """
     def ell_dependence(L, l, lp):
         '''L is outter multipole'''
@@ -354,19 +482,41 @@ def get_brute_force_unnorm_TT_qe(ell_out, profile_leg1, cltt_tot, ls, cltt_len, 
             return 2 * ( (L**2 + lp**2 - l**2) / (2*L*lp) )* ( 1 - ((L**2 + lp**2 - l**2) / (2*L*lp) )**2  )**(-0.5)
         else:
             return 0
-
     def inner_integrand(lp, L, l):
         return lp * al_F_2(lp) * ell_dependence(L, l, lp)
-
     def outer_integrand(l, L):
         return l * al_F_1(l) * quad(inner_integrand, 1, lmax, args=(L, l))[0]
+    L = ell_out[n]
+    return quad(outer_integrand, 1, lmax, args=L)[0]/(2*np.pi)
 
-    al_F_1, al_F_2 = get_filtered_profiles_fftlog(profile_leg1, cltt_tot, ls, cltt_len, profile_leg2=profile_leg2)
-    output_unnormalised_phi = np.zeros(ell_out.shape)
-    for i,L in enumerate(ell_out):
-        output_unnormalised_phi[i] = quad(outer_integrand, 1, lmax, args=L)[0]/(2*np.pi)
+def QE_via_quad(F_1_array, F_2_array, weights_mat):
+    '''
+    Unnormalized TT quadratic estimator
 
-    return output_unnormalised_phi
+    \hat{\phi}(\vL) = - 2 \int \frac{dl\,dl'}{2\pi} F_1(l) F_2(l') W(L, l, l')
+
+    where
+
+     W(L, l, l') \equiv \Delta(l,l',L) l l' \left(\frac{L^2 + l'^2 - l^2}{2Ll'} \right)\left[1 - \left( \frac{L^2 +l'^2 -l^2}{2Ll'}\right)\right]^{-\frac{1}{2}}
+
+    and \Delta(l,l',L) is the triangle condition. The double integral is calculated using Gaussian quadratures
+    implemented in the form of matrix multiplication to harness the speed of numpy's BLAS library:
+
+    F_1(l_i) H(L) F_2(l_i)
+
+    where l_i are the Gaussian quadrature nodes (and similarly for F_2), and H(L) is a matric derived from W(L, l_i, l_j)
+    after it has absorbed the quadrature weights [as documented in weights_mat_total()]. It appears that only a few dozen nodes
+    are needed for reasonable accuracy, but if more were required, one could explore using GPUs.
+
+    Inputs:
+        - F_1_array = 1D np array. The filtered inputs of the QE evaluated at the Gaussian quadrature nodes
+        - F_2_array = 1D np array. Same as F_1_array, but for F_2
+        - weights_mat = 2D np array. Matrix featuring the ell, ellprime dependence. Pre-computed at a fixed L
+                        using weights_mat_total(L)
+    Returns:
+        - The unnormalized lensing reconstruction at L
+    '''
+    return np.dot(np.matmul(F_1_array, weights_mat), F_2_array)
 
 def unnorm_TT_qe_fftlog(al_F_1, al_F_2, N_l, lmin, alpha, lmax):
     """
@@ -411,10 +561,15 @@ def get_filtered_profiles_fftlog(profile_leg1, cltt_tot, ls, cltt_len, profile_l
     Returns:
         * Interpolatable objects from which to get F_1 and F_2 at every multipole.
     """
+
+    def smooth_low_monopoles(array):
+        new = array[2:]
+        return np.interp(np.arange(len(array)), np.arange(len(array))[2:], new)
+
     if profile_leg2 is None:
         profile_leg2 = profile_leg1
-    F_1_of_l = np.nan_to_num(profile_leg1 / cltt_tot)
-    F_2_of_l = np.nan_to_num(cltt_len * profile_leg2/ cltt_tot)
+    F_1_of_l = smooth_low_monopoles(np.nan_to_num(profile_leg1 / cltt_tot))
+    F_2_of_l = smooth_low_monopoles(np.nan_to_num(cltt_len * profile_leg2/ cltt_tot))
 
     al_F_1 = interp1d(ls, F_1_of_l, bounds_error=False,  fill_value='extrapolate')
     al_F_2 = interp1d(ls, F_2_of_l, bounds_error=False,  fill_value='extrapolate')
