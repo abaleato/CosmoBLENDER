@@ -289,7 +289,7 @@ class experiment:
         Returns:
             - W(L, l_i, l_j)
         '''
-        return self.weights * self.weights[:, np.newaxis] * self.ell_dependence(L, self.lnodes_grid, self.lpnodes_grid)
+        return (self.weights * self.weights[:, np.newaxis] * self.ell_dependence(L, self.lnodes_grid, self.lpnodes_grid)).astype(np.float32)
 
     def ell_dependence(self, L, l, lp):
         '''
@@ -413,8 +413,8 @@ def get_TT_qe(fftlog_way, ell_out, profile_leg1, qe_norm, pix, lmax, cltt_tot=No
         # Calculate unnormalised QE
         if use_gauss==True:
             assert(weights_mat_total is not None and nodes is not None)
-            F_1_array = al_F_1(nodes)
-            F_2_array = al_F_2(nodes)
+            F_1_array = al_F_1(nodes).astype(np.float32)
+            F_2_array = al_F_2(nodes).astype(np.float32)
             unnorm_TT_qe = QE_via_quad(F_1_array, F_2_array, weights_mat_total)
         else:
             unnorm_TT_qe = unnorm_TT_qe_fftlog(al_F_1, al_F_2, N_l, lmin, alpha, lmax)(ell_out)
