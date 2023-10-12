@@ -308,7 +308,8 @@ class experiment:
         result = np.zeros_like(l, dtype=float)  # Initialize result array with appropriate dtype
 
         valid_indices = np.where(condition & ~singular_condition)
-        result[valid_indices] = -2 * lp[valid_indices] * l[valid_indices] * (
+        #TODO: I've removed minus sign to get expected -ve sign at low L in prim bispec. What's up?
+        result[valid_indices] = 2 * lp[valid_indices] * l[valid_indices] * (
                     (L ** 2 + lp[valid_indices] ** 2 - l[valid_indices] ** 2) / (2 * L * lp[valid_indices])) * (1 - (
                     (L ** 2 + lp[valid_indices] ** 2 - l[valid_indices] ** 2) / (2 * L * lp[valid_indices])) ** 2) ** (
                                     -0.5)
@@ -414,9 +415,7 @@ def get_TT_qe(fftlog_way, ell_out, profile_leg1, qe_norm, pix, lmax, cltt_tot=No
             assert(weights_mat_total is not None and nodes is not None)
             F_1_array = al_F_1(nodes)
             F_2_array = al_F_2(nodes)
-            unnorm_TT_qe = np.zeros_like(ell_out)
-            for i, L in enumerate(ell_out):
-                unnorm_TT_qe[i] = QE_via_quad(F_1_array, F_2_array, weights_mat_total[i,:,:])
+            unnorm_TT_qe = QE_via_quad(F_1_array, F_2_array, weights_mat_total)
         else:
             unnorm_TT_qe = unnorm_TT_qe_fftlog(al_F_1, al_F_2, N_l, lmin, alpha, lmax)(ell_out)
         # Apply a convention correction to match Quicklens
@@ -504,15 +503,16 @@ def QE_via_quad(F_1_array, F_2_array, weights_mat):
 
     F_1(l_i) H(L) F_2(l_i)
 
-    where l_i are the Gaussian quadrature nodes (and similarly for F_2), and H(L) is a matric derived from W(L, l_i, l_j)
+    where l_i are the Gaussian quadrature nodes (and similarly for F_2), and H(L) is a matrix derived from W(L, l_i, l_j)
     after it has absorbed the quadrature weights [as documented in weights_mat_total()]. It appears that only a few dozen nodes
     are needed for reasonable accuracy, but if more were required, one could explore using GPUs.
+
+    Furthermore, we evaluate F_1(l_i) H(L) F_2(l_i) at the required L's via matrix-multiplication
 
     Inputs:
         - F_1_array = 1D np array. The filtered inputs of the QE evaluated at the Gaussian quadrature nodes
         - F_2_array = 1D np array. Same as F_1_array, but for F_2
-        - weights_mat = 2D np array. Matrix featuring the ell, ellprime dependence. Pre-computed at a fixed L
-                        using weights_mat_total(L)
+        - weights_mat = 3D np array (len(L), len(ell), len(ellprime)) featuring the L, ell and ellprime dependence
     Returns:
         - The unnormalized lensing reconstruction at L
     '''

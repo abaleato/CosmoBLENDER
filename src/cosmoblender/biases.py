@@ -1,9 +1,9 @@
-'''
+"""
 Terminology:
 itgnd = integrand
 oneH = one halo
 twoH = two halo
-'''
+"""
 
 import numpy as np
 import hmvec as hm
@@ -33,7 +33,7 @@ class Hm_minimal:
 
 class hm_framework:
     """ Set the halo model parameters """
-    def __init__(self, lmax_out=3000, m_min=1e10, m_max=5e15, nMasses=30, z_min=0.07, z_max=3, nZs=30, k_min = 1e-4,\
+    def __init__(self, lmax_out=3000, m_min=1e10, m_max=5e15, nMasses=30, z_min=0.07, z_max=3, nZs=30, k_min = 1e-4,
                  k_max=10, nks=1001, mass_function='sheth-torman', mdef='vir', cib_model='planck13', cosmoParams=None
                  , xmax=5, nxs=40000):
         """ Inputs:
@@ -310,13 +310,14 @@ class hm_framework:
             self.get_galaxy_consistency(exp, survey_name)
 
         # Output ells
-        ells_out = np.logspace(np.log10(2), np.log10(self.lmax_out))
+        ells_out = np.linspace(1, self.lmax_out)
         # Get the nodes, weights and matrices needed for Gaussian quadrature of QE integral
         exp.get_weights_mat_total(ells_out)
         if not fftlog_way:
             lbins = np.arange(1,self.lmax_out+1,bin_width_out)
 
-        nx = self.lmax_out+1 if fftlog_way else exp.pix.nx
+        #nx = self.lmax_out+1 if fftlog_way else exp.pix.nx
+        nx = len(ells_out) if fftlog_way else exp.pix.nx
 
         # Get frequency scaling of tSZ, possibly including harmonic ILC cleaning
         exp.tsz_filter = exp.get_tsz_filter()
@@ -416,7 +417,8 @@ class hm_framework:
         # Get the nodes, weights and matrices needed for Gaussian quadrature of QE integral
         exp.get_weights_mat_total(ells_out)
 
-        nx = self.lmax_out+1
+        #nx = self.lmax_out+1
+        nx = len(ells_out) if fftlog_way else exp.pix.nx
 
         # The one and two halo bias terms -- these store the itgnd to be integrated over z
         oneH_ps = np.zeros([nx,self.nZs])+0j; twoH_ps = oneH_ps.copy()
@@ -430,9 +432,9 @@ class hm_framework:
                 if m> exp.massCut: continue
                 #project the galaxy profiles
                 kap = tls.pkToPell(hcos.comoving_radial_distance(hcos.zs[i]),
-                                   hcos.ks, hcos.uk_profiles['nfw'][i,j], ellmax=self.lmax_out)
+                                   hcos.ks, hcos.uk_profiles['nfw'][i,j])(ells_out)
                 gal = tls.pkToPell(hcos.comoving_radial_distance(hcos.zs[i]),
-                                   hcos.ks, hcos.uk_profiles['nfw'][i, j], ellmax=self.lmax_out)
+                                   hcos.ks, hcos.uk_profiles['nfw'][i, j])(ells_out)
                 # TODO: should ngal in denominator depend on z? ms_rescaled doesn't
                 galfft = gal / hcos.hods[survey_name]['ngal'][i] if fftlog_way else ql.spec.cl2cfft(gal,exp.pix).fft / \
                                                                                          hcos.hods[survey_name]['ngal'][
@@ -442,10 +444,9 @@ class hm_framework:
                 if damp_1h_prof:
                     gal_damp = tls.pkToPell(hcos.comoving_radial_distance(hcos.zs[i]),
                                        hcos.ks, hcos.uk_profiles['nfw'][i, j]
-                                       *(1 - np.exp(-(hcos.ks / hcos.p['kstar_damping']))), ellmax=self.lmax_out)
+                                       *(1 - np.exp(-(hcos.ks / hcos.p['kstar_damping']))))(ells_out)
                     kap_damp = tls.pkToPell(hcos.comoving_radial_distance(hcos.zs[i]), hcos.ks,
-                                            hcos.uk_profiles['nfw'][i, j] *(1 - np.exp(-(hcos.ks / hcos.p['kstar_damping']))),
-                                            ellmax=self.lmax_out)
+                                            hcos.uk_profiles['nfw'][i, j] *(1 - np.exp(-(hcos.ks / hcos.p['kstar_damping']))))(ells_out)
                     galfft_damp = gal_damp / hcos.hods[survey_name]['ngal'][i] if fftlog_way else ql.spec.cl2cfft(gal,
                                                                                                         exp.pix).fft / \
                                                                                         hcos.hods[survey_name]['ngal'][
@@ -467,7 +468,7 @@ class hm_framework:
             oneH_ps[:,i]=np.trapz(itgnd_1h_ps,hcos.ms,axis=-1)
 
             # This is the two halo term. P_k times the M integrals
-            pk = tls.pkToPell(hcos.comoving_radial_distance(hcos.zs[i]),hcos.ks,hcos.Pzk[i], ellmax=self.lmax_out)
+            pk = tls.pkToPell(hcos.comoving_radial_distance(hcos.zs[i]),hcos.ks,hcos.Pzk[i])(ells_out)
             if not fftlog_way:
                 pk = ql.spec.cl2cfft(pk, exp.pix).fft
 
@@ -536,12 +537,13 @@ class hm_framework:
         self.get_CIB_filters(exp)
 
         # Output ells
-        ells_out = np.logspace(np.log10(2), np.log10(self.lmax_out))
+        ells_out = np.linspace(1, self.lmax_out)
         # Get the nodes, weights and matrices needed for Gaussian quadrature of QE integral
         exp.get_weights_mat_total(ells_out)
         if not fftlog_way:
             lbins = np.arange(1,self.lmax_out+1,bin_width_out)
-        nx = self.lmax_out+1 if fftlog_way else exp.nx
+        #nx = self.lmax_out+1 if fftlog_way else exp.nx
+        nx = len(ells_out) if fftlog_way else exp.pix.nx
 
         # The one and two halo bias terms -- these store the itgnd to be integrated over z
         IIII_1h = np.zeros([nx,self.nZs])+0j if fftlog_way else np.zeros([nx,nx,self.nZs])+0j
@@ -640,13 +642,14 @@ class hm_framework:
         self.get_CIB_filters(exp)
 
         # Output ells
-        ells_out = np.logspace(np.log10(2), np.log10(self.lmax_out))
+        ells_out = np.linspace(1, self.lmax_out)
         # Get the nodes, weights and matrices needed for Gaussian quadrature of QE integral
         exp.get_weights_mat_total(ells_out)
         if not fftlog_way:
             lbins = np.arange(1,self.lmax_out+1,bin_width_out)
 
-        nx = self.lmax_out+1 if fftlog_way else exp.nx
+        #nx = self.lmax_out+1 if fftlog_way else exp.nx
+        nx = len(ells_out) if fftlog_way else exp.pix.nx
 
         # The one and two halo bias terms -- these store the itgnd to be integrated over z
         oneH_cross = np.zeros([nx,self.nZs])+0j if fftlog_way else np.zeros([nx,nx,self.nZs])+0j;
@@ -712,6 +715,7 @@ class hm_framework:
             self.get_cib_consistency(exp)
 
         nx = exp.lmax+1
+        ells_in = np.arange(0, exp.lmax + 1)
 
         # The one and two halo bias terms -- these store the itgnd to be integrated over z
         oneH_ps = np.zeros([nx,self.nZs])+0j
@@ -725,8 +729,7 @@ class hm_framework:
             for j,m in enumerate(hcos.ms):
                 if m> exp.massCut: continue
                 # project the galaxy profiles
-                u = tls.pkToPell(hcos.comoving_radial_distance(hcos.zs[i]), hcos.ks, hcos.uk_profiles['nfw'][i, j],
-                                 ellmax=exp.lmax)
+                u = tls.pkToPell(hcos.comoving_radial_distance(hcos.zs[i]), hcos.ks, hcos.uk_profiles['nfw'][i, j])(ells_in)
 
                 u_cen = self.CIB_central_filter[:,i,j]
                 u_sat = self.CIB_satellite_filter[:,i,j] * u
@@ -734,7 +737,7 @@ class hm_framework:
                 if damp_1h_prof:
                     u_damp = tls.pkToPell(hcos.comoving_radial_distance(hcos.zs[i]), hcos.ks,
                                           hcos.uk_profiles['nfw'][i, j]
-                                          * (1 - np.exp(-(hcos.ks / hcos.p['kstar_damping']))), ellmax=exp.lmax)
+                                          * (1 - np.exp(-(hcos.ks / hcos.p['kstar_damping']))))(ells_in)
                     u_sat_damp = self.CIB_satellite_filter[:, i, j] * u_damp
                 else:
                     u_sat_damp=u_sat
@@ -746,7 +749,7 @@ class hm_framework:
                 # Perform the m integrals
             oneH_ps[:, i] = np.trapz(itgnd_1h_ps, hcos.ms, axis=-1)
             # This is the two halo term. P_k times the M integrals
-            pk = tls.pkToPell(hcos.comoving_radial_distance(hcos.zs[i]), hcos.ks, hcos.Pzk[i], ellmax=exp.lmax)
+            pk = tls.pkToPell(hcos.comoving_radial_distance(hcos.zs[i]), hcos.ks, hcos.Pzk[i])(ells_in)
             twoH_ps[:, i] = (np.trapz(itgnd_2h_1g, hcos.ms, axis=-1) +self.I_consistency[i])** 2 * pk
 
         # Integrate over z
@@ -789,13 +792,14 @@ class hm_framework:
         self.get_CIB_filters(exp)
 
         # Output ells
-        ells_out = np.logspace(np.log10(2), np.log10(self.lmax_out))
+        ells_out = np.linspace(1, self.lmax_out)
         # Get the nodes, weights and matrices needed for Gaussian quadrature of QE integral
         exp.get_weights_mat_total(ells_out)
         if not fftlog_way:
             lbins = np.arange(1,self.lmax_out+1,bin_width_out)
 
-        nx = self.lmax_out+1 if fftlog_way else exp.nx
+        #nx = self.lmax_out+1 if fftlog_way else exp.nx
+        nx = len(ells_out) if fftlog_way else exp.pix.nx
 
         # The one and two halo bias terms -- these store the itgnd to be integrated over z
         Iyyy_1h = np.zeros([nx,self.nZs])+0j if fftlog_way else np.zeros([nx,nx,self.nZs])+0j
@@ -901,13 +905,14 @@ class hm_framework:
         exp.tsz_filter = exp.get_tsz_filter()
 
         # Output ells
-        ells_out = np.logspace(np.log10(2), np.log10(self.lmax_out))
+        ells_out = np.linspace(1, self.lmax_out)
         # Get the nodes, weights and matrices needed for Gaussian quadrature of QE integral
         exp.get_weights_mat_total(ells_out)
         if not fftlog_way:
             lbins = np.arange(1,self.lmax_out+1,bin_width_out)
 
-        nx = self.lmax_out+1 if fftlog_way else exp.nx
+        #nx = self.lmax_out+1 if fftlog_way else exp.nx
+        nx = len(ells_out) if fftlog_way else exp.pix.nx
 
         # The one and two halo bias terms -- these store the itgnd to be integrated over z
         oneH_cross = np.zeros([nx,self.nZs])+0j if fftlog_way else np.zeros([nx,nx,self.nZs])+0j;
@@ -1185,7 +1190,10 @@ def tsZ_cross_itgrnds_each_z(i, ells_out, fftlog_way, damp_1h_prof, exp_minimal,
         * hm_minimal = instance of biases.hm_minimal(hm_framework)
     """
     print(f'Now in parallel loop {i}')
-    nx = hm_minimal.lmax_out + 1 if fftlog_way else exp_minimal.pix.nx
+    #nx = hm_minimal.lmax_out + 1 if fftlog_way else exp_minimal.pix.nx
+    nx = len(ells_out) if fftlog_way else exp_minimal.pix.nx
+    ells_in = np.arange(0,exp_minimal.lmax+1)
+
     # Temporary storage
     itgnd_1h_cross = np.zeros([nx, hm_minimal.nMasses]) + 0j if fftlog_way else np.zeros([nx, nx, hm_minimal.nMasses]) + 0j
     itgnd_2h_2g = np.zeros([nx, hm_minimal.nMasses]) + 0j if fftlog_way else np.zeros([nx, nx, hm_minimal.nMasses]) + 0j
@@ -1200,8 +1208,8 @@ def tsZ_cross_itgrnds_each_z(i, ells_out, fftlog_way, damp_1h_prof, exp_minimal,
                                            weights_mat_total=exp_minimal.weights_mat_total, nodes=exp_minimal.nodes)
 
     # Project the matter power spectrum for two-halo terms
-    pk_of_l = tls.pkToPell(hm_minimal.comoving_radial_distance[i], hm_minimal.ks, hm_minimal.Pzk[i], ellmax=exp_minimal.lmax)
-    pk_of_L = tls.pkToPell(hm_minimal.comoving_radial_distance[i], hm_minimal.ks, hm_minimal.Pzk[i], ellmax=hm_minimal.lmax_out)
+    pk_of_l = tls.pkToPell(hm_minimal.comoving_radial_distance[i], hm_minimal.ks, hm_minimal.Pzk[i])(ells_in)
+    pk_of_L = tls.pkToPell(hm_minimal.comoving_radial_distance[i], hm_minimal.ks, hm_minimal.Pzk[i])(ells_out)
     if not fftlog_way:
         pk_of_l = ql.spec.cl2cfft(pk_of_l, exp_minimal.pix).fft
         pk_of_L = ql.spec.cl2cfft(pk_of_L, exp_minimal.pix).fft
@@ -1210,7 +1218,7 @@ def tsZ_cross_itgrnds_each_z(i, ells_out, fftlog_way, damp_1h_prof, exp_minimal,
     for j, m in enumerate(hm_minimal.ms):
         if m > exp_minimal.massCut: continue
         y = exp_minimal.tsz_filter * tls.pkToPell(hm_minimal.comoving_radial_distance[i], hm_minimal.ks,
-                                      hm_minimal.pk_profiles['y'][i, j], ellmax=exp_minimal.lmax)
+                                      hm_minimal.pk_profiles['y'][i, j])(ells_in)
         itgnd_y_for_2hbispec[..., j] = y * hm_minimal.nzm[i, j] * hm_minimal.bh_ofM[i, j]
 
     int_over_M_of_y = pk_of_l * (np.trapz(itgnd_y_for_2hbispec, hm_minimal.ms, axis=-1) + hm_minimal.y_consistency[i])
@@ -1219,11 +1227,11 @@ def tsZ_cross_itgrnds_each_z(i, ells_out, fftlog_way, damp_1h_prof, exp_minimal,
     for j, m in enumerate(hm_minimal.ms):
         if m > exp_minimal.massCut: continue
         y = exp_minimal.tsz_filter * tls.pkToPell(hm_minimal.comoving_radial_distance[i], hm_minimal.ks,
-                                      hm_minimal.pk_profiles['y'][i, j], ellmax=exp_minimal.lmax)
+                                      hm_minimal.pk_profiles['y'][i, j])(ells_in)
         # Get the galaxy map --- analogous to kappa in the auto-biases. Note that we need a factor of
         # H dividing the galaxy window function to translate the hmvec convention to e.g. Ferraro & Hill 18 #TODO: why do you say that?
         gal = tls.pkToPell(hm_minimal.comoving_radial_distance[i],
-                           hm_minimal.ks, hm_minimal.uk_profiles['nfw'][i, j], ellmax=hm_minimal.lmax_out)
+                           hm_minimal.ks, hm_minimal.uk_profiles['nfw'][i, j])(ells_out)
         # TODO: should ngal in denominator depend on z? ms_rescaled doesn't
         galfft = gal / hm_minimal.hods[survey_name]['ngal'][i] if fftlog_way else ql.spec.cl2cfft(gal, exp_minimal.pix).fft / \
                                                                             hm_minimal.hods[survey_name]['ngal'][i]
@@ -1235,10 +1243,10 @@ def tsZ_cross_itgrnds_each_z(i, ells_out, fftlog_way, damp_1h_prof, exp_minimal,
             y_damp = exp_minimal.tsz_filter \
                      * tls.pkToPell(hm_minimal.comoving_radial_distance[i], hm_minimal.ks,
                                     hm_minimal.pk_profiles['y'][i, j]
-                                    * (1 - np.exp(-(hm_minimal.ks / hm_minimal.p['kstar_damping']))), ellmax=exp_minimal.lmax)
+                                    * (1 - np.exp(-(hm_minimal.ks / hm_minimal.p['kstar_damping']))))(ells_in)
             gal_damp = tls.pkToPell(hm_minimal.comoving_radial_distance[i], hm_minimal.ks,
                                     hm_minimal.uk_profiles['nfw'][i, j]
-                                    * (1 - np.exp(-(hm_minimal.ks / hm_minimal.p['kstar_damping']))), ellmax=hm_minimal.lmax_out)
+                                    * (1 - np.exp(-(hm_minimal.ks / hm_minimal.p['kstar_damping']))))(ells_out)
             galfft_damp = gal_damp / hm_minimal.hods[survey_name]['ngal'][i] if fftlog_way else ql.spec.cl2cfft(gal_damp,
                                                                                                           exp_minimal.pix).fft / \
                                                                                           hm_minimal.hods[survey_name][
@@ -1283,11 +1291,9 @@ def tsZ_ps_itgrnds_each_z(i, ells_out, damp_1h_prof, exp_minimal, hm_minimal):
         if damp_1h_prof:
             y = tls.pkToPell(hm_minimal.comoving_radial_distance[i],
                              hm_minimal.ks,
-                             hm_minimal.pk_profiles['y'][i, j] * (1 - np.exp(-(hm_minimal.ks / hm_minimal.p['kstar_damping']))),
-                             ellmax=hm_minimal.lmax_out)
+                             hm_minimal.pk_profiles['y'][i, j] * (1 - np.exp(-(hm_minimal.ks / hm_minimal.p['kstar_damping']))))(ells_out)
         else:
-            y = tls.pkToPell(hm_minimal.comoving_radial_distance[i], hm_minimal.ks, hm_minimal.pk_profiles['y'][i, j],
-                             ellmax=hm_minimal.lmax_out)
+            y = tls.pkToPell(hm_minimal.comoving_radial_distance[i], hm_minimal.ks, hm_minimal.pk_profiles['y'][i, j])(ells_out)
         # Accumulate the itgnds
         itgnd_1h_ps_tSZ[:, j] = y * np.conjugate(y) * hm_minimal.nzm[i, j]
 
@@ -1311,7 +1317,9 @@ def cib_auto_itgrnds_each_z(i, ells_out, fftlog_way, get_secondary_bispec_bias, 
         * hm_minimal = instance of biases.hm_minimal(hm_framework)
     """
     print(f'Now in parallel loop {i}')
-    nx = hm_minimal.lmax_out + 1 if fftlog_way else exp_minimal.pix.nx
+    #nx = hm_minimal.lmax_out + 1 if fftlog_way else exp_minimal.pix.nx
+    nx = len(ells_out) if fftlog_way else exp_minimal.pix.nx
+    ells_in = np.arange(0,exp_minimal.lmax+1)
     pix_sbbs = ql.maps.cfft(exp_minimal.nx_secbispec, exp_minimal.dx_secbispec)
 
     # Temporary storage
@@ -1333,8 +1341,8 @@ def cib_auto_itgrnds_each_z(i, ells_out, fftlog_way, get_secondary_bispec_bias, 
                                            weights_mat_total=exp_minimal.weights_mat_total, nodes=exp_minimal.nodes)
 
     # Project the matter power spectrum for two-halo terms
-    pk_of_l = tls.pkToPell(hm_minimal.comoving_radial_distance[i], hm_minimal.ks, hm_minimal.Pzk[i], ellmax=exp_minimal.lmax)
-    pk_of_L = tls.pkToPell(hm_minimal.comoving_radial_distance[i], hm_minimal.ks, hm_minimal.Pzk[i], ellmax=hm_minimal.lmax_out)
+    pk_of_l = tls.pkToPell(hm_minimal.comoving_radial_distance[i], hm_minimal.ks, hm_minimal.Pzk[i])(ells_in)
+    pk_of_L = tls.pkToPell(hm_minimal.comoving_radial_distance[i], hm_minimal.ks, hm_minimal.Pzk[i])(ells_out)
     if not fftlog_way:
         pk_of_l = ql.spec.cl2cfft(pk_of_l, exp_minimal.pix).fft
         pk_of_L = ql.spec.cl2cfft(pk_of_L, exp_minimal.pix).fft
@@ -1342,13 +1350,13 @@ def cib_auto_itgrnds_each_z(i, ells_out, fftlog_way, get_secondary_bispec_bias, 
     # Integral over M for 2halo trispectrum. This will later go into a QE
     for j, m in enumerate(hm_minimal.ms):
         kap = tls.pkToPell(hm_minimal.comoving_radial_distance[i],
-                           hm_minimal.ks, hm_minimal.uk_profiles['nfw'][i, j], ellmax=exp_minimal.lmax)
+                           hm_minimal.ks, hm_minimal.uk_profiles['nfw'][i, j])(ells_in)
         integ_k_second_bispec[..., j] = kap * hm_minimal.ms_rescaled[j] * hm_minimal.nzm[i, j] * hm_minimal.bh_ofM[i, j]
 
         if m < exp_minimal.massCut:
             # project the galaxy profiles
             u = tls.pkToPell(hm_minimal.comoving_radial_distance[i], hm_minimal.ks,
-                             hm_minimal.uk_profiles['nfw'][i, j], ellmax=exp_minimal.lmax)
+                             hm_minimal.uk_profiles['nfw'][i, j])(ells_in)
             u_cen = hm_minimal.CIB_central_filter[:, i, j]  # Centrals come with a factor of u^0
             u_sat = hm_minimal.CIB_satellite_filter[:, i, j] * u
 
@@ -1363,7 +1371,7 @@ def cib_auto_itgrnds_each_z(i, ells_out, fftlog_way, get_secondary_bispec_bias, 
         if m > exp_minimal.massCut: continue
         # project the galaxy profiles
         u = tls.pkToPell(hm_minimal.comoving_radial_distance[i], hm_minimal.ks,
-                         hm_minimal.uk_profiles['nfw'][i, j], ellmax=exp_minimal.lmax)
+                         hm_minimal.uk_profiles['nfw'][i, j])(ells_in)
         u_cen = hm_minimal.CIB_central_filter[:, i, j]  # Centrals come with a factor of u^0
         u_sat = hm_minimal.CIB_satellite_filter[:, i, j] * u
 
@@ -1374,7 +1382,7 @@ def cib_auto_itgrnds_each_z(i, ells_out, fftlog_way, get_secondary_bispec_bias, 
 
         # Get the kappa map
         kap = tls.pkToPell(hm_minimal.comoving_radial_distance[i],
-                           hm_minimal.ks, hm_minimal.uk_profiles['nfw'][i, j], ellmax=hm_minimal.lmax_out)
+                           hm_minimal.ks, hm_minimal.uk_profiles['nfw'][i, j])(ells_out)
         kfft = kap * hm_minimal.ms_rescaled[j] if fftlog_way else ql.spec.cl2cfft(kap, exp_minimal.pix).fft * hm_minimal.ms_rescaled[j]
 
         if damp_1h_prof:
@@ -1382,8 +1390,7 @@ def cib_auto_itgrnds_each_z(i, ells_out, fftlog_way, get_secondary_bispec_bias, 
             # Note that we are damping u_sat, but leaving u_cen as is, because it's always at the center
             u_damp = tls.pkToPell(hm_minimal.comoving_radial_distance[i], hm_minimal.ks,
                                   hm_minimal.uk_profiles['nfw'][i, j] * (
-                                              1 - np.exp(-(hm_minimal.ks / hm_minimal.p['kstar_damping']))),
-                                  ellmax=exp_minimal.lmax)
+                                              1 - np.exp(-(hm_minimal.ks / hm_minimal.p['kstar_damping']))))(ells_in)
             # TODO: check that the correct way to damp u_cen is to leave it as is
             u_sat_damp = hm_minimal.CIB_satellite_filter[:, i, j] * u_damp
 
@@ -1393,7 +1400,7 @@ def cib_auto_itgrnds_each_z(i, ells_out, fftlog_way, get_secondary_bispec_bias, 
             # Get the kappa map
             kap_damp = tls.pkToPell(hm_minimal.comoving_radial_distance[i],
                                     hm_minimal.ks, hm_minimal.uk_profiles['nfw'][i, j]
-                                    * (1 - np.exp(-(hm_minimal.ks / hm_minimal.p['kstar_damping']))), ellmax=hm_minimal.lmax_out)
+                                    * (1 - np.exp(-(hm_minimal.ks / hm_minimal.p['kstar_damping']))))(ells_out)
             kfft_damp = kap_damp * hm_minimal.ms_rescaled[j] if fftlog_way else ql.spec.cl2cfft(kap_damp, exp_minimal.pix).fft * \
                                                                           hm_minimal.ms_rescaled[j]
         else:
@@ -1430,13 +1437,11 @@ def cib_auto_itgrnds_each_z(i, ells_out, fftlog_way, get_secondary_bispec_bias, 
                                                                                     parallelise=parallelise_secondbispec)
             # Get the kappa map, up to lmax rather than lmax_out as was needed in other terms
             kap_secbispec = tls.pkToPell(hm_minimal.comoving_radial_distance[i], hm_minimal.ks,
-                                         hm_minimal.uk_profiles['nfw'][i, j],
-                                         ellmax=exp_minimal.lmax)
+                                         hm_minimal.uk_profiles['nfw'][i, j])(ells_in)
             if damp_1h_prof:
                 kap_secbispec_damp = tls.pkToPell(hm_minimal.comoving_radial_distance[i], hm_minimal.ks,
                                              hm_minimal.uk_profiles['nfw'][i, j]
-                                             * (1 - np.exp(-(hm_minimal.ks / hm_minimal.p['kstar_damping']))),
-                                             ellmax=exp_minimal.lmax)
+                                             * (1 - np.exp(-(hm_minimal.ks / hm_minimal.p['kstar_damping']))))(ells_in)
             else:
                 kap_secbispec_damp = kap_secbispec
             sec_bispec_rec_1h = sec_bispec_rec(2*u_cen + u_sat_damp, kap_secbispec_damp * hm_minimal.ms_rescaled[j],
@@ -1478,7 +1483,10 @@ def cib_cross_itgrnds_each_z(i, ells_out, fftlog_way, damp_1h_prof, exp_minimal,
         * hm_minimal = instance of biases.hm_minimal(hm_framework)
     """
     print(f'Now in parallel loop {i}')
-    nx = hm_minimal.lmax_out + 1 if fftlog_way else exp_minimal.pix.nx
+    #nx = hm_minimal.lmax_out + 1 if fftlog_way else exp_minimal.pix.nx
+    nx = len(ells_out) if fftlog_way else exp_minimal.pix.nx
+    ells_in = np.arange(0, exp_minimal.lmax + 1)
+
     # Temporary storage
     itgnd_1h_cross = np.zeros([nx, hm_minimal.nMasses]) + 0j if fftlog_way else np.zeros([nx, nx, hm_minimal.nMasses]) + 0j;
     itgnd_2h_k = itgnd_1h_cross.copy();
@@ -1493,8 +1501,8 @@ def cib_cross_itgrnds_each_z(i, ells_out, fftlog_way, damp_1h_prof, exp_minimal,
                                            weights_mat_total=exp_minimal.weights_mat_total, nodes=exp_minimal.nodes)
 
     # Project the matter power spectrum for two-halo terms
-    pk_of_l = tls.pkToPell(hm_minimal.comoving_radial_distance[i], hm_minimal.ks, hm_minimal.Pzk[i], ellmax=exp_minimal.lmax)
-    pk_of_L = tls.pkToPell(hm_minimal.comoving_radial_distance[i], hm_minimal.ks, hm_minimal.Pzk[i], ellmax=hm_minimal.lmax_out)
+    pk_of_l = tls.pkToPell(hm_minimal.comoving_radial_distance[i], hm_minimal.ks, hm_minimal.Pzk[i])(ells_in)
+    pk_of_L = tls.pkToPell(hm_minimal.comoving_radial_distance[i], hm_minimal.ks, hm_minimal.Pzk[i])(ells_out)
     if not fftlog_way:
         pk_of_l = ql.spec.cl2cfft(pk_of_l, exp_minimal.pix).fft
         pk_of_L = ql.spec.cl2cfft(pk_of_L, exp_minimal.pix).fft
@@ -1504,7 +1512,7 @@ def cib_cross_itgrnds_each_z(i, ells_out, fftlog_way, damp_1h_prof, exp_minimal,
         if m > exp_minimal.massCut: continue
         # project the galaxy profiles
         u = tls.pkToPell(hm_minimal.comoving_radial_distance[i], hm_minimal.ks,
-                         hm_minimal.uk_profiles['nfw'][i, j], ellmax=exp_minimal.lmax)
+                         hm_minimal.uk_profiles['nfw'][i, j])(ells_in)
         u_cen = hm_minimal.CIB_central_filter[:, i, j]  # Centrals come with a factor of u^0
         u_sat = hm_minimal.CIB_satellite_filter[:, i, j] * u
 
@@ -1517,14 +1525,14 @@ def cib_cross_itgrnds_each_z(i, ells_out, fftlog_way, damp_1h_prof, exp_minimal,
         if m > exp_minimal.massCut: continue
         # project the galaxy profiles
         u = tls.pkToPell(hm_minimal.comoving_radial_distance[i], hm_minimal.ks,
-                         hm_minimal.uk_profiles['nfw'][i, j], ellmax=exp_minimal.lmax)
+                         hm_minimal.uk_profiles['nfw'][i, j])(ells_in)
         u_cen = hm_minimal.CIB_central_filter[:, i, j]  # Centrals come with a factor of u^0
         u_sat = hm_minimal.CIB_satellite_filter[:, i, j] * u
 
         # Get the galaxy map --- analogous to kappa in the auto-biases. Note that we need a factor of
         # H dividing the galaxy window function to translate the hmvec convention to e.g. Ferraro & Hill 18 # TODO:Why?
         gal = tls.pkToPell(hm_minimal.comoving_radial_distance[i],
-                           hm_minimal.ks, hm_minimal.uk_profiles['nfw'][i, j], ellmax=hm_minimal.lmax_out)
+                           hm_minimal.ks, hm_minimal.uk_profiles['nfw'][i, j])(ells_out)
         galfft = gal / hm_minimal.hods[survey_name]['ngal'][i] if fftlog_way else ql.spec.cl2cfft(gal, exp_minimal.pix).fft / \
                                                                             hm_minimal.hods[survey_name]['ngal'][i]
 
@@ -1535,12 +1543,11 @@ def cib_cross_itgrnds_each_z(i, ells_out, fftlog_way, damp_1h_prof, exp_minimal,
         if damp_1h_prof:
             u_damp = tls.pkToPell(hm_minimal.comoving_radial_distance[i], hm_minimal.ks,
                                   hm_minimal.uk_profiles['nfw'][i, j] * (
-                                              1 - np.exp(-(hm_minimal.ks / hm_minimal.p['kstar_damping']))),
-                                  ellmax=exp_minimal.lmax)
+                                              1 - np.exp(-(hm_minimal.ks / hm_minimal.p['kstar_damping']))))(ells_in)
             u_sat_damp = hm_minimal.CIB_satellite_filter[:, i, j] * u_damp
             gal_damp = tls.pkToPell(hm_minimal.comoving_radial_distance[i],
                                     hm_minimal.ks, hm_minimal.uk_profiles['nfw'][i, j]
-                                    * (1 - np.exp(-(hm_minimal.ks / hm_minimal.p['kstar_damping']))), ellmax=hm_minimal.lmax_out)
+                                    * (1 - np.exp(-(hm_minimal.ks / hm_minimal.p['kstar_damping']))))(ells_out)
             galfft_damp = gal_damp / hm_minimal.hods[survey_name]['ngal'][i] if fftlog_way else ql.spec.cl2cfft(gal_damp,
                                                                                                           exp_minimal.pix).fft / \
                                                                                           hm_minimal.hods[survey_name][
@@ -1585,7 +1592,9 @@ def mixed_auto_itgrnds_each_z(i, ells_out, fftlog_way, get_secondary_bispec_bias
         * hm_minimal = instance of biases.hm_minimal(hm_framework)
     """
     print(f'Now in parallel loop {i}')
-    nx = hm_minimal.lmax_out + 1 if fftlog_way else exp_minimal.pix.nx
+    #nx = hm_minimal.lmax_out + 1 if fftlog_way else exp_minimal.pix.nx
+    nx = len(ells_out) if fftlog_way else exp_minimal.pix.nx
+    ells_in = np.arange(0, exp_minimal.lmax + 1)
     pix_sbbs = ql.maps.cfft(exp_minimal.nx_secbispec, exp_minimal.dx_secbispec)
 
     # Temporary storage
@@ -1609,8 +1618,8 @@ def mixed_auto_itgrnds_each_z(i, ells_out, fftlog_way, get_secondary_bispec_bias
                                            weights_mat_total=exp_minimal.weights_mat_total, nodes=exp_minimal.nodes)
 
     # Project the matter power spectrum for two-halo terms
-    pk_of_l = tls.pkToPell(hm_minimal.comoving_radial_distance[i], hm_minimal.ks, hm_minimal.Pzk[i], ellmax=exp_minimal.lmax)
-    pk_of_L = tls.pkToPell(hm_minimal.comoving_radial_distance[i], hm_minimal.ks, hm_minimal.Pzk[i], ellmax=hm_minimal.lmax_out)
+    pk_of_l = tls.pkToPell(hm_minimal.comoving_radial_distance[i], hm_minimal.ks, hm_minimal.Pzk[i])(ells_in)
+    pk_of_L = tls.pkToPell(hm_minimal.comoving_radial_distance[i], hm_minimal.ks, hm_minimal.Pzk[i])(ells_out)
     if not fftlog_way:
         pk_of_l = ql.spec.cl2cfft(pk_of_l, exp_minimal.pix).fft
         pk_of_L = ql.spec.cl2cfft(pk_of_L, exp_minimal.pix).fft
@@ -1618,15 +1627,15 @@ def mixed_auto_itgrnds_each_z(i, ells_out, fftlog_way, get_secondary_bispec_bias
     # Integral over M for 2halo trispectrum. This will later go into a QE
     for j, m in enumerate(hm_minimal.ms):
         kap = tls.pkToPell(hm_minimal.comoving_radial_distance[i],
-                           hm_minimal.ks, hm_minimal.uk_profiles['nfw'][i, j], ellmax=exp_minimal.lmax)
+                           hm_minimal.ks, hm_minimal.uk_profiles['nfw'][i, j])(ells_in)
         integ_k_second_bispec[..., j] = kap * hm_minimal.ms_rescaled[j] * hm_minimal.nzm[i, j] * hm_minimal.bh_ofM[i, j]
 
         if m < exp_minimal.massCut:
             # project the galaxy profiles
             u = tls.pkToPell(hm_minimal.comoving_radial_distance[i], hm_minimal.ks,
-                             hm_minimal.uk_profiles['nfw'][i, j], ellmax=exp_minimal.lmax)
+                             hm_minimal.uk_profiles['nfw'][i, j])(ells_in)
             y = exp_minimal.tsz_filter * tls.pkToPell(hm_minimal.comoving_radial_distance[i], hm_minimal.ks,
-                                          hm_minimal.pk_profiles['y'][i, j], ellmax=exp_minimal.lmax)
+                                          hm_minimal.pk_profiles['y'][i, j])(ells_in)
             u_cen = hm_minimal.CIB_central_filter[:, i, j]  # Centrals come with a factor of u^0
             u_sat = hm_minimal.CIB_satellite_filter[:, i, j] * u
 
@@ -1643,9 +1652,9 @@ def mixed_auto_itgrnds_each_z(i, ells_out, fftlog_way, get_secondary_bispec_bias
         if m > exp_minimal.massCut: continue
         # project the galaxy profiles
         y = exp_minimal.tsz_filter * tls.pkToPell(hm_minimal.comoving_radial_distance[i], hm_minimal.ks,
-                                      hm_minimal.pk_profiles['y'][i, j], ellmax=exp_minimal.lmax)
+                                      hm_minimal.pk_profiles['y'][i, j])(ells_in)
         u = tls.pkToPell(hm_minimal.comoving_radial_distance[i], hm_minimal.ks,
-                         hm_minimal.uk_profiles['nfw'][i, j], ellmax=exp_minimal.lmax)
+                         hm_minimal.uk_profiles['nfw'][i, j])(ells_in)
         u_cen = hm_minimal.CIB_central_filter[:, i, j]  # Centrals come with a factor of u^0
         u_sat = hm_minimal.CIB_satellite_filter[:, i, j] * u
 
@@ -1664,17 +1673,16 @@ def mixed_auto_itgrnds_each_z(i, ells_out, fftlog_way, get_secondary_bispec_bias
 
         # Get the kappa map
         kap = tls.pkToPell(hm_minimal.comoving_radial_distance[i], hm_minimal.ks,
-                           hm_minimal.uk_profiles['nfw'][i, j], ellmax=hm_minimal.lmax_out)
+                           hm_minimal.uk_profiles['nfw'][i, j])(ells_out)
         kfft = kap * hm_minimal.ms_rescaled[j] if fftlog_way else ql.spec.cl2cfft(kap, exp_minimal.pix).fft * hm_minimal.ms_rescaled[j]
 
         if damp_1h_prof:
             y_damp = exp_minimal.tsz_filter * tls.pkToPell(hm_minimal.comoving_radial_distance[i], hm_minimal.ks,
                                                hm_minimal.pk_profiles['y'][i, j]
-                                               * (1 - np.exp(-(hm_minimal.ks / hm_minimal.p['kstar_damping']))),
-                                               ellmax=exp_minimal.lmax)
+                                               * (1 - np.exp(-(hm_minimal.ks / hm_minimal.p['kstar_damping']))))(ells_in)
             u_damp = tls.pkToPell(hm_minimal.comoving_radial_distance[i], hm_minimal.ks,
                                   hm_minimal.uk_profiles['nfw'][i, j]
-                                  * (1 - np.exp(-(hm_minimal.ks / hm_minimal.p['kstar_damping']))), ellmax=exp_minimal.lmax)
+                                  * (1 - np.exp(-(hm_minimal.ks / hm_minimal.p['kstar_damping']))))(ells_in)
             u_sat_damp = hm_minimal.CIB_satellite_filter[:, i, j] * u_damp
 
             phicfft_ucen_usat_damp = QE(u_cen, u_sat_damp)
@@ -1685,7 +1693,7 @@ def mixed_auto_itgrnds_each_z(i, ells_out, fftlog_way, get_secondary_bispec_bias
 
             kap_damp = tls.pkToPell(hm_minimal.comoving_radial_distance[i], hm_minimal.ks,
                                     hm_minimal.uk_profiles['nfw'][i, j]
-                                    * (1 - np.exp(-(hm_minimal.ks / hm_minimal.p['kstar_damping']))), ellmax=hm_minimal.lmax_out)
+                                    * (1 - np.exp(-(hm_minimal.ks / hm_minimal.p['kstar_damping']))))(ells_out)
             kfft_damp = kap_damp * hm_minimal.ms_rescaled[j] if fftlog_way else ql.spec.cl2cfft(kap_damp, exp_minimal.pix).fft * \
                                                                           hm_minimal.ms_rescaled[j]
         else:
@@ -1750,13 +1758,11 @@ def mixed_auto_itgrnds_each_z(i, ells_out, fftlog_way, get_secondary_bispec_bias
 
             # Get the kappa map, up to lmax rather than lmax_out as was needed in other terms
             kap_secbispec = tls.pkToPell(hm_minimal.comoving_radial_distance[i], hm_minimal.ks,
-                                         hm_minimal.uk_profiles['nfw'][i, j],
-                                         ellmax=exp_minimal.lmax)
+                                         hm_minimal.uk_profiles['nfw'][i, j])(ells_in)
             if damp_1h_prof:
                 kap_secbispec_damp = tls.pkToPell(hm_minimal.comoving_radial_distance[i], hm_minimal.ks,
                                                   hm_minimal.uk_profiles['nfw'][i, j]
-                                                  * (1 - np.exp(-(hm_minimal.ks / hm_minimal.p['kstar_damping']))),
-                                                  ellmax=exp_minimal.lmax)
+                                                  * (1 - np.exp(-(hm_minimal.ks / hm_minimal.p['kstar_damping']))))(ells_in)
             else:
                 kap_secbispec_damp = kap_secbispec
             sec_bispec_rec_1h = sec_bispec_rec(u_cen+u_sat_damp, kap_secbispec_damp * hm_minimal.ms_rescaled[j], y_damp)
@@ -1810,7 +1816,10 @@ def mixed_cross_itgrnds_each_z(i, ells_out, fftlog_way, damp_1h_prof, exp_minima
         * hm_minimal = instance of biases.hm_minimal(hm_framework)
     """
     print(f'Now in parallel loop {i}')
-    nx = hm_minimal.lmax_out + 1 if fftlog_way else exp_minimal.pix.nx
+    #nx = hm_minimal.lmax_out + 1 if fftlog_way else exp_minimal.pix.nx
+    nx = len(ells_out) if fftlog_way else exp_minimal.pix.nx
+    ells_in = np.arange(0, exp_minimal.lmax + 1)
+
     # Temporary storage
     itgnd_1h_cross = np.zeros([nx, hm_minimal.nMasses]) + 0j if fftlog_way else np.zeros([nx, nx, hm_minimal.nMasses]) + 0j;
     itgnd_2h_k = itgnd_1h_cross.copy(); itgnd_2h_II = itgnd_1h_cross.copy()
@@ -1826,8 +1835,8 @@ def mixed_cross_itgrnds_each_z(i, ells_out, fftlog_way, damp_1h_prof, exp_minima
                                            weights_mat_total=exp_minimal.weights_mat_total, nodes=exp_minimal.nodes)
 
     # Project the matter power spectrum for two-halo terms
-    pk_of_l = tls.pkToPell(hm_minimal.comoving_radial_distance[i], hm_minimal.ks, hm_minimal.Pzk[i], ellmax=exp_minimal.lmax)
-    pk_of_L = tls.pkToPell(hm_minimal.comoving_radial_distance[i], hm_minimal.ks, hm_minimal.Pzk[i], ellmax=hm_minimal.lmax_out)
+    pk_of_l = tls.pkToPell(hm_minimal.comoving_radial_distance[i], hm_minimal.ks, hm_minimal.Pzk[i])(ells_in)
+    pk_of_L = tls.pkToPell(hm_minimal.comoving_radial_distance[i], hm_minimal.ks, hm_minimal.Pzk[i])(ells_out)
     if not fftlog_way:
         pk_of_l = ql.spec.cl2cfft(pk_of_l, exp_minimal.pix).fft
         pk_of_L = ql.spec.cl2cfft(pk_of_L, exp_minimal.pix).fft
@@ -1837,9 +1846,9 @@ def mixed_cross_itgrnds_each_z(i, ells_out, fftlog_way, damp_1h_prof, exp_minima
         if m > exp_minimal.massCut: continue
         # project the profiles
         y = exp_minimal.tsz_filter * tls.pkToPell(hm_minimal.comoving_radial_distance[i], hm_minimal.ks,
-                                      hm_minimal.pk_profiles['y'][i, j], ellmax=exp_minimal.lmax)
+                                      hm_minimal.pk_profiles['y'][i, j])(ells_in)
         u = tls.pkToPell(hm_minimal.comoving_radial_distance[i], hm_minimal.ks,
-                         hm_minimal.uk_profiles['nfw'][i, j], ellmax=exp_minimal.lmax)
+                         hm_minimal.uk_profiles['nfw'][i, j])(ells_in)
         u_cen = hm_minimal.CIB_central_filter[:, i, j]  # Centrals come with a factor of u^0
         u_sat = hm_minimal.CIB_satellite_filter[:, i, j] * u
 
@@ -1853,16 +1862,16 @@ def mixed_cross_itgrnds_each_z(i, ells_out, fftlog_way, damp_1h_prof, exp_minima
     for j, m in enumerate(hm_minimal.ms):
         if m > exp_minimal.massCut: continue
         y = exp_minimal.tsz_filter * tls.pkToPell(hm_minimal.comoving_radial_distance[i],
-                                      hm_minimal.ks, hm_minimal.pk_profiles['y'][i, j], ellmax=exp_minimal.lmax)
+                                      hm_minimal.ks, hm_minimal.pk_profiles['y'][i, j])(ells_in)
         # project the galaxy profiles
         u = tls.pkToPell(hm_minimal.comoving_radial_distance[i], hm_minimal.ks,
-                         hm_minimal.uk_profiles['nfw'][i, j], ellmax=exp_minimal.lmax)
+                         hm_minimal.uk_profiles['nfw'][i, j])(ells_in)
         u_cen = hm_minimal.CIB_central_filter[:, i, j]  # Centrals come with a factor of u^0
         u_sat = hm_minimal.CIB_satellite_filter[:, i, j] * u
         # Get the galaxy map --- analogous to kappa in the auto-biases. Note that we need a factor of
         # H dividing the galaxy window function to translate the hmvec convention to e.g. Ferraro & Hill 18 # TODO:Why?
         gal = tls.pkToPell(hm_minimal.comoving_radial_distance[i],
-                           hm_minimal.ks, hm_minimal.uk_profiles['nfw'][i, j], ellmax=hm_minimal.lmax_out)
+                           hm_minimal.ks, hm_minimal.uk_profiles['nfw'][i, j])(ells_out)
         galfft = gal / hm_minimal.hods[survey_name]['ngal'][i] if fftlog_way else ql.spec.cl2cfft(gal, exp_minimal.pix).fft / \
                                                                             hm_minimal.hods[survey_name]['ngal'][i]
 
@@ -1874,15 +1883,15 @@ def mixed_cross_itgrnds_each_z(i, ells_out, fftlog_way, damp_1h_prof, exp_minima
         if damp_1h_prof:
             y_damp = exp_minimal.tsz_filter * tls.pkToPell(hm_minimal.comoving_radial_distance[i],
                                                hm_minimal.ks, hm_minimal.pk_profiles['y'][i, j]
-                                               * (1 - np.exp(-(hm_minimal.ks / hm_minimal.p['kstar_damping']))), ellmax=exp_minimal.lmax)
+                                               * (1 - np.exp(-(hm_minimal.ks / hm_minimal.p['kstar_damping']))))(ells_in)
             # project the galaxy profiles
             u_damp = tls.pkToPell(hm_minimal.comoving_radial_distance[i], hm_minimal.ks,
                                   hm_minimal.uk_profiles['nfw'][i, j]
-                                  * (1 - np.exp(-(hm_minimal.ks / hm_minimal.p['kstar_damping']))), ellmax=exp_minimal.lmax)
+                                  * (1 - np.exp(-(hm_minimal.ks / hm_minimal.p['kstar_damping']))))(ells_in)
             u_sat_damp = hm_minimal.CIB_satellite_filter[:, i, j] * u_damp
             gal_damp = tls.pkToPell(hm_minimal.comoving_radial_distance[i],
                                     hm_minimal.ks, hm_minimal.uk_profiles['nfw'][i, j]
-                                    * (1 - np.exp(-(hm_minimal.ks / hm_minimal.p['kstar_damping']))), ellmax=hm_minimal.lmax_out)
+                                    * (1 - np.exp(-(hm_minimal.ks / hm_minimal.p['kstar_damping']))))(ells_out)
             galfft_damp = gal_damp / hm_minimal.hods[survey_name]['ngal'][i] if fftlog_way else ql.spec.cl2cfft(gal_damp,
                                                                                                           exp_minimal.pix).fft / \
                                                                                           hm_minimal.hods[survey_name][
