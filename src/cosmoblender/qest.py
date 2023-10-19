@@ -12,6 +12,10 @@ import cmb_ilc
 import concurrent
 from scipy.special import roots_legendre
 
+import jax.numpy as jnp
+from jax import device_put, jit
+from functools import partial
+
 class Exp_minimal:
     """ A helper class to encapsulate some essential attributes of experiment() objects to be passed to parallelized
         workers, saving as much memory as possible
@@ -28,7 +32,7 @@ class Exp_minimal:
 
 class experiment:
     def __init__(self, nlev_t=np.array([5.]), beam_size=np.array([1.]), lmax=3500, massCut_Mvir = np.inf, nx=1024,
-                 dx_arcmin=1., nx_secbispec=256, dx_arcmin_secbispec=1.0, fname_scalar=None, fname_lensed=None, freq_GHz=np.array([150.]), fg=True, atm_fg=True,
+                 dx_arcmin=1., nx_secbispec=128, dx_arcmin_secbispec=0.1, fname_scalar=None, fname_lensed=None, freq_GHz=np.array([150.]), fg=True, atm_fg=True,
                  MV_ILC_bool=False, deproject_tSZ=False, deproject_CIB=False, bare_bones=False, nlee=None,
                  gauss_order=1000):
         """ Initialise a cosmology and experimental charactierstics
@@ -272,7 +276,7 @@ class experiment:
 
     def get_weights_mat_total(self, ells_out):
         ''' Get the matrices needed for Gaussian quadrature of QE integral '''
-        self.weights_mat_total = np.array([self.weights_mat_at_L(L) for L in ells_out])
+        self.weights_mat_total = device_put(np.array([self.weights_mat_at_L(L) for L in ells_out]))
 
     def weights_mat_at_L(self, L):
         '''
@@ -355,6 +359,112 @@ class experiment:
         with open(output_filename+'.pkl', 'wb') as output:
             pickle.dump(self.biases, output, pickle.HIGHEST_PROTOCOL)
 
+    def get_TT_qe(self, fftlog_way, ell_out, profile_leg1, qe_norm, pix, lmax, cltt_tot=None, ls=None, cltt_len=None,
+                  qest_lib=None, ivf_lib=None, profile_leg2=None, N_l=2 * 4096, lmin=0.000135, alpha=-1.3499,
+                  norm_bin_width=40, key='ptt', use_gauss=True, weights_mat_total=None, nodes=None):
+        """
+        Helper function to get the TT QE reconstruction for spherically-symmetric profiles using FFTlog
+        Inputs:
+            * fftlog_way = Bool. If true, use fftlog reconstruction. Otherwise use quicklens.
+            * ell_out = 1D numpy array with the multipoles at which the reconstruction is wanted.
+            * profile_leg1 = 1D numpy array. Projected, spherically-symmetric emission profile. Truncated at lmax.
+            * qe_norm = if fftlog_way=True, an experiment.qe_norm() instance.
+                        otherwise, a 1D array containg the normalization of the TT QE at ell_out
+            * pix = ql.maps.cfft() object. Contains numerical hyperparameters nx and dx
+            * lmax = int. Maximum multipole used in the reconstruction
+            * (optional) cltt_tot = 1d numpy array. Total power in observed TT fields. Needed if fftlog_way=1
+            * (optional) ls = 1d numpy array. Multipoles at which cltt_tot is defined. Needed if fftlog_way=1
+            * (optional) cltt_len = 1d numpy array. Lensed TT power spectrum at ls. Needed if fftlog_way=1
+            * (optional) qest_lib = experiment.qest_lib() instance for quicklens lensing rec. Needed if fftlog_way=0
+            * (optional) ivf_lib = experiment.ivf_lib() instance for quicklens lensing rec. Needed if fftlog_way=0
+            * (optional) profile_leg2 = 1D numpy array. As profile_leg1, but for the other QE leg.
+            * (optional) N_l = Integer (preferrably power of 2). Number of logarithmically-spaced samples FFTlog will use.
+                               Needed if fftlog_way=1
+            * (optional) lmin = Float. lmin of the reconstruction. Recommend choosing (unphysical) small values
+                                (e.g., lmin=1e-4) to avoid ringing. Needed if fftlog_way=1
+            * (optional) alpha = Float. FFTlog bias exponent. alpha=-1.35 seems to work fine for most applications.
+                                 Needed if fftlog_way=1
+            * (optional) norm_bin_width = int. Bin width to use when taking spectra of the semi-analytic QE
+                                          normalisation. Needed if fftlog_way=1
+        Returns:
+            * If fftlog_way=True, a 1D array with the unnormalised reconstruction at the multipoles specified in ell_out
+            * (optional) key = String. The quadratic estimator key for quicklens. Default is 'ptt' for TT
+            * (optional) use_gauss = Bool. If True, use Gaussian quad. Otherwise pyccl FFTlog
+            * (optional) weights_mat_total = np array with dimensions (len(ells_out), len(nodes), len(nodes)). Required if
+                                            use_gauss=True
+            * (optional) nodes = 1D np array. The Gaussian-quadrature-determined ells at which to evaluate integrals. Needed
+                                            if use_gauss=True
+        """
+        if profile_leg2 is None:
+            profile_leg2 = profile_leg1
+        if fftlog_way:
+            assert (cltt_tot is not None and ls is not None and cltt_len is not None)
+            al_F_1, al_F_2 = get_filtered_profiles_fftlog(profile_leg1, cltt_tot, ls, cltt_len, profile_leg2)
+            # Calculate unnormalised QE
+            if use_gauss == True:
+                assert (weights_mat_total is not None and nodes is not None)
+                F_1_array = jnp.array(al_F_1(nodes).astype(np.float32))
+                F_2_array = jnp.array(al_F_2(nodes).astype(np.float32))
+                unnorm_TT_qe = self.QE_via_quad(F_1_array, F_2_array)
+            else:
+                unnorm_TT_qe = unnorm_TT_qe_fftlog(al_F_1, al_F_2, N_l, lmin, alpha, lmax)(ell_out)
+            # Apply a convention correction to match Quicklens
+            conv_corr = 1 / (2 * np.pi)
+            return conv_corr * np.nan_to_num(unnorm_TT_qe / qe_norm)
+        else:
+            assert (ivf_lib is not None and qest_lib is not None)
+            tft1 = ql.spec.cl2cfft(profile_leg1, pix)
+            # Apply filters and do lensing reconstruction
+            t_filter = ivf_lib.get_fl().get_cffts()[0]
+            tft1.fft *= t_filter.fft
+            if profile_leg2 is None:
+                tft2 = tft1.copy()
+            else:
+                tft2 = ql.spec.cl2cfft(profile_leg2, pix)
+                tft2.fft *= t_filter.fft
+            unnormalized_phi = qest_lib.get_qft(key, tft1, 0 * tft1.copy(), 0 * tft1.copy(),
+                                                tft2, 0 * tft1.copy(), 0 * tft1.copy())
+            # In QL, the unnormalised reconstruction (obtained via eval_flatsky()) comes with a factor of sqrt(skyarea)
+            A_sky = (pix.dx * pix.nx) ** 2
+            # Normalize the reconstruction
+            return np.nan_to_num(unnormalized_phi.fft[:, :] / qe_norm.fft[:, :]) / np.sqrt(A_sky)
+
+    def QE_via_quad(self, F_1_array, F_2_array):
+        '''
+        Unnormalized TT quadratic estimator
+
+        \hat{\phi}(\vL) = 2 \int \frac{dl\,dl'}{2\pi} F_1(l) F_2(l') W(L, l, l')
+
+        where
+
+         W(L, l, l') \equiv - \Delta(l,l',L) l l' \left(\frac{L^2 + l'^2 - l^2}{2Ll'} \right)\left[1 - \left( \frac{L^2 +l'^2 -l^2}{2Ll'}\right)\right]^{-\frac{1}{2}}
+
+        and \Delta(l,l',L) is the triangle condition. The double integral is calculated using Gaussian quadratures
+        implemented in the form of matrix multiplication to harness the speed of numpy's BLAS library:
+
+        F_1(l_i) H(L) F_2(l_i)
+
+        where l_i are the Gaussian quadrature nodes (and similarly for F_2), and H(L) is a matrix derived from W(L, l_i, l_j)
+        after it has absorbed the quadrature weights [as documented in weights_mat_total()]. It appears that only a few dozen nodes
+        are needed for reasonable accuracy, but if more were required, one could explore using GPUs.
+
+        Furthermore, we evaluate F_1(l_i) H(L) F_2(l_i) at the required L's via matrix-multiplication
+
+        Inputs:
+            - F_1_array = 1D np array. The filtered inputs of the QE evaluated at the Gaussian quadrature nodes
+            - F_2_array = 1D np array. Same as F_1_array, but for F_2
+            - weights_mat = 3D np array (len(L), len(ell), len(ellprime)) featuring the L, ell and ellprime dependence
+        Returns:
+            - The unnormalized lensing reconstruction at L
+        '''
+        return jnp.dot(self.inner_mult(F_2_array), F_1_array) / (2 * np.pi)
+    def test(self):
+        print('hi')
+        return
+    @partial(jit, static_argnums=(0,))
+    def inner_mult(self, arr1):
+        return jnp.matmul(arr1, self.weights_mat_total)
+
 def load_dict_of_biases(filename='./dict_with_biases.pkl'):
     """
     Load a dictionary of biases that was previously saved using experiment.save_biases()
@@ -368,76 +478,6 @@ def load_dict_of_biases(filename='./dict_with_biases.pkl'):
     print('Successfully loaded experiment object with properties:\n')
     print(experiment_object)
     return experiment_object
-
-def get_TT_qe(fftlog_way, ell_out, profile_leg1, qe_norm, pix, lmax, cltt_tot=None, ls=None, cltt_len=None,
-              qest_lib=None, ivf_lib=None, profile_leg2=None, N_l=2*4096, lmin=0.000135, alpha=-1.3499,
-              norm_bin_width=40, key='ptt', use_gauss=True, weights_mat_total=None, nodes=None):
-    """
-    Helper function to get the TT QE reconstruction for spherically-symmetric profiles using FFTlog
-    Inputs:
-        * fftlog_way = Bool. If true, use fftlog reconstruction. Otherwise use quicklens.
-        * ell_out = 1D numpy array with the multipoles at which the reconstruction is wanted.
-        * profile_leg1 = 1D numpy array. Projected, spherically-symmetric emission profile. Truncated at lmax.
-        * qe_norm = if fftlog_way=True, an experiment.qe_norm() instance.
-                    otherwise, a 1D array containg the normalization of the TT QE at ell_out
-        * pix = ql.maps.cfft() object. Contains numerical hyperparameters nx and dx
-        * lmax = int. Maximum multipole used in the reconstruction
-        * (optional) cltt_tot = 1d numpy array. Total power in observed TT fields. Needed if fftlog_way=1
-        * (optional) ls = 1d numpy array. Multipoles at which cltt_tot is defined. Needed if fftlog_way=1
-        * (optional) cltt_len = 1d numpy array. Lensed TT power spectrum at ls. Needed if fftlog_way=1
-        * (optional) qest_lib = experiment.qest_lib() instance for quicklens lensing rec. Needed if fftlog_way=0
-        * (optional) ivf_lib = experiment.ivf_lib() instance for quicklens lensing rec. Needed if fftlog_way=0
-        * (optional) profile_leg2 = 1D numpy array. As profile_leg1, but for the other QE leg.
-        * (optional) N_l = Integer (preferrably power of 2). Number of logarithmically-spaced samples FFTlog will use.
-                           Needed if fftlog_way=1
-        * (optional) lmin = Float. lmin of the reconstruction. Recommend choosing (unphysical) small values
-                            (e.g., lmin=1e-4) to avoid ringing. Needed if fftlog_way=1
-        * (optional) alpha = Float. FFTlog bias exponent. alpha=-1.35 seems to work fine for most applications.
-                             Needed if fftlog_way=1
-        * (optional) norm_bin_width = int. Bin width to use when taking spectra of the semi-analytic QE
-                                      normalisation. Needed if fftlog_way=1
-    Returns:
-        * If fftlog_way=True, a 1D array with the unnormalised reconstruction at the multipoles specified in ell_out
-        * (optional) key = String. The quadratic estimator key for quicklens. Default is 'ptt' for TT
-        * (optional) use_gauss = Bool. If True, use Gaussian quad. Otherwise pyccl FFTlog
-        * (optional) weights_mat_total = np array with dimensions (len(ells_out), len(nodes), len(nodes)). Required if
-                                        use_gauss=True
-        * (optional) nodes = 1D np array. The Gaussian-quadrature-determined ells at which to evaluate integrals. Needed
-                                        if use_gauss=True
-    """
-    if profile_leg2 is None:
-        profile_leg2 = profile_leg1
-    if fftlog_way:
-        assert(cltt_tot is not None and ls is not None and cltt_len is not None)
-        al_F_1, al_F_2 = get_filtered_profiles_fftlog(profile_leg1, cltt_tot, ls, cltt_len, profile_leg2)
-        # Calculate unnormalised QE
-        if use_gauss==True:
-            assert(weights_mat_total is not None and nodes is not None)
-            F_1_array = al_F_1(nodes).astype(np.float32)
-            F_2_array = al_F_2(nodes).astype(np.float32)
-            unnorm_TT_qe = QE_via_quad(F_1_array, F_2_array, weights_mat_total)
-        else:
-            unnorm_TT_qe = unnorm_TT_qe_fftlog(al_F_1, al_F_2, N_l, lmin, alpha, lmax)(ell_out)
-        # Apply a convention correction to match Quicklens
-        conv_corr = 1/(2*np.pi)
-        return conv_corr * np.nan_to_num( unnorm_TT_qe / qe_norm )
-    else:
-        assert(ivf_lib is not None and qest_lib is not None)
-        tft1 = ql.spec.cl2cfft(profile_leg1, pix)
-        # Apply filters and do lensing reconstruction
-        t_filter = ivf_lib.get_fl().get_cffts()[0]
-        tft1.fft *=t_filter.fft
-        if profile_leg2 is None:
-            tft2 = tft1.copy()
-        else:
-            tft2 = ql.spec.cl2cfft(profile_leg2, pix)
-            tft2.fft *= t_filter.fft
-        unnormalized_phi = qest_lib.get_qft(key, tft1, 0*tft1.copy(), 0*tft1.copy(),
-                                                 tft2, 0*tft1.copy(), 0*tft1.copy())
-        # In QL, the unnormalised reconstruction (obtained via eval_flatsky()) comes with a factor of sqrt(skyarea)
-        A_sky = (pix.dx*pix.nx)**2
-        #Normalize the reconstruction
-        return np.nan_to_num(unnormalized_phi.fft[:,:] / qe_norm.fft[:,:]) /np.sqrt(A_sky)
 
 def get_brute_force_unnorm_TT_qe(ell_out, profile_leg1, cltt_tot, ls, cltt_len, lmax,
                                  profile_leg2=None, max_workers=None):
@@ -487,36 +527,6 @@ def int_func(lmax, ell_out, n, al_F_1, al_F_2):
         return l * al_F_1(l) * quad(inner_integrand, 1, lmax, args=(L, l))[0]
     L = ell_out[n]
     return quad(outer_integrand, 1, lmax, args=L)[0]/(2*np.pi)
-
-def QE_via_quad(F_1_array, F_2_array, weights_mat):
-    '''
-    Unnormalized TT quadratic estimator
-
-    \hat{\phi}(\vL) = 2 \int \frac{dl\,dl'}{2\pi} F_1(l) F_2(l') W(L, l, l')
-
-    where
-
-     W(L, l, l') \equiv - \Delta(l,l',L) l l' \left(\frac{L^2 + l'^2 - l^2}{2Ll'} \right)\left[1 - \left( \frac{L^2 +l'^2 -l^2}{2Ll'}\right)\right]^{-\frac{1}{2}}
-
-    and \Delta(l,l',L) is the triangle condition. The double integral is calculated using Gaussian quadratures
-    implemented in the form of matrix multiplication to harness the speed of numpy's BLAS library:
-
-    F_1(l_i) H(L) F_2(l_i)
-
-    where l_i are the Gaussian quadrature nodes (and similarly for F_2), and H(L) is a matrix derived from W(L, l_i, l_j)
-    after it has absorbed the quadrature weights [as documented in weights_mat_total()]. It appears that only a few dozen nodes
-    are needed for reasonable accuracy, but if more were required, one could explore using GPUs.
-
-    Furthermore, we evaluate F_1(l_i) H(L) F_2(l_i) at the required L's via matrix-multiplication
-
-    Inputs:
-        - F_1_array = 1D np array. The filtered inputs of the QE evaluated at the Gaussian quadrature nodes
-        - F_2_array = 1D np array. Same as F_1_array, but for F_2
-        - weights_mat = 3D np array (len(L), len(ell), len(ellprime)) featuring the L, ell and ellprime dependence
-    Returns:
-        - The unnormalized lensing reconstruction at L
-    '''
-    return np.dot(np.matmul(F_2_array, weights_mat), F_1_array)/(2*np.pi)
 
 def unnorm_TT_qe_fftlog(al_F_1, al_F_2, N_l, lmin, alpha, lmax):
     """
