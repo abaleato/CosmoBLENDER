@@ -50,7 +50,6 @@ def get_sec_bispec_bias(L_array, qe_norm_1D, pix, cl_len, cl_unl, cltt_tot, proj
     else:
         second_bispec_bias = np.zeros(L_array.shape)
         for i, L in enumerate(L_array):
-
             second_bispec_bias[i] = get_sec_bispec_bias_at_L(projected_fg_profile_1, projected_fg_profile_2,
                                                              pix, cltt_tot, W_T, cltt_filters,
                                                              lxly_tuple, l_phi_ifft_tuple, L)
@@ -95,8 +94,8 @@ def get_sec_bispec_bias_at_L(projected_fg_profile_1, projected_fg_profile_2, pix
     # TODO: implement experiment.ny in addition to experiment.nx
     integral_over_y = np.trapz( integral_over_x, np.roll(ly[:, 0], pix.nx//2, axis=0), axis=-1)
 
-
-    return (-2) / (2*np.pi)**3 * L**2 * integral_over_y
+    # TODO: check whether you need a minus sign here
+    return (2) / (2*np.pi)**3 * L**2 * integral_over_y
 
 def shift_array(array_to_paste, pix, lxly_tuple, lx_shift, ly_shift=0):
     """

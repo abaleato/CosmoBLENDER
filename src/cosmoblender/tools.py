@@ -49,7 +49,7 @@ def spline_interpolate_weights(orig_weights, orig_ells, lmax):
 
     for row in range(new_weights.shape[1]):
         cs = CubicSpline(orig_ells, orig_weights[:,row], extrapolate=False)
-        new_weights[:,row] = cs(new_ells)
+        new_weights[:,row] = np.nan_to_num(cs(new_ells))
     return new_weights, new_ells
 
 def split_positive_negative(spectrum):

@@ -178,9 +178,9 @@ class experiment:
         Get the harmonic ILC weights
         """
         lmin_cutoff = 14
-        ell_spacing = 100 # Sum of weights is still 1 to 1 part in 10^14 even with ell_spacing=100
+        num_of_ells = 50 # Sum of weights is still 1 to 1 part in 10^14 even with ells spaced 100 apart
         # Evaluate only at discrete ells, and interpolate later.
-        W_sILC_Ls = np.arange(lmin_cutoff, self.lmax, ell_spacing)
+        W_sILC_Ls = np.linspace(lmin_cutoff, self.lmax, num_of_ells)
 
         if self.MV_ILC_bool:
             W_sILC = np.array(
@@ -409,7 +409,8 @@ class experiment:
             else:
                 unnorm_TT_qe = unnorm_TT_qe_fftlog(al_F_1, al_F_2, N_l, lmin, alpha, lmax)(ell_out)
             # Apply a convention correction to match Quicklens
-            conv_corr = 1 / (2 * np.pi)
+            #TODO: do we need a factor of 2pi here?
+            conv_corr = 1  / (2 * np.pi) /2
             return conv_corr * np.nan_to_num(unnorm_TT_qe / qe_norm)
         else:
             assert (ivf_lib is not None and qest_lib is not None)
@@ -465,7 +466,7 @@ class experiment:
     def inner_mult(self, arr1):
         return jnp.matmul(arr1, self.weights_mat_total)
 
-def load_dict_of_biases(filename='./dict_with_biases.pkl'):
+def load_dict_of_biases(filename='./dict_with_biases.pkl', verbose=False):
     """
     Load a dictionary of biases that was previously saved using experiment.save_biases()
     Inputs:
@@ -475,8 +476,9 @@ def load_dict_of_biases(filename='./dict_with_biases.pkl'):
     """
     with open(filename, 'rb') as input:
         experiment_object = pickle.load(input)
-    print('Successfully loaded experiment object with properties:\n')
-    print(experiment_object)
+    if verbose:
+        print('Successfully loaded experiment object with properties:\n')
+        print(experiment_object)
     return experiment_object
 
 def get_brute_force_unnorm_TT_qe(ell_out, profile_leg1, cltt_tot, ls, cltt_len, lmax,
