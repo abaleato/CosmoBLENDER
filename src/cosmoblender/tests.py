@@ -35,11 +35,11 @@ def test_cib_ps(hm_object, exp_object, damp_1h_prof=True, cib_consistency=False)
                                                                     cib_consistency=cib_consistency)
     # Compare to Yogesh' calculation
     ells = np.arange(3000)
-    PII_yogesh_1h = hm_calc.hcos.get_power_1halo('cib', nu_obs=np.array([exp_object.freq_GHz * 1e9]))
-    PII_yogesh_2h = hm_calc.hcos.get_power_2halo('cib', nu_obs=np.array([exp_object.freq_GHz * 1e9]))
+    PII_yogesh_1h = hm_object.hcos.get_power_1halo('cib', nu_obs=np.array([exp_object.freq_GHz * 1e9]))
+    PII_yogesh_2h = hm_object.hcos.get_power_2halo('cib', nu_obs=np.array([exp_object.freq_GHz * 1e9]))
 
-    clCIBCIB_1h_yogesh = hm_calc.hcos.C_ii(ells, hm_object.hcos.zs, hm_object.hcos.ks, PII_yogesh_1h, dcdzflag=False)
-    clCIBCIB_2h_yogesh = hm_calc.hcos.C_ii(ells, hm_object.hcos.zs, hm_object.hcos.ks, PII_yogesh_2h, dcdzflag=False)
+    clCIBCIB_1h_yogesh = hm_object.hcos.C_ii(ells, hm_object.hcos.zs, hm_object.hcos.ks, PII_yogesh_1h, dcdzflag=False)
+    clCIBCIB_2h_yogesh = hm_object.hcos.C_ii(ells, hm_object.hcos.zs, hm_object.hcos.ks, PII_yogesh_2h, dcdzflag=False)
 
     plt.loglog(tls.from_Jypersr_to_uK(exp_object.freq_GHz)**-2 * (clCIBCIB_oneHalo_ps + clCIBCIB_twoHalo_ps) + shot_noise, label=r'total, {}\,GHz'.format(exp_object.freq_GHz[0]), color='r')
     plt.loglog(tls.from_Jypersr_to_uK(exp_object.freq_GHz)**-2 * clCIBCIB_oneHalo_ps, label='1 halo term', color='g')
