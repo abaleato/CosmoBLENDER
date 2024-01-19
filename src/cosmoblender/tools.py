@@ -7,17 +7,31 @@ import quicklens as ql
 from astropy.cosmology import FlatLambdaCDM
 from scipy.interpolate import CubicSpline
 
-def scale_sz(freq=150.):
+import sys
+# TODO: install BasicILC
+sys.path.insert(0, '/Users/antonbaleatolizancos/Software/BasicILC_py3/')
+import cmb_ilc
+
+cmb_dummy = cmb_ilc.CMB()
+def scale_sz(freq=150., analytic=False):
+    """
+    Wrapper function to get the scaling of the SZ spectrum with frequency.
+    """
+    if analytic:
+        return scale_sz_analytic(freq)
+    else:
+        return cmb_dummy.tszFreqDpdceT(freq*1e9)/2.726
+
+def scale_sz_analytic(freq=150.):
     """
     f_nu in the literature. This is only the non-relativistic formula.
     Note that the formula in alexs paper is wrong. get it from sehgal et al.
     """
     #freq must be in GHz
     freq_hz = freq*1e9
-    T_CMB = 2.7255e6
-    h = 6.6260755e-27#6.62607004e-34
-    K_b = 1.380658e-16#1.38064852e-23
-    T_CMB_K = T_CMB/1e6
+    T_CMB_K = 2.72548
+    h = 6.62607015e-34
+    K_b = 1.380649e-23
     x_nu = h*freq_hz/(K_b * T_CMB_K)
     return x_nu * np.cosh(x_nu/2.)/np.sinh(x_nu/2.) - 4
 

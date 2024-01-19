@@ -276,7 +276,7 @@ class experiment:
 
     def get_weights_mat_total(self, ells_out):
         ''' Get the matrices needed for Gaussian quadrature of QE integral '''
-        self.weights_mat_total = device_put(np.array([self.weights_mat_at_L(L) for L in ells_out]))
+        self.weights_mat_total = device_put(jnp.array([self.weights_mat_at_L(L) for L in ells_out]))
 
     def weights_mat_at_L(self, L):
         '''
@@ -459,9 +459,7 @@ class experiment:
             - The unnormalized lensing reconstruction at L
         '''
         return jnp.dot(self.inner_mult(F_2_array), F_1_array) / (2 * np.pi)
-    def test(self):
-        print('hi')
-        return
+
     @partial(jit, static_argnums=(0,))
     def inner_mult(self, arr1):
         return jnp.matmul(arr1, self.weights_mat_total)
