@@ -7,11 +7,12 @@ delensing. It follows [Baleato Lizancos et al. 2023]().
 
 ## Installation
 ###### Dependencies:
-- `numpy`, `scipy`, `matplotlib`
-- [hmvec](https://github.com/simonsobs/hmvec) (including galaxy branch for CIB calculations)
-- Quicklens ([Python 3 version](https://github.com/abaleato/Quicklens-with-fixes/tree/Python3) )
-- [pyccl](https://github.com/LSSTDESC/CCL)
-- astropy
+- `NumPy`, `SciPy`, `Matplotlib`
+- `BasicILC` from [this fork](https://github.com/abaleato/BasicILC/tree/cosmoblender)
+- `Hmvec` from its [galaxy branch](https://github.com/simonsobs/hmvec) for CIB calculations
+- `Quicklens` ([Python 3 version](https://github.com/abaleato/Quicklens-with-fixes/tree/Python3))
+- [`pyccl`](https://github.com/LSSTDESC/CCL)
+- `astropy`
 
 ###### Editable installation in-place:
 First, clone the repository
