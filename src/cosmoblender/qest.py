@@ -7,7 +7,7 @@ import pickle
 from . import tools as tls
 import sys
 # TODO: install BasicILC
-sys.path.insert(0, '/Users/antonbaleatolizancos/Software/BasicILC_py3/')
+sys.path.insert(0, '/Users/antonbaleatolizancos/Software/BasicILC/')
 import cmb_ilc
 import concurrent
 from scipy.special import roots_legendre
@@ -32,7 +32,7 @@ class Exp_minimal:
 
 class experiment:
     def __init__(self, nlev_t=np.array([5.]), beam_size=np.array([1.]), lmax=3500, massCut_Mvir = np.inf, nx=1024,
-                 dx_arcmin=1., nx_secbispec=128, dx_arcmin_secbispec=0.1, fname_scalar=None, fname_lensed=None, freq_GHz=np.array([150.]), fg=True, atm_fg=True,
+                 dx_arcmin=1., nx_secbispec=128, dx_arcmin_secbispec=0.1, fname_scalar=None, fname_lensed=None, freq_GHz=np.array([150.]), fg=True, atm_fg=False,
                  MV_ILC_bool=False, deproject_tSZ=False, deproject_CIB=False, bare_bones=False, nlee=None,
                  gauss_order=1000):
         """ Initialise a cosmology and experimental charactierstics
@@ -50,12 +50,15 @@ class experiment:
                 * (optional) freq_GHz =np array of one or many floats. Frequency of observqtion (in GHZ). If array,
                                         frequencies that get combined as ILC using ILC_weights as weights
                 * (optional) fg = Whether or not to include non-atmospheric fg power in inverse-variance filter
-                * (optional) atm_fg = Whether or not to include atmospheric fg power in inverse-variance filter
+                * (optional) atm_fg = Whether or not to include atmospheric fg power in inverse-variance filter. Default
+                                    is False, as BasicILC does not implement atm fg properly correlated across
+                                    frequencies. If True, include atm fgs, but note that this is only correct for the
+                                     hardcoded case of SO.
                 * (optional) MV_ILC_bool = Bool. If true, form a MV ILC of freqs
                 * (optional) deproject_tSZ = Bool. If true, form ILC deprojecting tSZ and retaining unit response to CMB
                 * (optional) deproject_CIB = Bool. If true, form ILC deprojecting CIB and retaining unit response to CMB
                 * (optional) bare_bones= Bool. If True, don't run any of the costly operations at initialisation
-                * (optional) nlee = np array of size lmax+1 containing E-mode noise power for delensing template
+                * (optional) nlee = np array of size lmax+1 containing E-mode noise (and fg) power for delensing template
                 * (optional) gauss_order= int. Order of the Gaussian quadrature used to compute analytic QE
         """
         if fname_scalar is None:
@@ -72,10 +75,10 @@ class experiment:
         self.lmin = 1
         self.freq_GHz = freq_GHz
 
-
         # Hyperparams for analytic QE calculation
         self.gauss_order = gauss_order
         self.nodes, self.weights = self.get_quad_nodes_weights(gauss_order, self.lmin, self.lmax)
+        #
         self.lnodes_grid, self.lpnodes_grid = np.meshgrid(self.nodes, self.nodes)
 
         self.massCut = massCut_Mvir #Convert from M_vir (which is what Alex uses) to M_200 (which is what the
@@ -99,6 +102,7 @@ class experiment:
         self.MV_ILC_bool = MV_ILC_bool
         self.deproject_tSZ = deproject_tSZ
         self.deproject_CIB = deproject_CIB
+
         if not bare_bones:
             #Initialise sky model
             self.sky = cmb_ilc.CMBILC(freq_GHz*1e9, beam_size, nlev_t, fg=fg, atm=atm_fg, lMaxT=self.lmax)
@@ -242,17 +246,20 @@ class experiment:
     def get_total_EE_power(self, lmax):
         """
         Get total EE power from CMB, noise and fgs.
+        At present, this assumes the E-modes are obtained from exactly the same channels as the temperature
         Note that if both self.deproject_tSZ=1 and self.deproject_CIB=1, both are deprojected
+
+        # TODO: Allow E-modes to come from a different set of observations
+        # TODO: Allow ClEE to change with background cosmology
+        # TODO: Allow for the possibility of deprojecting various components from the E-modes
         """
         ells = np.arange(lmax+1)
-        #TODO: Why can't we get ells below 10 in cltt_tot?
         if len(self.freq_GHz)==1:
             self.clee_tot = self.sky.cmb[0, 0].ftotalEE(ells)
         else:
             nL = 201
             L = np.logspace(np.log10(self.lmin), np.log10(lmax), nL)
             # ToDo: sample better in L
-            # TODO: add dust/sync deprojection options-- for now only MV
             f = lambda l: self.sky.powerIlcEE(self.sky.weightsIlcCmbEE(l), l)
 
             #TODO: turn zeros into infinities to avoid issues when dividing by this
@@ -324,6 +331,7 @@ class experiment:
         Calculate the QE normalisation as the reciprocal of the N^{(0)} bias
         Inputs:
             * (optional) key = String. The quadratic estimator key. Default is 'ptt' for TT
+        # TODO: replace this with a faster analytic calculation that does away with Quicklens dependence
         """
         self.qest_lib = ql.sims.qest.library(self.cl_unl, self.cl_len, self.ivf_lib)
         self.qe_norm = self.qest_lib.get_qr(key)
