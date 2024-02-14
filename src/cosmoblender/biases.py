@@ -1236,7 +1236,8 @@ class hm_framework:
             oneH_cross[...,idx], twoH_cross[...,idx] = itgnds_at_i
 
         # itgnd factors from Limber projection (adapted to hmvec conventions)
-        gII_itgnd = tls.limber_itgrnd_kernel(hcos, 3) * tls.gal_window(hcos, hcos.zs, gzs, gdndz) * tls.CIB_window(hcos)**2
+        gII_itgnd = (tls.limber_itgrnd_kernel(hcos, 3) * tls.gal_window(hcos, hcos.zs, gzs, gdndz)
+                     * tls.CIB_window(hcos)**2)
 
         # Integrate over z
         exp.biases['cib']['cross_w_gals']['1h'] = np.trapz( oneH_cross*gII_itgnd, hcos.zs, axis=-1)
@@ -1752,7 +1753,7 @@ class hm_framework:
             oneH_cross[...,idx], twoH_cross[...,idx] = itgnds_at_i
 
         # itgnd factors from Limber projection (adapted to hmvec conventions)
-        gIy_itgnd = 2 * tls.scale_sz(exp.freq_GHz) * self.T_CMB * tls.limber_itgrnd_kernel(hcos, 3)\
+        gIy_itgnd = 2 * self.T_CMB * tls.limber_itgrnd_kernel(hcos, 3)\
                     * tls.gal_window(hcos, hcos.zs, gzs, gdndz) * tls.CIB_window(hcos) * tls.y_window(hcos)
 
         # Integrate over z
