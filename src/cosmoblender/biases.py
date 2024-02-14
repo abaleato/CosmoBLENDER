@@ -494,7 +494,7 @@ class hm_framework:
 
         # Run in parallel
         hm_minimal = Hm_minimal(self)
-        exp_minimal = qest.Exp_minimal(exp)
+        exp_minimal = exp
 
         n = len(hcos.zs)
         outputs = map(self.tsZ_cross_itgrnds_each_z, np.arange(n), n * [ells_out], n * [fftlog_way],
@@ -1226,7 +1226,7 @@ class hm_framework:
 
         # Run in parallel
         hm_minimal = Hm_minimal(self)
-        exp_minimal = qest.Exp_minimal(exp)
+        exp_minimal = exp
 
         n = len(hcos.zs)
         outputs = map(self.cib_cross_itgrnds_each_z, np.arange(n), n * [ells_out], n * [fftlog_way],
