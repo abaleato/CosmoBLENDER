@@ -251,6 +251,32 @@ def get_comoving_from_surface_ngal(z_bins, surface_ngal):
         comoving_ngal[i] = comoving_density_single_bin(surface_ngal[i], z_bin - Delta_z / 2., z_bin + Delta_z / 2., 1.)
     return comoving_ngal
 
+class CustomBiasesDict(dict):
+    def __init__(self, *args, **kwargs):
+        ''' A dicttionary class with the added feature of letting us calculate the sum total of the biases'''
+        super().__init__(*args, **kwargs)
+
+    def calculate_total(self):
+        ''' Helper function to calculate the sum of tsz, cib and mixed biases for every bias term'''
+        empty_arr = 0
+        self['total'] = {'trispec' : {'1h' : empty_arr, '2h' : empty_arr},
+                                 'prim_bispec' : {'1h' : empty_arr, '2h' : empty_arr},
+                                 'second_bispec' : {'1h' : empty_arr, '2h' : empty_arr},
+                                 'cross_w_gals' : {'1h' : empty_arr, '2h' : empty_arr}}
+        # Calculate the sum of 'tsz', 'cib', and 'mixed' for each sub-dictionary structure
+        for sub_key in self['tsz'].keys():
+            for sub_sub_key in ['1h', '2h']:
+                for component in ['tsz', 'cib', 'mixed']:
+                    entry = self[component][sub_key][sub_sub_key]
+                    # Check if entry is empty
+                    if len(entry)>0:
+                        self['total'][sub_key][sub_sub_key] += entry
+    def __getitem__(self, key):
+        # If the key is 'total' and 'total' is not present, calculate and assign the 'total' value
+        if key == 'total' and 'total' not in self:
+            self.calculate_total()
+        # Return the value corresponding to the key
+        return super().__getitem__(key)
 
 # Now some useful decorators, inspired by James Fergusson
 
@@ -268,3 +294,4 @@ def debug(func):
         else:
             return func(*args, **kwargs)
     return wrapper
+

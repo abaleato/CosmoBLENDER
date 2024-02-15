@@ -1,6 +1,5 @@
 import numpy as np
 from scipy.interpolate import interp1d
-from pyccl.pyutils import _fftlog_transform
 from scipy.integrate import quad
 import quicklens as ql
 import pickle
@@ -15,6 +14,12 @@ from scipy.special import roots_legendre
 import jax.numpy as jnp
 from jax import device_put, jit
 from functools import partial
+
+try:
+    from pyccl.pyutils import _fftlog_transform
+    ccl_available = True
+except ImportError:
+    ccl_available = False
 
 class Exp_minimal:
     """ A helper class to encapsulate some essential attributes of experiment() objects to be passed to parallelized
@@ -32,8 +37,9 @@ class Exp_minimal:
 
 class experiment:
     def __init__(self, nlev_t=np.array([5.]), beam_size=np.array([1.]), lmax=3500, massCut_Mvir = np.inf, nx=1024,
-                 dx_arcmin=1., nx_secbispec=128, dx_arcmin_secbispec=0.1, fname_scalar=None, fname_lensed=None, freq_GHz=np.array([150.]), fg=True, atm_fg=False,
-                 MV_ILC_bool=False, deproject_tSZ=False, deproject_CIB=False, bare_bones=False, nlee=None,
+                 dx_arcmin=1., nx_secbispec=128, dx_arcmin_secbispec=0.1, fname_scalar=None, fname_lensed=None,
+                 freq_GHz=np.array([150.]), fg=True, atm_fg=False, MV_ILC_bool=False, deproject_tSZ=False,
+                 deproject_CIB=False, bare_bones=False, nlee=None,
                  gauss_order=1000):
         """ Initialise a cosmology and experimental charactierstics
             - Inputs:
@@ -121,7 +127,7 @@ class experiment:
 
         # Initialise an empty dictionary to store the biases
         empty_arr = {}
-        self.biases = { 'ells': empty_arr,
+        self.biases = tls.CustomBiasesDict({ 'ells': empty_arr,
                         'second_bispec_bias_ells': empty_arr,
                         'tsz' : {'trispec' : {'1h' : empty_arr, '2h' : empty_arr},
                                  'prim_bispec' : {'1h' : empty_arr, '2h' : empty_arr},
@@ -134,7 +140,7 @@ class experiment:
                         'mixed': {'trispec': {'1h': empty_arr, '2h': empty_arr},
                                 'prim_bispec': {'1h': empty_arr, '2h': empty_arr},
                                 'second_bispec': {'1h': empty_arr, '2h': empty_arr},
-                                 'cross_w_gals' : {'1h' : empty_arr, '2h' : empty_arr}} }
+                                 'cross_w_gals' : {'1h' : empty_arr, '2h' : empty_arr}} })
 
     def get_quad_nodes_weights(self, gauss_order, a, b):
         # Get the nodes and weights for Gaussian quadrature of chosen order
@@ -373,7 +379,7 @@ class experiment:
         """
         Helper function to get the TT QE reconstruction for spherically-symmetric profiles using FFTlog
         Inputs:
-            * fftlog_way = Bool. If true, use fftlog reconstruction. Otherwise use quicklens.
+            * fftlog_way = Bool. If true, use fftlog of Gaussian quad reconstruction. Otherwise use quicklens.
             * ell_out = 1D numpy array with the multipoles at which the reconstruction is wanted.
             * profile_leg1 = 1D numpy array. Projected, spherically-symmetric emission profile. Truncated at lmax.
             * qe_norm = if fftlog_way=True, an experiment.qe_norm() instance.
@@ -415,6 +421,7 @@ class experiment:
                 F_2_array = jnp.array(al_F_2(nodes).astype(np.float32))
                 unnorm_TT_qe = self.QE_via_quad(F_1_array, F_2_array)
             else:
+                assert (ccl_available), 'pyccl not available. Please install pyccl to use FFTlog'
                 unnorm_TT_qe = unnorm_TT_qe_fftlog(al_F_1, al_F_2, N_l, lmin, alpha, lmax)(ell_out)
             # Apply a convention correction to match Quicklens
             #TODO: do we need a factor of 2pi here?
