@@ -258,7 +258,7 @@ class CustomBiasesDict(dict):
 
     def calculate_total(self):
         ''' Helper function to calculate the sum of tsz, cib and mixed biases for every bias term'''
-        empty_arr = 0
+        empty_arr = {}
         self['total'] = {'trispec' : {'1h' : empty_arr, '2h' : empty_arr},
                                  'prim_bispec' : {'1h' : empty_arr, '2h' : empty_arr},
                                  'second_bispec' : {'1h' : empty_arr, '2h' : empty_arr},
@@ -266,14 +266,17 @@ class CustomBiasesDict(dict):
         # Calculate the sum of 'tsz', 'cib', and 'mixed' for each sub-dictionary structure
         for sub_key in self['tsz'].keys():
             for sub_sub_key in ['1h', '2h']:
-                for component in ['tsz', 'cib', 'mixed']:
-                    entry = self[component][sub_key][sub_sub_key]
+                for component in ['cib', 'tsz', 'mixed']:
+                    entry = self[component][sub_key][sub_sub_key].copy()
                     # Check if entry is empty
                     if len(entry)>0:
-                        self['total'][sub_key][sub_sub_key] += entry
+                        if len(self['total'][sub_key][sub_sub_key]) == 0:
+                            self['total'][sub_key][sub_sub_key] = entry
+                        else:
+                            self['total'][sub_key][sub_sub_key] += entry
     def __getitem__(self, key):
         # If the key is 'total' and 'total' is not present, calculate and assign the 'total' value
-        if key == 'total' and 'total' not in self:
+        if key == 'total' and ('total' not in self):
             self.calculate_total()
         # Return the value corresponding to the key
         return super().__getitem__(key)
