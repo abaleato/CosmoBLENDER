@@ -35,7 +35,7 @@ class hm_framework:
     """ Set the halo model parameters """
     def __init__(self, lmax_out=3000, m_min=1e10, m_max=5e15, nMasses=30, z_min=0.07, z_max=3, nZs=30, k_min = 1e-4,
                  k_max=10, nks=1001, mass_function='sheth-torman', mdef='vir', cib_model='planck13', cosmoParams=None
-                 , xmax=5, nxs=40000):
+                 , xmax=5, nxs=40000, tsz_param_override={}):
         """ Inputs:
                 * lmax_out = int. Maximum multipole at which to return the lensing reconstruction
                 * m_min = Minimum virial mass for the halo model calculation
@@ -53,6 +53,7 @@ class hm_framework:
                 * cosmoParams = Dictionary of cosmological parameters to initialised HaloModel hmvec object
                 * xmax = Float. Electron pressure profile integral xmax (see further docs at hmvec.add_nfw_profile() )
                 * nxs = Integer. Electron pressure profile integral number of x's
+                * tsz_param_override = Dictionary. Override the default parameters for the tSZ profile
         """
         self.lmax_out = lmax_out
         self.nMasses = nMasses
@@ -71,9 +72,10 @@ class hm_framework:
         self.nxs = nxs
         self.xmax = xmax
         self.cosmoParams = cosmoParams
+        self.tsz_param_override = tsz_param_override
 
         self.hcos = hm.HaloModel(zs,ks,ms=ms,mass_function=mass_function,params=cosmoParams,mdef=mdef)
-        self.hcos.add_battaglia_pres_profile("y",family="pres",xmax=xmax,nxs=nxs)
+        self.hcos.add_battaglia_pres_profile("y",family="pres",xmax=xmax,nxs=nxs, param_override=self.tsz_param_override)
         self.hcos.set_cibParams(cib_model)
 
         self.ms_rescaled = self.hcos.ms[...]/self.hcos.rho_matter_z(0)
@@ -297,7 +299,7 @@ class hm_framework:
             * exp_minimal = instance of qest.exp_minimal(exp)
             * hm_minimal = instance of biases.hm_minimal(hm_framework)
         """
-        print(f'Now in parallel loop {i}')
+        #print(f'Now in parallel loop {i}')
         # nx = hm_minimal.lmax_out + 1 if fftlog_way else exp_minimal.pix.nx
         nx = len(ells_out) if fftlog_way else exp_minimal.pix.nx
         ells_in = np.arange(0, exp_minimal.lmax + 1)
@@ -527,7 +529,7 @@ class hm_framework:
             * exp_minimal = instance of qest.exp_minimal(exp)
             * hm_minimal = instance of biases.hm_minimal(hm_framework)
         """
-        print(f'Now in parallel loop {i}')
+        #print(f'Now in parallel loop {i}')
         # nx = hm_minimal.lmax_out + 1 if fftlog_way else exp_minimal.pix.nx
         nx = len(ells_out) if fftlog_way else exp_minimal.pix.nx
         ells_in = np.arange(0, exp_minimal.lmax + 1)
@@ -886,7 +888,7 @@ class hm_framework:
             * exp_minimal = instance of qest.exp_minimal(exp)
             * hm_minimal = instance of biases.hm_minimal(hm_framework)
         """
-        print(f'Now in parallel loop {i}')
+        #print(f'Now in parallel loop {i}')
         # nx = hm_minimal.lmax_out + 1 if fftlog_way else exp_minimal.pix.nx
         nx = len(ells_out) if fftlog_way else exp_minimal.pix.nx
         ells_in = np.arange(0, exp_minimal.lmax + 1)
@@ -1005,7 +1007,7 @@ class hm_framework:
             * exp_minimal = instance of qest.exp_minimal(exp)
             * hm_minimal = instance of biases.hm_minimal(hm_framework)
         """
-        print(f'Now in parallel loop {i}')
+        #print(f'Now in parallel loop {i}')
         # nx = hm_minimal.lmax_out + 1 if fftlog_way else exp_minimal.pix.nx
         nx = len(ells_out) if fftlog_way else exp_minimal.pix.nx
         ells_in = np.arange(0, exp_minimal.lmax + 1)
@@ -1452,7 +1454,7 @@ class hm_framework:
             * exp_minimal = instance of qest.exp_minimal(exp)
             * hm_minimal = instance of biases.hm_minimal(hm_framework)
         """
-        print(f'Now in parallel loop {i}')
+        #print(f'Now in parallel loop {i}')
         # nx = hm_minimal.lmax_out + 1 if fftlog_way else exp_minimal.pix.nx
         nx = len(ells_out) if fftlog_way else exp_minimal.pix.nx
         ells_in = np.arange(0, exp_minimal.lmax + 1)
@@ -1779,7 +1781,7 @@ class hm_framework:
             * exp_minimal = instance of qest.exp_minimal(exp)
             * hm_minimal = instance of biases.hm_minimal(hm_framework)
         """
-        print(f'Now in parallel loop {i}')
+        #print(f'Now in parallel loop {i}')
         # nx = hm_minimal.lmax_out + 1 if fftlog_way else exp_minimal.pix.nx
         nx = len(ells_out) if fftlog_way else exp_minimal.pix.nx
         ells_in = np.arange(0, exp_minimal.lmax + 1)
@@ -1899,8 +1901,8 @@ class hm_framework:
         return oneH_cross_at_i, twoH_cross_at_i
 
     def get_bias_to_delensed_clbb(self, exp, get_cib=True, get_tsz=True, get_mixed=False, fftlog_way=True,
-                                  get_secondary_bispec_bias=False, bin_width_out=30, \
-                                  bin_width_out_second_bispec_bias=250, parallelise_secondbispec=True, lmax_clkk=None,
+                                  get_secondary_bispec_bias=True, bin_width_out=30, \
+                                  bin_width_out_second_bispec_bias=100, parallelise_secondbispec=False, lmax_clkk=None,
                                   bin_width=30, lmin_clbb=2, lmax_clbb=1000):
         """
         Calculate the leading biases to the power spectrum of delensed B-mode, eqns (24) and (25) in arXiv:2205.09000
@@ -1942,14 +1944,20 @@ class hm_framework:
 
         which_bias_list = []
         if get_cib:
-            self.get_cib_auto_biases(exp, get_secondary_bispec_bias=get_secondary_bispec_bias)
+            self.get_cib_auto_biases(exp, get_secondary_bispec_bias=get_secondary_bispec_bias, parallelise_secondbispec=parallelise_secondbispec, bin_width_out_second_bispec_bias=bin_width_out_second_bispec_bias)
             which_bias_list.append('cib')
+            print('CIB bias done')
         if get_tsz:
-            self.get_tsz_auto_biases(exp, get_secondary_bispec_bias=get_secondary_bispec_bias)
+            self.get_tsz_auto_biases(exp, get_secondary_bispec_bias=get_secondary_bispec_bias, 
+                                     parallelise_secondbispec=parallelise_secondbispec, 
+                                     bin_width_out_second_bispec_bias=bin_width_out_second_bispec_bias)
             which_bias_list.append('tsz')
+            print('tSZ bias done')
         if get_mixed:
-            self.get_mixed_auto_biases(exp, get_secondary_bispec_bias=get_secondary_bispec_bias)
+            self.get_mixed_auto_biases(exp, get_secondary_bispec_bias=get_secondary_bispec_bias,
+                                       parallelise_secondbispec=parallelise_secondbispec, bin_width_out_second_bispec_bias=bin_width_out_second_bispec_bias)
             which_bias_list.append('mixed')
+            print('Mixed bias done')
 
         for which_bias in which_bias_list:
             for which_coupling in which_coupling_list:
