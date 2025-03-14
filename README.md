@@ -28,4 +28,4 @@ and from within it run
 See the notebooks under the `examples/` directory -- `examples/example_pipeline.ipynb` is a great place to start.
 
 ## Attribution
-If you use the code, please cite [Baleato Lizancos et al. 2023]().
+If you use the code, please cite [Baleato Lizancos et al. 2025 (in prep.)]().
