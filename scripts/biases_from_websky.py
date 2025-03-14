@@ -87,7 +87,7 @@ def load_cib(nside, lmax, freq_CIB_GHz, masking_threshold_mJy=None):
     """ Load Websky CIB sim. Return it in uK units"""
     global websky_dir
 
-    cib_map_MJy = hp.read_map(websky_dir + 'cib_nu0143.fits')
+    cib_map_MJy_sr = hp.read_map(websky_dir + 'cib_nu0143.fits')
 
     # some useful constants
     h_over_k = 0.047992447 #:[K*s]
@@ -114,7 +114,7 @@ def load_cib(nside, lmax, freq_CIB_GHz, masking_threshold_mJy=None):
 
     from_MJypersr_to_K = T_cmb/diff_black_body(freq_CIB_GHz, T_cmb)
     from_mJypersr_to_muK = from_MJypersr_to_K * 1e6 / 1e9
-    cib_map = cib_map_MJy * from_MJypersr_to_K * 1e6 # [uK]
+    cib_map = cib_map_MJy_sr * from_MJypersr_to_K * 1e6 # [uK]
 
     if masking_threshold_mJy is not None:
         # Now convert the flux cut to uK
@@ -135,14 +135,14 @@ def load_cib(nside, lmax, freq_CIB_GHz, masking_threshold_mJy=None):
     return cib_map, cib_alm
 
 if __name__ == '__main__':
-    which_bias = 'tSZ' # 'tSZ' or 'CIB' or 'all'
+    which_bias = 'CIB' # 'tSZ' or 'CIB' or 'all'
     lmax = 3000
     nside = 2048
 
     freq_tsz = 150. # in GHz
     freq_CIB = 150. # in GHz
     # Masking threshold for CIB point sources
-    masking_threshold_mJy = 1 # in mJy
+    masking_threshold_mJy = 1.2 # in mJy
 
     key = 'ptt'  # 'peb' # 'ptt'
     # Experiment setup

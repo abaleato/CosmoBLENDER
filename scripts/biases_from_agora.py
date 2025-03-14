@@ -139,7 +139,7 @@ if __name__ == '__main__':
     freq_tsz = 150. # in GHz
     freq_CIB = 150. # in GHz
     # Masking threshold for CIB point sources
-    masking_threshold_mJy = 0.4 # in mJy
+    masking_threshold_mJy = 5 # in mJy
 
     key = 'ptt'  # 'peb' # 'ptt'
     # Experiment setup
