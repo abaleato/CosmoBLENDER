@@ -75,48 +75,46 @@ def get_fg_N0(measured_fg_ps, nltt):
 
 def load_tsz(nside, lmax, freq_GHz):
     """ Load Websky tSZ sim. Return it in uK units"""
-    global websky_dir
+    global sim_dir
     T_CMB = 2.73
     tsz_scaling = scale_sz(freq_GHz) * T_CMB * 1e6
     tsz_map = tsz_scaling * hp.remove_monopole(
-        hp.ud_grade(hp.read_map(websky_dir + 'tsz_2048.fits'), nside_out=nside))
+        hp.ud_grade(hp.read_map(sim_dir + 'tsz/unl/agora_utszNG_bahamas80_bnd_unb_1.0e+12_1.0e+18.fits'), nside_out=nside))
     tsz_alm = hp.map2alm(tsz_map, lmax=lmax)
     return tsz_map, tsz_alm
 
 def load_cib(nside, lmax, freq_CIB_GHz, masking_threshold_mJy=None):
     """ Load Websky CIB sim. Return it in uK units"""
-    global websky_dir
+    global sim_dir
 
-    cib_map_MJy = hp.read_map(websky_dir + 'cib_nu0143.fits')
-
-    # some useful constants
-    h_over_k = 0.047992447 #:[K*s]
-    h_over_c2 = 7.3724972E-4 #: [MJy/sr/GHz^3]
-    k3_over_c2h2 = 6.66954097 # :[MJy/sr]
-    c2_over_k = 65.096595 # :[K*GHz^2/MJy/sr
-
-    def diff_black_body(nu, T):
-        """
-        differential BB spectrum [MJy/sr] with a temperature T [K] at frequency nu [GHz]
-        ***multiply by dT/T to get dI_nu***
-
-        :param nu: observed frequency [GHz]
-        :param T: thermodynamic temperature [K]
-        :return: dI_nu*T/dT [MJy/sr]
-        """
-        
-        x = h_over_k * nu / T  # nu: [GHz] ; T: [K]
-        f = x ** 4 * np.exp(x) / np.expm1(x) ** 2
-
-        return 2 * k3_over_c2h2 * T ** 3 * f
-
-    T_cmb = 2.7255 # [K]
-
-    from_MJypersr_to_K = T_cmb/diff_black_body(freq_CIB_GHz, T_cmb)
-    from_mJypersr_to_muK = from_MJypersr_to_K * 1e6 / 1e9
-    cib_map = cib_map_MJy * from_MJypersr_to_K * 1e6 # [uK]
-
+    cib_map = hp.read_map(sim_dir + 'cib/uK/unl/act/agora_unl_cibmap_act_150ghz_uk.fits')
     if masking_threshold_mJy is not None:
+        # some useful constants
+        h_over_k = 0.047992447 #:[K*s]
+        h_over_c2 = 7.3724972E-4 #: [MJy/sr/GHz^3]
+        k3_over_c2h2 = 6.66954097 # :[MJy/sr]
+        c2_over_k = 65.096595 # :[K*GHz^2/MJy/sr
+
+        def diff_black_body(nu, T):
+            """
+            differential BB spectrum [MJy/sr] with a temperature T [K] at frequency nu [GHz]
+            ***multiply by dT/T to get dI_nu***
+
+            :param nu: observed frequency [GHz]
+            :param T: thermodynamic temperature [K]
+            :return: dI_nu*T/dT [MJy/sr]
+            """
+            
+            x = h_over_k * nu / T  # nu: [GHz] ; T: [K]
+            f = x ** 4 * np.exp(x) / np.expm1(x) ** 2
+
+            return 2 * k3_over_c2h2 * T ** 3 * f
+
+        T_cmb = 2.7255 # [K]
+
+        from_MJypersr_to_K = T_cmb/diff_black_body(freq_CIB_GHz, T_cmb)
+        from_mJypersr_to_muK = from_MJypersr_to_K * 1e6 / 1e9
+
         # Now convert the flux cut to uK
         pix_area = (4*np.pi)/len(cib_map)
         flux_cut_mJy_per_sr = masking_threshold_mJy / pix_area
@@ -131,18 +129,17 @@ def load_cib(nside, lmax, freq_CIB_GHz, masking_threshold_mJy=None):
         cib_map = cib_map_masked
 
     cib_alm = hp.map2alm(hp.ud_grade(cib_map, nside_out=nside), lmax=lmax)
-
     return cib_map, cib_alm
 
 if __name__ == '__main__':
-    which_bias = 'tSZ' # 'tSZ' or 'CIB' or 'all'
+    which_bias = 'CIB' # 'tSZ' or 'CIB' or 'all'
     lmax = 3000
     nside = 2048
 
     freq_tsz = 150. # in GHz
     freq_CIB = 150. # in GHz
     # Masking threshold for CIB point sources
-    masking_threshold_mJy = 1 # in mJy
+    masking_threshold_mJy = 0.4 # in mJy
 
     key = 'ptt'  # 'peb' # 'ptt'
     # Experiment setup
@@ -150,13 +147,13 @@ if __name__ == '__main__':
     beam_size = 1.4  # 1. #arcmin
     npad = 2
 
-    # Load the Websky sims
-    websky_dir = '/pscratch/sd/a/ab2368/websky/'
+    # Load the Agora sims
+    sim_dir = '/global/cfs/projectdirs/cmb/data/agora/components/'
+    base_dir = '/pscratch/sd/a/ab2368/agora/'
     # Create new directory to save files
-    output_dir = websky_dir+'biases_from_websky_lmax{}_nside{}_nlevt{}_beamarcmin{}/'.format(lmax, nside, nlev_t, beam_size)
+    output_dir = base_dir+'biases_from_agora_lmax{}_nside{}_nlevt{}_beamarcmin{}/'.format(lmax, nside, nlev_t, beam_size)
     if not os.path.exists(output_dir):
         os.mkdir(output_dir)
-
 
     masking_suffix = ''
     if which_bias == 'tSZ':
@@ -173,19 +170,20 @@ if __name__ == '__main__':
         fg_alm = cib_alm + tsz_alm
 
     # CMB
-    websky_cmb_alm = shorten_alm(hp.read_alm(websky_dir + 'lensed_alm.fits'), lmax)
-    websky_unlensed_cmb_alm = shorten_alm(hp.read_alm(websky_dir + 'unlensed_alm.fits'), lmax)
+    cmb_map_len = hp.ud_grade(hp.read_map(sim_dir + 'cmb/len/tqu1/agora_tqu1_phiNG_seed1_lmax16000_nside8192_interp1.6_method1_pol_1_lensedmap.fits', field=[0]), nside_out=nside)
+    cmb_alm = shorten_alm(hp.map2alm(cmb_map_len), lmax)
+    unlensed_cmb_alm = shorten_alm(hp.read_alm(sim_dir+'cmb/unl/teb1/agora_phiG_teb1_seed1.alm'), lmax)
 
     # Kappa
-    true_kappa = hp.read_map(websky_dir + 'kap.fits')
+    true_kappa = hp.read_map(sim_dir+'cmbkappa/agora_born_cmbkappa_highzadded_lowLcorrected.fits')
     # First order lensing correction to the temperature. Calculated in get_1storder_lensedT.py
-    if os.path.exists(websky_dir+'g_T_alm_first_order_in_lensing_lmax{}.npy'.format(lmax)):
-        g_T_alm_1storder = np.load(websky_dir+'g_T_alm_first_order_in_lensing_lmax{}.npy'.format(lmax))
+    if os.path.exists(base_dir+'g_T_alm_first_order_in_lensing_lmax{}.npy'.format(lmax)):
+        g_T_alm_1storder = np.load(base_dir+'g_T_alm_first_order_in_lensing_lmax{}.npy'.format(lmax))
     else:
-        g_T_alm_1storder = np.load(websky_dir+'g_T_alm_first_order_in_lensing_lmax{}.npy'.format(3000))
+        g_T_alm_1storder = np.load(base_dir+'g_T_alm_first_order_in_lensing_lmax{}.npy'.format(3000))
 
     # Set E and B to zeros bc we're focusing on TT reconstruction
-    Ealm = Balm = np.zeros(websky_cmb_alm.shape)
+    Ealm = Balm = np.zeros(cmb_alm.shape)
 
     # Initialise quadratic estimators
     cl_unl = ql.spec.get_camb_scalcl(lmax=lmax)
@@ -207,8 +205,8 @@ if __name__ == '__main__':
     norm = qest_lib.get_qr_full_sky(key)
 
     # Wiener filter the inputs of the QE
-    cmbT_alm_filtered = ivf_lib.ivf_alm_array(websky_cmb_alm, 'cltt')
-    cmbT_unlensed_alm_filtered = ivf_lib.ivf_alm_array(websky_unlensed_cmb_alm, 'cltt')
+    cmbT_alm_filtered = ivf_lib.ivf_alm_array(cmb_alm, 'cltt')
+    cmbT_unlensed_alm_filtered = ivf_lib.ivf_alm_array(unlensed_cmb_alm, 'cltt')
     cmbT_1storder_alm_filtered = ivf_lib.ivf_alm_array(g_T_alm_1storder, 'cltt')
     fgT_alm_filtered = ivf_lib.ivf_alm_array(fg_alm, 'cltt')
     e_alm_filtered = ivf_lib.ivf_alm_array(Ealm, 'clee')
@@ -225,7 +223,7 @@ if __name__ == '__main__':
     if not os.path.exists(output_dir+'{}only_rec_map{}.npy'.format(which_bias, masking_suffix)):
         # Perform the reconstruction with FOREGROUND ONLY AS INPUT
         fgonly_rec_map = get_qe_rec_map(fgT_alm_filtered, fgT_alm_filtered)
-        np.save(output_dir + '{}only_rec_map'.format(which_bias), fgonly_rec_map)
+        np.save(output_dir + '{}only_rec_map{}'.format(which_bias, masking_suffix), fgonly_rec_map)
     else:
         fgonly_rec_map = np.load(output_dir+'{}only_rec_map{}.npy'.format(which_bias, masking_suffix))
 
