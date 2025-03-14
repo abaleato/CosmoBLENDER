@@ -3,7 +3,7 @@
 **C**osmological **B**iases to **LEN**sing and **D**elensing **D**ue to **E**xtragalactic **R**adiation
 
 CosmoBLENDER is a python code that computes biases to CMB lensing auto- and cross-correlations, as well as internal
-delensing. It follows [Baleato Lizancos et al. 2023]().
+delensing. It follows [Baleato Lizancos et al. 2025 (in prep.)]().
 
 ## Installation
 ###### Dependencies:
