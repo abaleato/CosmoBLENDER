@@ -21,14 +21,20 @@ if __name__ == '__main__':
     dx_arcmin_secbispec = 1.0
 
     # Foreground cleaning? Only relevant if many frequencies are provided
-    MV_ILC_bool = False
+    MV_ILC_bool = True
     deproject_CIB = False
     deproject_tSZ = False
+
     fg_cleaning_dict = {'MV_ILC_bool': MV_ILC_bool, 'deproject_CIB': deproject_CIB, 'deproject_tSZ': deproject_tSZ}
     SPT_properties = {'nlev_t': np.array([18.]), 'beam_size': np.array([1.]), 'freq_GHz': np.array([150.]),
                       'dx_arcmin_secbispec':dx_arcmin_secbispec, 'nx_secbispec':nx_secbispec}
     # Initialise experiments with various different mass cuts
-    experiment = qest.experiment(lmax=lmax, massCut_Mvir=5e15, **SPT_properties, **fg_cleaning_dict)
+
+    SO_properties = {'nlev_t': np.array([52., 27., 5.8, 6.3, 15., 37.]),
+                     'beam_size': np.array([7.4, 5.1, 2.2, 1.4, 1.0, 0.9]),
+                     'freq_GHz': np.array([27.3, 41.7, 93., 143., 225., 278.]), 'nx_secbispec': 128}
+    #experiment = qest.experiment(lmax=lmax, massCut_Mvir=5e15, **SPT_properties, **fg_cleaning_dict)
+    experiment = qest.experiment(lmax=lmax, massCut_Mvir=5e15, **SO_properties, MV_ILC_bool=True)
 
     # Set CIB halo model
     cib_model = 'planck13'  # 'vierro'
@@ -37,9 +43,9 @@ if __name__ == '__main__':
     cosmoParams = {'As': 2.08e-9, 'ns': .965, 'omch2': (0.31 - 0.049) * (H0 / 100.) ** 2,
                    'ombh2': 0.049 * (H0 / 100.) ** 2, 'tau': 0.055, 'H0': H0}
 
-    nZs = 20
-    nMasses = 20
-    bin_width_out_second_bispec_bias = 100
+    nZs = 3
+    nMasses = 3
+    bin_width_out_second_bispec_bias = 400
     parallelise_secondbispec = False
     max_workers = None # Force serial for now
 
