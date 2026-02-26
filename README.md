@@ -50,4 +50,24 @@ Start with `notebooks/example_pipeline.ipynb`.
 - `notebooks/explore_zerocrossing_primbispec.ipynb`: Investigates where and why primary bispectrum contributions cross zero.
 
 ## Attribution
-If you use the code, please cite [Baleato Lizancos et al. 2025](https://arxiv.org/abs/2507.03859).
+
+If you use the code, please cite:
+
+```bibtex
+@ARTICLE{2025JCAP...11..031B,
+             author = {{Baleato Lizancos}, A. and {Coulton}, W. and {Challinor}, A. and {Sherwin}, B.~D. and {Mehta}, Y.},
+                title = "{A halo model of extragalactic contamination to CMB lensing, delensing, and cross-correlations}",
+            journal = {\jcap},
+         keywords = {CMBR theory, gravitational lensing, Sunyaev-Zeldovich effect, Cosmology and Nongalactic Astrophysics},
+                 year = 2025,
+                month = nov,
+             volume = {2025},
+             number = {11},
+                    eid = {031},
+                pages = {031},
+                    doi = {10.1088/1475-7516/2025/11/031},
+archivePrefix = {arXiv},
+             eprint = {2507.03859},
+ primaryClass = {astro-ph.CO},
+}
+```
