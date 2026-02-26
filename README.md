@@ -2,30 +2,44 @@
 
 **C**osmological **B**iases to **LEN**sing and **D**elensing **D**ue to **E**xtragalactic **R**adiation
 
-CosmoBLENDER is a python code that computes biases to CMB lensing auto- and cross-correlations, as well as internal
-delensing. It follows [Baleato Lizancos et al. 2025](https://arxiv.org/abs/2507.03859).
+CosmoBLENDER computes foreground-induced biases to temperature-based CMB lensing reconstructions, including:
+- CMB lensing auto-correlations,
+- CMB lensing cross-correlations with galaxies,
+- internal B-mode delensing.
+
+The implementation follows [Baleato Lizancos et al. 2025](https://arxiv.org/abs/2507.03859).
 
 ## Installation
-###### Dependencies:
+### Dependencies
 - `NumPy`, `SciPy`, `Matplotlib`
 - `BasicILC` from [this fork](https://github.com/abaleato/BasicILC/tree/cosmoblender)
 - `Hmvec` from its [galaxy branch](https://github.com/simonsobs/hmvec) for CIB calculations
 - `Quicklens` ([Python 3 version](https://github.com/abaleato/Quicklens-with-fixes/tree/Python3))
 - `astropy`
-- [`pyccl`](https://github.com/LSSTDESC/CCL) (optional, needed for FFTlog-based calculation; we recommend using the default Gaussian quadratures instead).
+- [`pyccl`](https://github.com/LSSTDESC/CCL) (optional, for FFTlog-based calculations)
 
 
-###### Editable installation in-place:
-First, clone the repository
+### Editable installation
+Clone the repository:
 
     git clone https://github.com/abaleato/CosmoBLENDER.git
 
-and from within it run
+From the repository root, run:
 
     python -m pip install -e .
 
-## Usage
-See the notebooks under the `examples/` directory -- `examples/example_pipeline.ipynb` is a great place to start.
+## Notebooks
+All tutorials and worked examples are in `notebooks/`.
+
+Start with `notebooks/example_pipeline.ipynb`.
+
+- `notebooks/example_pipeline.ipynb`: An introduction to data stuctures, experiment setup and bias calculations for auto-correlations, cross-correlations, and delensing.
+- `notebooks/auto_correlations.ipynb`: Examples focused on biases to the CMB lensing auto-spectrum, including how to vary cosmological, astrophysical and experimental parameters.
+- `notebooks/cross_correlations.ipynb`: Same as above, but focusing on cross-correlations with galaxy samples.
+- `notebooks/delensing.ipynb`: Examples focused on foreground-induced biases in B-mode delensing.
+- `notebooks/varying_M_min.ipynb`: Studies how predictions change as the minimum halo mass cut is varied.
+- `notebooks/varying_z.ipynb`: Same as above, but for the redshift range.
+- `notebooks/explore_zerocrossing_primbispec.ipynb`: Investigates where and why primary bispectrum contributions cross zero.
 
 ## Attribution
 If you use the code, please cite [Baleato Lizancos et al. 2025](https://arxiv.org/abs/2507.03859).

@@ -8,12 +8,15 @@ version = "1.0.0"
 description = "CosmoBLENDER: Cosmological Biases to LENsing and Delensing due to Extragalactic Radiation"
 readme = "README_PyPI.md"
 authors = [{ name = "Anton Baleato Lizancos", email = "a.baleatolizancos@berkeley.edu" }]
-license = { file = "LICENSE" }
+license = "CC-BY-NC-SA-3.0"
 classifiers = [
     "Programming Language :: Python",
     "Programming Language :: Python :: 3",
+    "Programming Language :: Python :: 3 :: Only",
+    "Topic :: Scientific/Engineering :: Astronomy",
+    "Intended Audience :: Science/Research",
 ]
-keywords = ["feed", "reader", "tutorial"]
+keywords = ["cmb", "lensing", "delensing", "cosmology", "halo-model"]
 dependencies = [
     "numpy",
     "scipy",
@@ -21,10 +24,20 @@ dependencies = [
     "astropy",
     "healpy",
     "hmvec",
-    "quicklens",
-    "pyccl"
+    "quicklens"
 ]
-requires-python = ">=3.7"
+requires-python = ">=3.9"
+
+[project.optional-dependencies]
+fftlog = ["pyccl"]
 
 [project.urls]
 Homepage = "https://github.com/abaleato/CosmoBLENDER"
+Repository = "https://github.com/abaleato/CosmoBLENDER"
+Issues = "https://github.com/abaleato/CosmoBLENDER/issues"
+
+[tool.setuptools]
+package-dir = {"" = "src"}
+
+[tool.setuptools.packages.find]
+where = ["src"]
