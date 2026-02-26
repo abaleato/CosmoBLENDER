@@ -15,23 +15,26 @@ CosmoBLENDER computes foreground-induced biases to temperature-based CMB lensing
 The implementation follows [Baleato Lizancos et al. 2025](https://arxiv.org/abs/2507.03859).
 
 ## Installation
-### Dependencies
-- `NumPy`, `SciPy`, `Matplotlib`
-- `BasicILC` from [this fork](https://github.com/abaleato/BasicILC/tree/cosmoblender)
-- `Hmvec` from its [galaxy branch](https://github.com/simonsobs/hmvec) for CIB calculations
-- `Quicklens` ([Python 3 version](https://github.com/abaleato/Quicklens-with-fixes/tree/Python3))
-- `astropy`
-- [`pyccl`](https://github.com/LSSTDESC/CCL) (optional, for FFTlog-based calculations)
 
+### From PyPI
 
-### Editable installation
+    pip install cosmoblender
+
+### From source (editable)
 Clone the repository:
 
     git clone https://github.com/abaleato/CosmoBLENDER.git
 
 From the repository root, run:
 
-    python -m pip install -e .
+    pip install -e .
+
+### Dependencies
+- `NumPy`, `SciPy`, `Matplotlib`, `astropy`
+- `BasicILC` from [this fork](https://github.com/abaleato/BasicILC/tree/cosmoblender)
+- `Hmvec` from its [galaxy branch](https://github.com/simonsobs/hmvec) for CIB calculations
+- `Quicklens` ([Python 3 version](https://github.com/abaleato/Quicklens-with-fixes/tree/Python3))
+- [`pyccl`](https://github.com/LSSTDESC/CCL) (optional, for FFTlog-based calculations)
 
 ## Notebooks
 All tutorials and worked examples are in `notebooks/`.
