@@ -1,5 +1,10 @@
 # CosmoBLENDER
 
+[![PyPI version](https://img.shields.io/pypi/v/cosmoblender)](https://pypi.org/project/cosmoblender/)
+[![Python](https://img.shields.io/pypi/pyversions/cosmoblender)](https://pypi.org/project/cosmoblender/)
+[![License: CC BY-NC-SA 3.0](https://img.shields.io/badge/License-CC%20BY--NC--SA%203.0-lightgrey.svg)](https://creativecommons.org/licenses/by-nc-sa/3.0/)
+[![arXiv](https://img.shields.io/badge/arXiv-2507.03859-b31b1b.svg)](https://arxiv.org/abs/2507.03859)
+
 **C**osmological **B**iases to **LEN**sing and **D**elensing **D**ue to **E**xtragalactic **R**adiation
 
 CosmoBLENDER computes foreground-induced biases to temperature-based CMB lensing reconstructions, including:
